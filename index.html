@@ -3,15 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ISF Card Engine V9.2 (Smart & Smooth)</title>
+    <title>ISF Card Engine V9.3 (Overwhelm Strategy)</title>
 </head>
 <body>
     <script>
     (function() {
-        /* ISF OFFICIAL ENGINE V9.2
-           - Feature: Custom Fonts for Difficulty Screen
-           - Feature: Smarter "Defensive" AI Logic
-           - Polish: Smoother, faster card animations (0.2s)
+        /* ISF OFFICIAL ENGINE V9.3
+           - Feature: "Overwhelm Strategy" (AI takes risks if it has multiple moves)
+           - Polish: Smoother card animations (0.2s)
+           - UI: Custom Fonts
         */
 
         // 1. SETUP & CONSTANTS
@@ -344,7 +344,7 @@
             }
         }
 
-        // --- SMART AI BRAIN ---
+        // --- SMART AI BRAIN (V9.3) ---
         function startAiBrain() {
             if (!gameActive) return;
 
@@ -435,76 +435,113 @@
             return columns;
         }
 
-        /* --- SMARTER AI IMPLEMENTATION --- */
+        /* --- UPDATED LOGIC: OVERWHELM STRATEGY --- */
         function attemptAiMove() {
             if (slapLocked || sequenceLocked) { aiThinking = false; return; }
             const allAiCards = Array.from(document.querySelectorAll('#ai-boundary .card'));
             const columns = getColumns(allAiCards);
-            let playMove = null;
-            let rearrangeMove = null;
-            let flipMove = null;
-            let emptyColumnX = null;
-
-            // DEFENSIVE ANALYSIS
+            
+            // ANALYZE GAME STATE
             const playerFoundationCount = document.querySelectorAll('#player-boundary .card').length;
             const aiFoundationCount = allAiCards.length;
             const aiTotal = aiDraw.length + aiFoundationCount;
+            // "Danger Zone": Player is running low
             const isDangerZone = playerFoundationCount <= 4;
+            // "Aggressive Mode": AI is also running low, so it should rush
             const isAiAggressive = aiTotal <= 6;
 
+            let possibleMoves = [];
+            let flipMove = null;
+            let rearrangeMove = null;
+            let emptyColumnX = null;
+
+            // IDENTIFY EMPTY COLUMNS
             for (let colX of [80, 280, 480, 680]) {
                 if (columns[colX].length === 0) emptyColumnX = colX;
             }
+
+            // SCAN ALL PILES
             for (let k in columns) {
                 const pile = columns[k];
                 if (pile.length === 0) continue;
                 const topCard = pile[pile.length - 1];
 
+                // 1. FLIP (Immediate Priority)
                 if (topCard.classList.contains('face-down')) {
                     flipMove = topCard;
                     break;
                 }
 
+                // 2. FIND PLAYABLE MOVES
                 const rank = parseInt(topCard.dataset.rank);
                 const targets = [ { id: 'target-active', val: targetRanks.active }, { id: 'target-secondary', val: targetRanks.secondary } ];
                 for (let t of targets) {
                     if (t.val !== null) {
                         const diff = Math.abs(rank - t.val);
                         if (diff === 1 || diff === 12) {
-                            // Defensive Check
-                            let moveIsSafe = true;
-                            if (isDangerZone && !isAiAggressive) {
-                                if (checkIfMoveHelpsPlayer(rank)) {
-                                    moveIsSafe = false;
-                                }
-                            }
-                            if (moveIsSafe) {
-                                playMove = { card: topCard, targetId: t.id };
-                                break;
-                            }
+                            // Check if this specific move helps the player
+                            const risky = checkIfMoveHelpsPlayer(rank);
+                            possibleMoves.push({ card: topCard, targetId: t.id, isRisky: risky });
                         }
                     }
                 }
-                if (playMove) break; 
-                if (emptyColumnX !== null && pile.length > 1 && !playMove) {
+
+                // 3. CHECK REARRANGE
+                if (emptyColumnX !== null && pile.length > 1 && !rearrangeMove) {
                     const cardUnder = pile[pile.length - 2];
                     if (cardUnder.classList.contains('face-down')) {
                         rearrangeMove = { card: topCard, targetX: emptyColumnX, targetY: 40 };
                     }
                 }
             }
+
+            // EXECUTE DECISION
             if (flipMove) {
                 flipMove.classList.replace('face-down', 'face-up');
                 aiThinking = false;
-            } else if (playMove) {
-                animateAiMove(playMove.card, playMove.targetId, 'play');
-            } else if (rearrangeMove) {
+            } 
+            else if (possibleMoves.length > 0) {
+                // FILTER MOVES
+                const safeMoves = possibleMoves.filter(m => !m.isRisky);
+                const riskyMoves = possibleMoves.filter(m => m.isRisky);
+                
+                let finalMove = null;
+
+                if (safeMoves.length > 0) {
+                    finalMove = safeMoves[0]; // Priority: Always take safe moves
+                } 
+                else {
+                    // Only risky moves are available.
+                    // OVERWHELM LOGIC: If I have multiple options, I should play them to overwhelm the player.
+                    // Or if I'm aggressive, I play. 
+                    // Or if I'm NOT in danger, I play.
+                    // I ONLY block if I'm in Danger, I'm NOT Aggressive, and I only have ONE move.
+                    const shouldRiskIt = (possibleMoves.length > 1) || isAiAggressive || !isDangerZone;
+
+                    if (shouldRiskIt) {
+                        finalMove = riskyMoves[0];
+                    } else {
+                        // Defensive Block: AI chooses to stall
+                        console.log("AI Defense: Blocking risky move.");
+                    }
+                }
+
+                if (finalMove) {
+                    animateAiMove(finalMove.card, finalMove.targetId, 'play');
+                } else {
+                    aiThinking = false;
+                    triggerAiPass();
+                }
+            } 
+            else if (rearrangeMove) {
                 animateAiMove(rearrangeMove.card, rearrangeMove, 'rearrange');
-            } else {
+            } 
+            else {
                 aiThinking = false;
                 triggerAiPass();
             }
         }
+
         function checkIfMoveHelpsPlayer(futurePileRank) {
             const playerFaceUpCards = document.querySelectorAll('#player-boundary .face-up');
             for (let i = 0; i < playerFaceUpCards.length; i++) {
@@ -534,7 +571,6 @@
                 targetY = slotRect.top;
                 targetRot = '0deg';
             } else {
-                // REARRANGE: Move directly and wait
                 card.style.left = target.targetX + 'px';
                 card.style.top = target.targetY + 'px';
                 setTimeout(() => {
