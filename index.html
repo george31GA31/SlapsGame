@@ -3,17 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ISF Card Engine V10.0 (Online Beta)</title>
+    <title>ISF Card Engine V10.1 (Online Sync)</title>
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 </head>
 <body>
     <script>
     (function() {
-        /* ISF OFFICIAL ENGINE V10.0 (ONLINE BETA)
-           - Feature: PeerJS Networking Integration
-           - UI: Added Host/Join Menus
-           - Logic: Connection Handshake Established
-           - State: V9.4 Logic + Networking Layer
+        /* ISF OFFICIAL ENGINE V10.1 (ONLINE SYNC)
+           - Fix: Wired up "Start Match" button
+           - Logic: Host generates deck and sends half to Joiner
+           - Sync: Both players start with coordinated decks
         */
 
         // 1. SETUP & CONSTANTS
@@ -26,6 +25,7 @@
         let conn = null;
         let isHost = false;
         let netId = null;
+        let isOnline = false; // Flag to disable AI brain in online mode
 
         let p1Inventory = [], aiInventory = [];
         let p1Draw = [], aiDraw = [];
@@ -244,12 +244,14 @@
         // 3. MENU LOGIC
         // Main -> Difficulty
         document.getElementById('btn-play-ai').onclick = () => { 
+            isOnline = false;
             document.getElementById('screen-main').classList.add('hidden'); 
             document.getElementById('screen-difficulty').classList.remove('hidden'); 
         };
         
         // Main -> Online Menu
         document.getElementById('btn-online-menu').onclick = () => {
+            isOnline = true;
             document.getElementById('screen-main').classList.add('hidden');
             document.getElementById('screen-online').classList.remove('hidden');
         };
@@ -279,6 +281,29 @@
             if(code.length > 0) initJoin(code);
         };
 
+        // FIX: The Host Start Button Logic
+        document.getElementById('btn-start-online').onclick = () => {
+            if(!conn) return;
+            // 1. Generate FULL deck
+            let fullDeck = generateDeck();
+            
+            // 2. Split it (Host gets first half, Joiner gets second half)
+            let hostCards = fullDeck.slice(0, 26);
+            let joinerCards = fullDeck.slice(26, 52);
+
+            // 3. Send Joiner their cards
+            conn.send({
+                type: 'START_GAME',
+                myCards: joinerCards, // Joiner will use these as P1
+                oppCards: hostCards   // Joiner will see these as AI
+            });
+
+            // 4. Start Host Game
+            document.getElementById('screen-lobby-host').classList.add('hidden');
+            document.getElementById('isf-stadium').classList.remove('hidden');
+            initGame(hostCards, joinerCards); // Host uses P1, Joiner is AI
+        };
+
         document.getElementById('btn-back-menu').onclick = () => { document.getElementById('screen-difficulty').classList.add('hidden'); document.getElementById('screen-main').classList.remove('hidden'); };
         document.getElementById('diff-slider').oninput = (e) => {
             currentDifficulty = parseInt(e.target.value);
@@ -289,7 +314,10 @@
             document.getElementById('isf-stadium').classList.remove('hidden');
             initGame();
         };
-        document.getElementById('nav-restart').onclick = initGame;
+        document.getElementById('nav-restart').onclick = () => {
+            if(isOnline) alert("Restart not supported in online beta yet.");
+            else initGame();
+        };
         document.getElementById('nav-menu').onclick = () => { gameActive = false; document.getElementById('isf-stadium').classList.add('hidden'); document.getElementById('screen-main').classList.remove('hidden'); document.getElementById('victory-screen').style.display = 'none'; };
         
         // --- NETWORKING LOGIC ---
@@ -346,27 +374,39 @@
 
         function setupConnection() {
             conn.on('data', (data) => {
-                console.log('Received', data);
-                // GAME SYNC LOGIC WILL GO HERE IN NEXT UPDATE
-                if (data === 'START_GAME') {
-                    // Placeholder for now
-                    alert("Host started the game! (Card Sync coming next update)");
+                // START HANDSHAKE
+                if (data.type === 'START_GAME') {
+                    document.getElementById('screen-lobby-join').classList.add('hidden');
+                    document.getElementById('isf-stadium').classList.remove('hidden');
+                    // Initialize with received decks
+                    initGame(data.myCards, data.oppCards);
                 }
             });
         }
 
-        // --- GAME LOGIC (UNCHANGED) ---
+        // --- GAME LOGIC ---
 
         function generateDeck() {
             let d = [];
             suits.forEach(s => values.forEach(v => d.push({ s, v, rank: rankMap[v], color: (s===' ♥ '||s===' ♦ ') ? 'red' : 'black', id: Math.random().toString(36) })));
             return d.sort(() => Math.random() - 0.5);
         }
-        function initGame() {
+
+        // MODIFIED INIT: Now accepts specific card arrays for Online Sync
+        function initGame(forcedP1, forcedAI) {
             document.getElementById('victory-screen').style.display = 'none';
-            let d = generateDeck();
-            p1Inventory = d.splice(0, 26);
-            aiInventory = d.splice(0, 26);
+            
+            if (forcedP1 && forcedAI) {
+                // ONLINE MODE: Use provided decks
+                p1Inventory = forcedP1;
+                aiInventory = forcedAI;
+            } else {
+                // OFFLINE MODE: Generate new
+                let d = generateDeck();
+                p1Inventory = d.splice(0, 26);
+                aiInventory = d.splice(0, 26);
+            }
+            
             gameActive = true;
 
             // Reset Ref & Stats
@@ -414,8 +454,14 @@
             updateDisplay();
             resetRevealButton();
 
-            setTimeout(() => { triggerAiPass(); }, 1500);
-            startAiBrain();
+            // ONLY START AI IF OFFLINE
+            if (!isOnline) {
+                setTimeout(() => { triggerAiPass(); }, 1500);
+                startAiBrain();
+            } else {
+                // ONLINE: We will eventually sync moves here
+                // For now, it's just a sandbox where you can move your own cards
+            }
         }
 
         // --- REFEREE SYSTEM ---
@@ -483,9 +529,9 @@
             }
         }
 
-        // --- SMART AI BRAIN (V9.4) ---
+        // --- SMART AI BRAIN (OFFLINE ONLY) ---
         function startAiBrain() {
-            if (!gameActive) return;
+            if (!gameActive || isOnline) return; // DISABLE AI IN ONLINE MODE
 
             const loopId = setInterval(() => {
                 if (!gameActive || document.getElementById('victory-screen').style.display === 'flex') {
@@ -523,6 +569,7 @@
             }, 2000);
         }
         setInterval(() => {
+            if (isOnline) return; // DISABLE AI SLAPS ONLINE
             if (!slapLocked && !sequenceLocked && targetRanks.secondary === targetRanks.active && targetRanks.secondary) {
                 const chance = currentDifficulty * 0.05;
                 if (Math.random() < chance) {
