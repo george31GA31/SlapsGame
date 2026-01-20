@@ -3,17 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ISF Card Engine V10.4 (Host Authority)</title>
+    <title>ISF Card Engine V10.5 (Total Sync)</title>
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 </head>
 <body>
     <script>
     (function() {
-        /* ISF OFFICIAL ENGINE V10.4 (HOST AUTHORITY)
-           - Fix: Desynchronization during card reveal
-           - Logic: Host calculates the Reveal cards and sends them to Joiner
-           - Logic: Joiner waits for Host command to flip cards
-           - Result: Both players guaranteed to see same center stacks
+        /* ISF OFFICIAL ENGINE V10.5 (TOTAL SYNC)
+           - Fix: "Blind Trust" Network Move (Receiver ignores legality checks)
+           - Feature: Networked Slaps (Slapping updates opponent immediately)
+           - Feature: Networked Round Ends (Winner forces round reset)
+           - Logic: Host Authority for Reveals maintained
         */
 
         // 1. SETUP & CONSTANTS
@@ -379,34 +379,54 @@
                 }
                 if (data.type === 'MOVE') {
                     const mirroredTarget = (data.targetId === 'target-active') ? 'target-secondary' : 'target-active';
-                    executeRemoteMove(data.cardRank, data.cardSuit, data.cardVal, data.cardColor, mirroredTarget);
+                    // "BLIND TRUST" - Execute move without validity checks to ensure sync
+                    forceRemoteMove(data.cardRank, data.cardSuit, data.cardVal, data.cardColor, mirroredTarget);
                 }
-                // BUG FIX: Host Authority Reveal
                 if (data.type === 'FORCE_REVEAL') {
                     forceRevealFromHost(data.card1, data.card2);
+                }
+                if (data.type === 'SLAP') {
+                    triggerSlap('ai', true); // 'true' means it came from network
+                }
+                if (data.type === 'ROUND_WIN') {
+                    // Opponent won round
+                    endRound('ai');
                 }
             });
         }
         
-        function executeRemoteMove(rank, suit, val, color, targetId) {
-            const oppCards = Array.from(document.querySelectorAll('#ai-boundary .card'));
-            let targetCard = null;
-            for(let c of oppCards) {
-                if (parseInt(c.dataset.rank) === rank && c.dataset.suit === suit) {
-                    targetCard = c;
-                    break;
-                }
-            }
-            if (!targetCard && oppCards.length > 0) targetCard = oppCards[oppCards.length - 1];
+        // "BLIND TRUST" MOVE EXECUTION
+        function forceRemoteMove(rank, suit, val, color, targetId) {
+            // 1. Update State immediately
+            centerStack.push({ rank: rank, s: suit, v: val, color: color });
+            if (targetId === 'target-active') targetRanks.active = rank; else targetRanks.secondary = rank;
 
-            if(targetCard) {
-                targetCard.className = `card ${color}`;
-                targetCard.innerHTML = `
-                <div class="card-corner top-left"><div>${val}</div><div>${suit}</div></div>
-                <div class="center-suit">${suit}</div>
-                <div class="card-corner bottom-right"><div>${val}</div><div>${suit}</div></div>
-                `;
-                animateAiMove(targetCard, targetId, 'play');
+            // 2. Visuals
+            const slot = document.getElementById(targetId);
+            slot.innerHTML = ''; // Clear slot
+            
+            // Create the card div manually
+            const card = document.createElement('div');
+            card.className = `card in-center ${color}`;
+            card.innerHTML = `
+            <div class="card-corner top-left"><div>${val}</div><div>${suit}</div></div>
+            <div class="center-suit">${suit}</div>
+            <div class="card-corner bottom-right"><div>${val}</div><div>${suit}</div></div>
+            `;
+            // Add to slot
+            slot.appendChild(card);
+
+            // 3. Remove a card from AI pile to keep count
+            const aiCards = document.querySelectorAll('#ai-boundary .card');
+            if (aiCards.length > 0) aiCards[aiCards.length - 1].remove();
+
+            // 4. Update UI numbers
+            resetPasses();
+            updateDisplay();
+            
+            // 5. Check if they won
+            if (document.querySelectorAll('#ai-boundary .card').length === 0) {
+               // Wait for their 'ROUND_WIN' signal usually, but we can double check here
             }
         }
 
@@ -933,7 +953,6 @@
                 updateDisplay();
             } else {
                 if (centerStack.length > 0) {
-                    // STALEMATE SHUFFLE (Host Authority needed here too technically, but randomness ok for now)
                     const recycled = centerStack.sort(() => Math.random() - 0.5);
                     const half = Math.floor(recycled.length / 2);
                     p1Draw = recycled.slice(0, half); aiDraw = recycled.slice(half);
@@ -944,32 +963,13 @@
             }
         }
         
-        // --- NEW: FORCE REVEAL (JOINER LOGIC) ---
         function forceRevealFromHost(hostCard, joinerCard) {
-            // When Host says reveal, we force the board to match Host
-            // HOST VIEW: Host Card -> Active(Right), Joiner Card -> Secondary(Left)
-            // JOINER VIEW: Host Card -> Secondary(Left), Joiner Card -> Active(Right)
-            
-            // 1. Clear slots
             document.querySelectorAll('.slot').forEach(s => s.innerHTML = '');
-            
-            // 2. We don't pop() because our local deck might be out of sync. 
-            // We blindly accept the cards provided.
-            // But we must visually decrement the pile numbers?
-            // For now, let's just update display to assume we lost a card.
-            p1Draw.pop(); aiDraw.pop(); 
-            
+            if(p1Draw.length > 0) p1Draw.pop(); 
+            if(aiDraw.length > 0) aiDraw.pop(); 
             centerStack.push(hostCard, joinerCard);
-            
-            // 3. Place them (MIRRORED)
-            // Host sent: card1=HostCard, card2=JoinerCard
-            // I am Joiner.
-            // HostCard goes to my Left (secondary).
-            // JoinerCard (My card) goes to my Right (active).
-            
             updateCenter('secondary', createRevealCard(hostCard));
             updateCenter('active', createRevealCard(joinerCard));
-            
             resetRevealButton();
             updateDisplay();
         }
@@ -985,8 +985,14 @@
             c.dataset.rank = data.rank; c.dataset.suit = data.s; c.dataset.val = data.v; c.dataset.color = data.color;
             return c;
         }
-        function triggerSlap(winner) {
+        function triggerSlap(winner, isNetworkCommand = false) {
             if (slapLocked || !targetRanks.secondary || targetRanks.secondary !== targetRanks.active) return;
+            
+            // SEND SLAP COMMAND
+            if (isOnline && !isNetworkCommand && conn) {
+                conn.send({ type: 'SLAP', winner: 'opponent' });
+            }
+
             slapLocked = true; sequenceLocked = true;
             const msg = document.getElementById('slap-alert');
             msg.innerText = winner === 'player' ? "PLAYER 1 SLAPS WON!" : "OPP SLAPS WON!";
@@ -1012,6 +1018,10 @@
             }
         });
         function endRound(winner) {
+            if (winner === 'player') {
+                if(isOnline && conn) conn.send({ type: 'ROUND_WIN' });
+            }
+
             if (winner === 'player') stats.p1Rounds++; else stats.aiRounds++;
             updateStatsUI();
             if (p1IsBorrowing) { aiDraw.push(...p1Draw); p1Draw = []; }
@@ -1027,7 +1037,16 @@
             }
             p1Inventory.sort(() => Math.random() - 0.5); aiInventory.sort(() => Math.random() - 0.5);
             alert(`${winner.toUpperCase()} WINS ROUND!`);
-            setupRound();
+            
+            if(isOnline && isHost) {
+                // Host resets board for both after alert
+                setupRound();
+            } else if (!isOnline) {
+                setupRound();
+            } else {
+                // Joiner waits for Host to send 'FORCE_REVEAL' or 'START_GAME' or simply re-syncs
+                setupRound();
+            }
         }
         function domToCard(c) {
             return { v: c.dataset.val, s: c.dataset.suit, rank: parseInt(c.dataset.rank), color: c.classList.contains('red') ? 'red' : 'black' };
