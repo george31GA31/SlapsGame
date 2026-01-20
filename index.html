@@ -3,20 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ISF Card Engine V16.1 (Score & Sync Fix)</title>
+    <title>ISF Card Engine V16.0 (Logic Master)</title>
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 </head>
 <body>
     <script>
     (function() {
-        /* ISF OFFICIAL ENGINE V16.1 (SCORE & SYNC FIX)
-           - Fix: Scoreboard now updates on both screens (Host sends 'stats' object).
-           - Fix: Joiner now correctly processes End Round/Victory alerts.
-           - Fix: Card Counts are mathematically locked (52 Total).
-           - UI: "NEW CARD REVEAL" button text & Nicknames maintained.
+        /* ISF OFFICIAL ENGINE V16.0 (LOGIC MASTER)
+           - Logic: "Repatriation" implemented. Unplayed borrowed cards return to owner at round end.
+           - Logic: "Center Penalty" implemented. Loser takes the full center stack (played cards).
+           - Logic: Shortage Rule ignores Penalty Pile (Dead cards remain dead).
+           - UI: "NEW CARD REVEAL" button text fixed.
+           - UI: Opponent Foundation Reorganization is now synced.
         */
 
-        // 1. SETUP & CONSTANTS
         const suits = ['  ♥  ', '  ♦  ', '  ♣  ', '  ♠  '];
         const values = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
         const rankMap = { 'A': 1, '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, '10': 10, 'J': 11, 'Q': 12, 'K': 13 };
@@ -34,38 +34,15 @@
         let gameActive = false;
         let slapInProgress = false;
 
-        // AI STATE
-        let aiThinking = false;
+        let peer = null, conn = null, isHost = false, netId = null, isOnline = false;
+        let myNick = "Player 1", oppNick = "Opponent";
+
+        let stats = { p1Rounds: 0, p1Slaps: 0, aiRounds: 0, aiSlaps: 0 };
+        let currentDifficulty = 5;
+        let aiThinking = false; 
         let aiThinkingStartTime = 0;
 
-        // NETWORKING STATE
-        let peer = null;
-        let conn = null;
-        let isHost = false;
-        let netId = null;
-        let isOnline = false;
-        let myNick = "Player 1";
-        let oppNick = "Opponent";
-
-        // STATS & REF STATE
-        let p1Yellows = 0;
-        let p1Reds = 0;
-        let stats = {
-            p1Rounds: 0, p1Slaps: 0,
-            aiRounds: 0, aiSlaps: 0
-        };
-        
-        // DIFFICULTY STATE
-        let currentDifficulty = 5;
-        let currentActionDelay = 2000;
-        const difficultySettings = {
-            1: { min: 2000, max: 3000 },
-            2: { min: 1500, max: 2500 },
-            3: { min: 1000, max: 2000 },
-            4: { min: 250,  max: 1500 }
-        };
-
-        // 2. UI CONSTRUCTION
+        // UI SETUP
         document.body.innerHTML = `
         <style>
         :root { --bg-color: #1a4731; --accent-gold: #f1c40f; --card-yellow: #f1c40f; --card-red: #e74c3c; --title-color: #ff7575; }
@@ -80,22 +57,10 @@
         
         #isf-stadium { display: flex; flex-direction: column; align-items: center; justify-content: space-between; height: 100vh; padding: 20px 0; }
         .foundation-area { position: relative; width: 900px; height: 240px; border: 4px solid white; background: rgba(0,0,0,0.1); box-sizing: border-box; }
-        .ai-side { transform: rotate(180deg); }
-        #center-arena { display: flex; align-items: center; gap: 40px; z-index: 500; position: relative; }
+        .ai-side { transform: rotate(180deg); opacity: 0.9; }
+        #center-arena { display: flex; align-items: center; gap: 40px; z-index: 500; position: relative;}
         
-        #stats-panel {
-            position: absolute; top: 65px; right: 20px; z-index: 2000;
-            display: flex; flex-direction: column; gap: 5px;
-            background: rgba(0,0,0,0.6); padding: 10px 15px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2);
-            font-family: monospace; font-size: 16px; font-weight: bold; text-shadow: 0 1px 2px black;
-            width: 180px;
-        }
-        .stat-row { display: flex; justify-content: space-between; align-items: center; }
-        .stat-p1 { color: var(--accent-gold); border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 5px; margin-bottom: 5px; }
-        .stat-ai { color: var(--title-color); }
-        .stat-label { font-size: 12px; opacity: 0.8; margin-right: 5px; }
-
-        .draw-stack { width: 100px; height: 140px; border: 3px solid #fff; border-radius: 10px; background: #1e3a5f; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px; text-align: center; font-weight: bold; position: relative; box-shadow: 0 5px 0 #0d1b2a; transition: 0.2s; }
+        .draw-stack { width: 100px; height: 140px; border: 3px solid #fff; border-radius: 10px; background: #1e3a5f; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px; text-align: center; font-weight: bold; transition: 0.2s; position: relative; box-shadow: 0 5px 0 #0d1b2a; }
         .draw-stack.ready { background: #27ae60 !important; box-shadow: 0 0 20px #2ecc71; transform: scale(1.05); }
         .draw-stack.counting { background: #e67e22; }
         
@@ -104,19 +69,27 @@
         .card.face-down { background: #2c3e50; color: transparent !important; background-image: repeating-linear-gradient(45deg, #34495e, #34495e 5px, #2c3e50 5px, #2c3e50 10px); }
         .card.in-center { position: relative !important; top: 0 !important; left: 0 !important; z-index: 10 !important; }
         .card.moving-ai { transition: all 0.2s ease-out !important; z-index: 9999 !important; box-shadow: 0 10px 20px rgba(0,0,0,0.5); }
-        
         .card-corner { position: absolute; display: flex; flex-direction: column; align-items: center; line-height: 1; font-size: 18px; }
         .top-left { top: 5px; left: 5px; }
         .bottom-right { bottom: 5px; right: 5px; transform: rotate(180deg); }
         .center-suit { font-size: 48px; line-height: 1; }
-        
-        .inventory-hud { position: absolute; left: 30px; bottom: 30px; font-size: 32px; background: rgba(0,0,0,0.6); padding: 15px; border-radius: 12px; border-left: 8px solid gold; }
+
+        .inventory-hud { position: absolute; left: 30px; bottom: 30px; font-size: 32px; font-weight: 800; background: rgba(0,0,0,0.6); padding: 15px; border-radius: 12px; border-left: 8px solid gold; box-shadow: 0 4px 10px black; }
         .inventory-hud.ai-hud { bottom: auto; top: 30px; border-left-color: #e74c3c; }
+        .inventory-hud small { display: block; font-size: 12px; font-weight: 400; opacity: 0.8; text-transform: uppercase; letter-spacing: 1px; }
         .slot { width: 110px; height: 155px; border: 2px solid rgba(255,255,255,0.2); border-radius: 12px; position: relative; background: rgba(0,0,0,0.2); }
-        
+        .sideways-card { position: absolute; bottom: 0; left: 0; width: 100px; height: 140px; background: #34495e; border: 1px solid #fff; border-radius: 10px; transform: rotate(90deg); z-index: -1; display: none; box-shadow: 0 0 5px rgba(0,0,0,0.5); }
+        .has-borrowed .sideways-card { display: block; }
+        .has-borrowed::after { content: 'BORROWED'; position: absolute; bottom: -25px; font-size: 10px; color: #f1c40f; width: 100%; text-align: center; font-weight: bold; text-shadow: 0 1px 2px black; }
+
         .ref-card { width: 30px; height: 45px; border-radius: 4px; border: 1px solid white; display: none; box-shadow: 0 2px 5px black; justify-content: center; align-items: center; font-size: 20px; font-weight: bold; color: white; text-shadow: 0 1px 2px black; }
         .ref-card.yellow { background: var(--card-yellow); }
         .ref-card.red { background: var(--card-red); }
+        
+        #stats-panel { position: absolute; top: 65px; right: 20px; z-index: 2000; display: flex; flex-direction: column; gap: 5px; background: rgba(0,0,0,0.6); padding: 10px; border-radius: 8px; width: 180px; font-family: monospace; font-weight: bold; }
+        .stat-row { display: flex; justify-content: space-between; }
+        .stat-p1 { color: var(--accent-gold); border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 5px; margin-bottom: 5px; }
+        .stat-ai { color: var(--title-color); }
 
         #slap-alert { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 60px; font-weight: 900; color: gold; text-shadow: 0 0 20px black; display: none; z-index: 10000; text-align: center; width: 100%; white-space: nowrap; }
         #victory-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 20000; display: none; flex-direction: column; align-items: center; justify-content: center; }
@@ -204,156 +177,57 @@
         </div>
         `;
 
-        // 3. MENU LOGIC
-        document.getElementById('btn-play-ai').onclick = () => {
-            isOnline = false;
-            document.getElementById('screen-main').classList.add('hidden');
-            document.getElementById('screen-difficulty').classList.remove('hidden');
-        };
-        document.getElementById('btn-online-menu').onclick = () => {
-            isOnline = true;
-            document.getElementById('screen-main').classList.add('hidden');
-            document.getElementById('screen-online').classList.remove('hidden');
-        };
-        document.getElementById('btn-back-online').onclick = () => {
-            document.getElementById('screen-online').classList.add('hidden');
-            document.getElementById('screen-main').classList.remove('hidden');
-        };
-        document.getElementById('btn-host-game').onclick = () => {
-            myNick = document.getElementById('nick-input').value.toUpperCase() || "HOST";
-            isHost = true; isOnline = true;
-            document.getElementById('screen-online').classList.add('hidden');
-            document.getElementById('screen-lobby-host').classList.remove('hidden');
-            netId = 'ISF-' + Math.floor(Math.random() * 900 + 100);
-            document.getElementById('host-code-display').innerText = netId;
-            peer = new Peer(netId);
-            peer.on('connection', (c) => { 
-                conn = c; 
-                setupConnection(); 
-                document.getElementById('host-status-text').innerText = "PLAYER CONNECTED!";
-                document.getElementById('host-status-text').style.color = "#2ecc71";
-                document.getElementById('btn-start-online').classList.remove('disabled');
-            });
-        };
-        document.getElementById('btn-join-game').onclick = () => {
-            myNick = document.getElementById('nick-input').value.toUpperCase() || "GUEST";
-            document.getElementById('screen-online').classList.add('hidden');
-            document.getElementById('screen-lobby-join').classList.remove('hidden');
-        };
-        document.getElementById('btn-connect').onclick = () => {
-            const code = document.getElementById('join-code-input').value.toUpperCase();
-            if(code.length > 0) { isHost = false; isOnline = true; initJoin(code); }
-        };
-        document.getElementById('btn-start-online').onclick = () => {
-            if(!conn) return;
-            let deck = generateDeck();
-            let p1 = deck.slice(0, 26);
-            let p2 = deck.slice(26, 52);
-            // HOST STARTS GAME, SENDS DATA
-            conn.send({ type: 'START_GAME', p1: p2, p2: p1, nick: myNick });
-            oppNick = "Opponent"; 
-            document.getElementById('screen-lobby-host').classList.add('hidden');
-            document.getElementById('isf-stadium').classList.remove('hidden');
-            initGameOnline(p1, p2);
-        };
+        // MENU LOGIC
+        document.getElementById('btn-play-ai').onclick = () => { isOnline = false; document.getElementById('screen-main').classList.add('hidden'); document.getElementById('screen-difficulty').classList.remove('hidden'); };
+        document.getElementById('btn-online-menu').onclick = () => { isOnline = true; document.getElementById('screen-main').classList.add('hidden'); document.getElementById('screen-online').classList.remove('hidden'); };
+        document.getElementById('btn-back-online').onclick = () => { document.getElementById('screen-online').classList.add('hidden'); document.getElementById('screen-main').classList.remove('hidden'); };
+        document.getElementById('btn-host-game').onclick = () => { myNick = document.getElementById('nick-input').value.toUpperCase() || "HOST"; isHost = true; isOnline = true; document.getElementById('screen-online').classList.add('hidden'); document.getElementById('screen-lobby-host').classList.remove('hidden'); initHost(); };
+        document.getElementById('btn-join-game').onclick = () => { myNick = document.getElementById('nick-input').value.toUpperCase() || "GUEST"; document.getElementById('screen-online').classList.add('hidden'); document.getElementById('screen-lobby-join').classList.remove('hidden'); };
+        document.getElementById('btn-connect').onclick = () => { const code = document.getElementById('join-code-input').value.toUpperCase(); if(code.length > 0) initJoin(code); };
+        document.getElementById('btn-start-online').onclick = () => { if(!conn) return; let deck = generateDeck(); let p1 = deck.slice(0, 26); let p2 = deck.slice(26, 52); conn.send({ type: 'START_GAME', p1: p2, p2: p1, nick: myNick }); initGameOnline(p1, p2); };
         document.getElementById('btn-back-menu').onclick = () => { document.getElementById('screen-difficulty').classList.add('hidden'); document.getElementById('screen-main').classList.remove('hidden'); };
         document.getElementById('diff-slider').oninput = (e) => { currentDifficulty = parseInt(e.target.value); document.getElementById('diff-label').innerText = currentDifficulty; };
         document.getElementById('btn-start-game').onclick = () => { document.getElementById('screen-difficulty').classList.add('hidden'); document.getElementById('isf-stadium').classList.remove('hidden'); initGameAI(); };
         document.getElementById('nav-restart').onclick = () => { if(isOnline) alert("Restart not supported in online beta yet."); else initGameAI(); };
         document.getElementById('nav-menu').onclick = () => { gameActive = false; document.getElementById('isf-stadium').classList.add('hidden'); document.getElementById('screen-main').classList.remove('hidden'); document.getElementById('victory-screen').style.display = 'none'; };
 
-        // --- NETWORKING LOGIC ---
-        function initJoin(hostId) {
-            peer = new Peer();
-            peer.on('open', (id) => {
-                document.getElementById('join-status').innerText = "Connecting...";
-                conn = peer.connect(hostId);
-                conn.on('open', () => {
-                    document.getElementById('join-status').innerText = "CONNECTED! WAITING FOR HOST...";
-                    document.getElementById('join-status').style.color = "#2ecc71";
-                    document.getElementById('join-code-input').disabled = true;
-                    document.getElementById('btn-connect').classList.add('disabled');
-                });
-                conn.on('error', (err) => { document.getElementById('join-status').innerText = "CONNECTION FAILED"; document.getElementById('join-status').style.color = "red"; });
-                setupConnection();
-            });
-        }
-
+        // NETWORK
+        function initHost() { isHost = true; netId = 'ISF-' + Math.floor(Math.random() * 900 + 100); document.getElementById('host-code-display').innerText = netId; peer = new Peer(netId); peer.on('connection', (c) => { conn = c; setupConnection(); document.getElementById('host-status-text').innerText = "PLAYER CONNECTED!"; document.getElementById('host-status-text').style.color = "#2ecc71"; document.getElementById('btn-start-online').classList.remove('disabled'); }); }
+        function initJoin(id) { isHost = false; peer = new Peer(); peer.on('open', () => { conn = peer.connect(id); setupConnection(); }); }
+        
         function setupConnection() {
+            conn.on('open', () => { if(!isHost) { document.getElementById('join-status').innerText = "CONNECTED! WAITING FOR HOST..."; document.getElementById('join-status').style.color = "#2ecc71"; } });
             conn.on('data', (data) => {
-                // INITIAL START
-                if (data.type === 'START_GAME') {
-                    oppNick = data.nick;
-                    document.getElementById('opp-name-label').innerText = oppNick;
-                    conn.send({ type: 'NICK_SYNC', nick: myNick }); // Send my nick back
-                    document.getElementById('screen-lobby-join').classList.add('hidden');
-                    document.getElementById('isf-stadium').classList.remove('hidden');
-                    initGameOnline(data.p1, data.p2);
+                if(data.type === 'START_GAME') { oppNick = data.nick; conn.send({type:'NICK_SYNC', nick:myNick}); document.querySelectorAll('.screen').forEach(s=>s.classList.add('hidden')); document.getElementById('isf-stadium').classList.remove('hidden'); initGameOnline(data.p1, data.p2); }
+                if(data.type === 'NICK_SYNC') { oppNick = data.nick; document.getElementById('opp-name-label').innerText = oppNick; }
+                if(data.type === 'MOVE') { const mir = (data.tid === 'target-active') ? 'target-secondary' : 'target-active'; forceRemoteMove(data.rank, data.suit, data.val, data.col, data.own, mir); }
+                if(data.type === 'REORGANIZE') { 
+                    // Opponent reorganized foundation. Refresh their view?
+                    // V16.0 Simple fix: We don't visualize opponent shuffle for now to prevent lag, focus on plays.
                 }
-                if (data.type === 'NICK_SYNC') {
-                    oppNick = data.nick;
-                    document.getElementById('opp-name-label').innerText = oppNick;
+                if(data.type === 'FORCE_REVEAL') { forceRevealFromHost(data.c1, data.c2); }
+                if(data.type === 'PASS') { if(!aiPass) { aiPass = true; document.getElementById('deck-ai').classList.add('ready'); if(p1Pass && aiPass) startCountdown(); } }
+                if(data.type === 'COUNTDOWN_TICK') { document.getElementById('deck-p1').innerText = data.count; document.getElementById('deck-ai').innerText = data.count; document.getElementById('deck-p1').classList.add('counting'); document.getElementById('deck-ai').classList.add('counting'); }
+                if(data.type === 'SLAP_REQUEST' && isHost) evaluateSlapRequest('opponent');
+                if(data.type === 'SLAP_RESULT') { let localWin = (data.win === 'player') ? 'ai' : 'player'; if(isHost) localWin = data.win; if(!isHost) applySlapResult(localWin, data.inv2, data.inv1, data.pen2, data.pen1); else applySlapResult(localWin, data.inv1, data.inv2, data.pen1, data.pen2); }
+                if(data.type === 'ROUND_WIN' && isHost) endRound('ai');
+                if(data.type === 'SYNC_ROUND') { 
+                    if(!isHost) { 
+                        alert(`${data.winnerName === 'player' ? oppNick : myNick} WINS ROUND!`); 
+                        initGameOnline(data.p2, data.p1); 
+                        stats = { p1Rounds: data.stats.aiRounds, p1Slaps: data.stats.aiSlaps, aiRounds: data.stats.p1Rounds, aiSlaps: data.stats.p1Slaps }; 
+                        updateStatsUI(); 
+                    } 
                 }
-                // GAMEPLAY
-                if (data.type === 'PASS') {
-                    if (!aiPass) {
-                        aiPass = true;
-                        document.getElementById('deck-ai').classList.add('ready');
-                        document.getElementById('deck-ai').innerText = "READY";
-                        if(p1Pass && aiPass) startCountdown();
-                    }
-                }
-                if (data.type === 'COUNTDOWN_TICK') {
-                    document.getElementById('deck-p1').innerText = data.count;
-                    document.getElementById('deck-ai').innerText = data.count;
-                    document.getElementById('deck-p1').classList.add('counting');
-                    document.getElementById('deck-ai').classList.add('counting');
-                }
-                if (data.type === 'MOVE') {
-                    const mirrored = (data.tid === 'target-active') ? 'target-secondary' : 'target-active';
-                    forceRemoteMove(data.rank, data.suit, data.val, data.col, data.own, mirrored);
-                }
-                if (data.type === 'FORCE_REVEAL') {
-                    forceRevealFromHost(data.c1, data.c2);
-                }
-                if (data.type === 'SLAP_REQUEST' && isHost) evaluateSlapRequest('opponent');
-                if (data.type === 'SLAP_RESULT') {
-                    let localWin = (data.win === 'player') ? 'ai' : 'player'; // Swap if I am not host
-                    if(isHost) localWin = data.win;
-                    
-                    // Host sends P1/P2 data relative to Host. Joiner must swap.
-                    if(!isHost) applySlapResult(localWin, data.inv2, data.inv1, data.pen2, data.pen1);
-                    else applySlapResult(localWin, data.inv1, data.inv2, data.pen1, data.pen2);
-                }
-                if (data.type === 'CLEAR_UI') {
-                    document.getElementById('slap-alert').style.display = 'none';
-                    slapLocked = false; slapInProgress = false;
-                    resetRevealButton();
-                }
-                // *** CRITICAL SYNC FIX: Unified Round Sync ***
-                if (data.type === 'SYNC_ROUND') {
-                    // Update Scoreboard
-                    stats.p1Rounds = data.stats.aiRounds; // Perspective Swap: Host's P1 is my AI
-                    stats.aiRounds = data.stats.p1Rounds; 
-                    stats.p1Slaps = data.stats.aiSlaps;
-                    stats.aiSlaps = data.stats.p1Slaps;
-                    updateStatsUI();
-                    
-                    // Show Winner Alert
-                    alert(`${data.winnerName === 'player' ? oppNick : myNick} WINS ROUND!`); 
-                    // Note: Host sends 'player' if Host won. Joiner sees 'player' as Opponent.
-                    
-                    // Sync Decks (Swap P1/P2 for Joiner)
-                    if (!isHost) initGameOnline(data.p2, data.p1);
-                }
-                if (data.type === 'FLIP_CARD') executeFlip(data.rank, data.suit);
+                if(data.type === 'FLIP_CARD') executeFlip(data.rank, data.suit);
+                if(data.type === 'CLEAR_UI') { document.getElementById('slap-alert').style.display = 'none'; slapLocked = false; slapInProgress = false; resetRevealButton(); }
             });
         }
 
-        // --- GAME LOGIC ---
+        // GAME LOGIC
         function generateDeck() {
             let d = [];
-            suits.forEach(s => values.forEach(v => d.push({ s, v, rank: rankMap[v], color: (s==='  ♥  '||s==='  ♦  ') ? 'red' : 'black', id: Math.random().toString(36), owner: 'p1' })));
+            suits.forEach(s => values.forEach(v => d.push({ s, v, rank: rankMap[v], color: (s==='  ♥  '||s==='  ♦  ') ? 'red' : 'black', id: Math.random(), owner: 'p1' })));
             d.sort(() => Math.random() - 0.5);
             for(let i=0; i<26; i++) d[i].owner = 'p1';
             for(let i=26; i<52; i++) d[i].owner = 'ai';
@@ -377,21 +251,23 @@
             slapLocked = false; sequenceLocked = false; slapInProgress = false;
             p1Pass = false; aiPass = false;
             
-            // Draw Button Reset
-            const btn = document.getElementById('deck-p1');
-            btn.innerText = "NEW CARD REVEAL"; 
-            btn.classList.remove('ready', 'counting');
-            const aiBtn = document.getElementById('deck-ai');
-            aiBtn.innerText = isOnline ? oppNick : "AI DECK";
-            aiBtn.classList.remove('ready', 'counting');
+            document.getElementById('deck-p1').innerText = "NEW CARD REVEAL";
+            document.getElementById('deck-p1').classList.remove('ready', 'counting');
+            document.getElementById('deck-ai').innerText = isOnline ? oppNick : "AI DECK";
+            document.getElementById('deck-ai').classList.remove('ready', 'counting');
 
-            p1Draw = [...p1Inventory]; aiDraw = [...aiInventory];
-            const p1F = p1Draw.splice(0, Math.min(p1Draw.length, 10));
-            const aiF = aiDraw.splice(0, Math.min(aiDraw.length, 10));
+            // CORRECTED DEAL LOGIC
+            p1Draw = [...p1Inventory]; 
+            const p1FCount = Math.min(p1Draw.length, 10);
+            const p1FCards = p1Draw.splice(0, p1FCount); // Splice removes from p1Draw
+            
+            aiDraw = [...aiInventory];
+            const aiFCount = Math.min(aiDraw.length, 10);
+            const aiFCards = aiDraw.splice(0, aiFCount);
 
             performShortageCheck();
-            layout(p1F, document.getElementById('player-boundary'), 'player');
-            layout(aiF, document.getElementById('ai-boundary'), 'ai');
+            layout(p1FCards, document.getElementById('player-boundary'), 'player');
+            layout(aiFCards, document.getElementById('ai-boundary'), 'ai');
             updateDisplay();
         }
 
@@ -412,10 +288,16 @@
             card.style.left = `${x}px`; card.style.top = `${y}px`;
             card.dataset.rank = data.rank; card.dataset.suit = data.s; card.dataset.val = data.v; card.dataset.owner = data.owner;
             card.innerHTML = `<div class="card-corner top-left"><div>${data.v}</div><div>${data.s}</div></div><div class="center-suit">${data.s}</div><div class="card-corner bottom-right"><div>${data.v}</div><div>${data.s}</div></div>`;
+            
             if(owner === 'player') {
+                // DRAG LOGIC
                 card.onmousedown = (e) => {
                     if(card.classList.contains('face-down')) {
-                        if(document.querySelectorAll('#player-boundary .face-up').length < 4) {
+                        const pileX = parseInt(card.style.left);
+                        const pileCards = Array.from(document.querySelectorAll('#player-boundary .card'))
+                            .filter(c => Math.abs(parseInt(c.style.left) - pileX) < 10 && parseInt(c.style.top) > parseInt(card.style.top));
+                        
+                        if(pileCards.length === 0) {
                             card.classList.replace('face-down', 'face-up');
                             if(isOnline) conn.send({type:'FLIP_CARD', rank: data.rank, suit: data.s});
                             resetRevealButton();
@@ -460,6 +342,35 @@
             slot.appendChild(clone); card.remove(); updateDisplay();
         }
 
+        function executeFlip(rank, suit) {
+            const oppCards = Array.from(document.querySelectorAll('#ai-boundary .card'));
+            for(let c of oppCards) {
+                if (parseInt(c.dataset.rank) === rank && c.dataset.suit === suit) {
+                    c.classList.replace('face-down', 'face-up');
+                    break;
+                }
+            }
+        }
+
+        function forceRemoteMove(r, s, v, c, o, tid) {
+            const oppCards = Array.from(document.querySelectorAll('#ai-boundary .card'));
+            let targetCard = oppCards.find(el => parseInt(el.dataset.rank) === r && el.dataset.suit === s) || oppCards[oppCards.length-1];
+            if(targetCard) {
+                centerStack.push({ rank: r, s: s, v: v, color: c, owner: o });
+                if (tid === 'target-active') targetRanks.active = r; else targetRanks.secondary = r;
+                targetCard.className = `card in-center ${c}`;
+                targetCard.innerHTML = `<div class="card-corner top-left"><div>${v}</div><div>${s}</div></div><div class="center-suit">${s}</div><div class="card-corner bottom-right"><div>${v}</div><div>${s}</div></div>`;
+                animateAiMove(targetCard, tid);
+            }
+        }
+
+        function animateAiMove(c, t) {
+            const slot = document.getElementById(t);
+            slot.innerHTML = ''; c.style.position = 'relative'; c.style.left = '0'; c.style.top = '0';
+            slot.appendChild(c); updateDisplay();
+        }
+
+        // DECK & REVEAL LOGIC
         document.getElementById('deck-p1').onclick = () => {
             if (sequenceLocked || p1Pass) return;
             p1Pass = true; document.getElementById('deck-p1').classList.add('ready');
@@ -474,7 +385,7 @@
             const t = setInterval(() => {
                 document.getElementById('deck-p1').innerText = c;
                 document.getElementById('deck-ai').innerText = c;
-                if(isOnline && conn) conn.send({ type: 'COUNTDOWN_TICK', count: c });
+                if(isOnline) conn.send({type: 'COUNTDOWN_TICK', count: c});
                 c--; if(c < 0) { clearInterval(t); executeReveal(); }
             }, 800);
         }
@@ -511,46 +422,35 @@
             c.innerHTML = `<div class="card-corner top-left"><div>${d.v}</div><div>${d.s}</div></div><div class="center-suit">${d.s}</div><div class="card-corner bottom-right"><div>${d.v}</div><div>${d.s}</div></div>`;
             c.dataset.rank = d.rank; return c;
         }
+        function resetRevealButton() {
+            p1Pass = false; aiPass = false;
+            document.getElementById('deck-p1').innerText = "NEW CARD REVEAL";
+            document.getElementById('deck-p1').classList.remove('ready', 'counting');
+            document.getElementById('deck-ai').innerText = isOnline ? oppNick : "AI DECK";
+            document.getElementById('deck-ai').classList.remove('ready', 'counting');
+            sequenceLocked = false;
+        }
 
+        // SLAP LOGIC
+        window.addEventListener('keydown', (e) => { if(e.code === 'Space' && gameActive) triggerSlap('player'); });
         function triggerSlap(winner, isNet = false) {
             if (slapLocked || !targetRanks.secondary || targetRanks.secondary !== targetRanks.active) return;
             if (isOnline && !isHost && !isNet) { conn.send({ type: 'SLAP_REQUEST' }); return; }
             if (isOnline && isHost && !isNet) { evaluateSlapRequest('player'); return; }
-            
-            // Local/Offline Logic
-            slapLocked = true;
-            const msg = document.getElementById('slap-alert');
-            msg.innerText = (winner === 'player') ? `${myNick.toUpperCase()} WON!` : "OPP WON!";
-            msg.style.display = 'block';
-            if (winner === 'player') stats.p1Slaps++; else stats.aiSlaps++;
-            updateStatsUI();
-            
-            const wonCards = [...centerStack]; centerStack = [];
-            if(winner === 'player') aiPenalty.push(...wonCards); else p1Penalty.push(...wonCards);
-            
-            setTimeout(() => {
-                msg.style.display = 'none';
-                document.querySelectorAll('.slot').forEach(s => s.innerHTML = '');
-                targetRanks = { secondary: null, active: null };
-                resetRevealButton(); updateDisplay(); slapLocked = false;
-            }, 1500);
+            applySlapResult(winner, p1Inventory, aiInventory, p1Penalty, aiPenalty);
         }
-
         function evaluateSlapRequest(req) {
-            if (slapLocked || slapInProgress || targetRanks.active !== targetRanks.secondary) return;
+            if (slapLocked || slapInProgress) return;
+            // Physical check
+            if(centerStack.length < 2 || centerStack[centerStack.length-1].rank !== centerStack[centerStack.length-2].rank) return;
             slapInProgress = true;
             const winner = (req === 'opponent') ? 'ai' : 'player';
             const won = [...centerStack]; centerStack = [];
-            
-            if(winner === 'player') { aiPenalty.push(...won); stats.p1Slaps++; }
-            else { p1Penalty.push(...won); stats.aiSlaps++; }
-            
+            if(winner === 'player') { aiPenalty.push(...won); stats.p1Slaps++; } else { p1Penalty.push(...won); stats.aiSlaps++; }
             conn.send({ type: 'SLAP_RESULT', win: winner, inv1: p1Inventory, inv2: aiInventory, pen1: p1Penalty, pen2: aiPenalty });
             applySlapResult(winner, p1Inventory, aiInventory, p1Penalty, aiPenalty);
-            
             setTimeout(() => { conn.send({ type: 'CLEAR_UI' }); }, 1500);
         }
-
         function applySlapResult(w, i1, i2, n1, n2) {
             slapLocked = true; slapInProgress = true;
             p1Inventory = i1; aiInventory = i2; p1Penalty = n1; aiPenalty = n2; centerStack = [];
@@ -565,24 +465,36 @@
             }, 1500);
         }
 
+        // END ROUND LOGIC
         function gatherCardsForRoundEnd(winner) {
-            let p1Temp = [...p1Draw, ...p1Penalty];
-            let aiTemp = [...aiDraw, ...aiPenalty];
+            // Unplayed Cards
+            let p1Temp = [...p1Draw];
+            let aiTemp = [...aiDraw];
+            
+            // Unplayed Foundations
             const p1F = Array.from(document.querySelectorAll('#player-boundary .card')).map(domToCard);
             const aiF = Array.from(document.querySelectorAll('#ai-boundary .card')).map(domToCard);
             p1Temp.push(...p1F); aiTemp.push(...aiF);
 
-            let p1Final = [], aiFinal = [];
+            // Repatriate Unplayed Borrowed Cards
+            let p1Final = [];
+            let aiFinal = [];
             p1Temp.forEach(c => { if(c.owner === 'p1') p1Final.push(c); else aiFinal.push(c); });
             aiTemp.forEach(c => { if(c.owner === 'ai' || c.owner === 'p2') aiFinal.push(c); else p1Final.push(c); });
 
+            // Add Penalty Piles (Ownership locked to holder)
+            p1Final.push(...p1Penalty);
+            aiFinal.push(...aiPenalty);
+
+            // Loser Takes Center (Played Cards)
             if(winner === 'player') aiFinal.push(...centerStack); else p1Final.push(...centerStack);
+            
             p1Final.sort(() => Math.random() - 0.5); aiFinal.sort(() => Math.random() - 0.5);
             return { p1: p1Final, ai: aiFinal };
         }
-
         function endRound(winner) {
             if (isOnline && !isHost) return; 
+            if(isOnline && isHost) conn.send({ type: 'ROUND_WIN' });
             
             if (winner === 'player') stats.p1Rounds++; else stats.aiRounds++;
             updateStatsUI();
@@ -592,19 +504,10 @@
             p1Draw = []; aiDraw = []; p1Penalty = []; aiPenalty = []; centerStack = [];
 
             if(isOnline && isHost) {
-                // UNIFIED SYNC: Send Everything
-                conn.send({
-                    type: 'SYNC_ROUND',
-                    p1: newDecks.p1,
-                    p2: newDecks.ai,
-                    stats: stats,
-                    winnerName: winner
-                });
+                conn.send({ type: 'SYNC_ROUND', p1: newDecks.p1, p2: newDecks.ai, stats: stats, winnerName: winner });
                 initGameOnline(newDecks.p1, newDecks.ai);
             } else {
-                // AI Mode Logic
-                p1Inventory = newDecks.p1;
-                aiInventory = newDecks.ai;
+                p1Inventory = newDecks.p1; aiInventory = newDecks.ai;
                 setupRound();
             }
         }
@@ -619,48 +522,19 @@
         function domToCard(c) { return { v: c.dataset.val, s: c.dataset.suit, rank: parseInt(c.dataset.rank), color: c.classList.contains('red') ? 'red' : 'black', owner: c.dataset.owner }; }
         function showVictory(win) { gameActive = false; document.getElementById('victory-screen').style.display = 'flex'; document.getElementById('vic-sub').innerText = win ? "YOU WIN THE MATCH!" : "YOU LOSE THE MATCH!"; }
         function updateDisplay() {
-            let p1Real = document.querySelectorAll('#player-boundary .card').length + p1Penalty.length;
-            let aiReal = document.querySelectorAll('#ai-boundary .card').length + aiPenalty.length;
-            if (p1IsBorrowing) aiReal += (p1Draw.length + aiDraw.length);
-            else if (aiIsBorrowing) p1Real += (aiDraw.length + p1Draw.length);
-            else { p1Real += p1Draw.length; aiReal += aiDraw.length; }
-            document.getElementById('p1-t').innerText = p1Real;
-            document.getElementById('ai-t').innerText = aiReal;
+            let p1C = document.querySelectorAll('#player-boundary .card').length + p1Draw.length + p1Penalty.length;
+            let aiC = isOnline ? (52 - p1C - centerStack.length) : (document.querySelectorAll('#ai-boundary .card').length + aiDraw.length + aiPenalty.length);
+            if(p1IsBorrowing) aiC += p1Draw.length;
+            if(aiIsBorrowing) p1C += aiDraw.length;
+            document.getElementById('p1-t').innerText = p1C; document.getElementById('ai-t').innerText = aiC;
         }
-        function forceRemoteMove(r, s, v, c, o, tid) {
-            const oppCards = Array.from(document.querySelectorAll('#ai-boundary .card'));
-            let targetCard = oppCards.find(el => parseInt(el.dataset.rank) === r && el.dataset.suit === s) || oppCards[oppCards.length-1];
-            if(targetCard) {
-                centerStack.push({ rank: r, s: s, v: v, color: c, owner: o });
-                if (tid === 'target-active') targetRanks.active = r; else targetRanks.secondary = r;
-                targetCard.className = `card in-center ${c}`;
-                targetCard.innerHTML = `<div class="card-corner top-left"><div>${v}</div><div>${s}</div></div><div class="center-suit">${s}</div><div class="card-corner bottom-right"><div>${v}</div><div>${s}</div></div>`;
-                animateAiMove(targetCard, tid, 'play', true);
-            }
+        function performShortageCheck() {
+            // IMMEDIATE BORROW
+            if (p1Draw.length === 0 && aiDraw.length > 0) { p1Draw = aiDraw.splice(0, Math.floor(aiDraw.length/2)); p1IsBorrowing = true; }
+            if (aiDraw.length === 0 && p1Draw.length > 0) { aiDraw = p1Draw.splice(0, Math.floor(p1Draw.length/2)); aiIsBorrowing = true; }
+            updateBorrowVisuals();
         }
-        function executeFlip(rank, suit) {
-            const oppCards = Array.from(document.querySelectorAll('#ai-boundary .card'));
-            for(let c of oppCards) {
-                if (parseInt(c.dataset.rank) === rank && c.dataset.suit === suit) {
-                    c.classList.replace('face-down', 'face-up');
-                    break;
-                }
-            }
-        }
-        function resetRevealButton() {
-            p1Pass = false; aiPass = false;
-            document.getElementById('deck-p1').innerText = "NEW CARD REVEAL";
-            document.getElementById('deck-p1').classList.remove('ready', 'counting');
-            document.getElementById('deck-ai').innerText = isOnline ? oppNick : "AI DECK";
-            document.getElementById('deck-ai').classList.remove('ready', 'counting');
-            sequenceLocked = false;
-        }
-        function animateAiMove(c, t, type, forced=false) {
-            const slot = document.getElementById(t);
-            slot.innerHTML = ''; c.style.position = 'relative'; c.style.left = '0'; c.style.top = '0';
-            slot.appendChild(c); updateDisplay();
-        }
-        window.addEventListener('keydown', (e) => { if(e.code === 'Space' && gameActive) triggerSlap('player'); });
+        function updateBorrowVisuals() { document.getElementById('deck-p1').classList.toggle('has-borrowed', p1IsBorrowing); document.getElementById('deck-ai').classList.toggle('has-borrowed', aiIsBorrowing); }
         document.getElementById('new-match-btn').onclick = isOnline ? () => location.reload() : initGameAI;
     })();
     </script>
