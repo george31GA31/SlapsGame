@@ -3,17 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ISF Card Engine V15.0 (Simplified Slaps)</title>
+    <title>ISF Card Engine V15.1 (Reveal Fixed)</title>
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 </head>
 <body>
     <script>
     (function() {
-        /* ISF OFFICIAL ENGINE V15.0 (SIMPLIFIED SLAPS)
-           - Removed: Center Count Widget.
-           - Logic: Slap Trigger is now purely based on matching Rank Numbers (e.g. 5 vs 5).
-           - Logic: Host arbitrates "First to Press". Loser receives the Center Stack immediately.
-           - Logic: "Blind Trust" and "Repatriation Economy" maintained.
+        /* ISF OFFICIAL ENGINE V15.1 (REVEAL FIXED)
+           - Fix: Reverted 'forceRevealFromHost' to V14.1 logic (Guarantees 2 cards).
+           - Fix: "Blind Trust" enabled for smooth syncing.
+           - Logic: Slap checks physical card ranks (e.g. 8 vs 8).
+           - Logic: Host arbitrates slaps and end-round math.
+           - UI: Center Widget removed.
         */
 
         // 1. SETUP & CONSTANTS
@@ -231,7 +232,7 @@
                 <div id="deck-ai" class="draw-stack">OPPONENT<div class="sideways-card"></div></div>
                 <div id="target-secondary" class="slot"></div>
                 <div id="target-active" class="slot"></div>
-                <div id="deck-p1" class="draw-stack">START<div class="sideways-card"></div></div>
+                <div id="deck-p1" class="draw-stack">PASS<div class="sideways-card"></div></div>
             </div>
             <div id="player-boundary" class="foundation-area"></div>
             <div class="inventory-hud">
@@ -395,6 +396,15 @@
                         initGameOnline(data.p2, data.p1);
                     }
                 }
+                if (data.type === 'SYNC_STATS') {
+                    if (!isHost) {
+                        p1Inventory = data.p2Inv;
+                        aiInventory = data.p1Inv;
+                        p1Penalty = data.p2Pen;
+                        aiPenalty = data.p1Pen;
+                        updateDisplay();
+                    }
+                }
                 if (data.type === 'FLIP_CARD') {
                     executeFlip(data.cardRank, data.cardSuit);
                 }
@@ -406,7 +416,11 @@
             slapInProgress = true;
 
             // SIMPLIFIED SLAP CHECK: MATCHING RANKS
-            if (targetRanks.active === null || targetRanks.secondary === null || targetRanks.active !== targetRanks.secondary) {
+            if (centerStack.length < 2) { slapInProgress = false; return; }
+            const top1 = centerStack[centerStack.length - 1];
+            const top2 = centerStack[centerStack.length - 2];
+            
+            if (top1.rank !== top2.rank) {
                 slapInProgress = false; 
                 return; 
             }
@@ -415,7 +429,6 @@
             const wonCards = [...centerStack];
             centerStack = [];
             
-            // LOSER TAKES CARDS
             if (winner === 'player') {
                 aiPenalty.push(...wonCards); 
             } else {
@@ -425,8 +438,8 @@
             conn.send({ 
                 type: 'SLAP_RESULT', 
                 winnerName: winner,
-                newP1: p1Inventory, // HOST
-                newP2: aiInventory, // JOINER
+                newP1: p1Inventory,
+                newP2: aiInventory,
                 newPenP1: p1Penalty,
                 newPenP2: aiPenalty
             });
@@ -1057,6 +1070,7 @@
             if(p1Draw.length > 0) p1Draw.pop(); 
             if(aiDraw.length > 0) aiDraw.pop(); 
             
+            // FIX: HARD WIPE CENTER STACK TO PREVENT DUPLICATION
             centerStack = [];
             centerStack.push(hostCard, joinerCard);
             
@@ -1080,13 +1094,14 @@
         function triggerSlap(winner, isNetworkCommand = false) {
             if (slapLocked || !targetRanks.secondary || targetRanks.secondary !== targetRanks.active) return;
             
-            if (isOnline && !isNetworkCommand && conn) {
+            // JOINER sends request, HOST decides
+            if (isOnline && !isHost && !isNetworkCommand && conn) {
                 conn.send({ type: 'SLAP_REQUEST' });
-                return; 
+                return; // Stop local execution for joiner
             }
-            if(isOnline && isHost && !isNetworkCommand) {
-                evaluateSlapRequest('player');
-                return;
+            // HOST sends confirmation to everyone
+            if(isOnline && isHost && !isNetworkCommand && conn) {
+                conn.send({ type: 'SLAP_RESULT', winnerName: 'player' }); // Host won locally
             }
 
             slapLocked = true; sequenceLocked = true;
@@ -1103,6 +1118,7 @@
                 p1Penalty.push(...wonCards); 
             }
             
+            // HOST SYNC STATS
             if(isOnline && isHost && conn) {
                 conn.send({
                     type: 'SYNC_STATS',
@@ -1204,7 +1220,6 @@
             else { p1Real += p1Draw.length; aiReal += aiDraw.length; }
             document.getElementById('p1-t').innerText = p1Real;
             document.getElementById('ai-t').innerText = aiReal;
-            document.getElementById('center-count-val').innerText = centerStack.length;
         }
         document.getElementById('new-match-btn').onclick = isOnline ? () => location.reload() : initGameAI;
     })();
