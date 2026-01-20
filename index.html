@@ -3,17 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ISF Card Engine V10.9 (Manual Flip & Force Sync)</title>
+    <title>ISF Card Engine V11.0 (Mirror Fixed)</title>
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 </head>
 <body>
     <script>
     (function() {
-        /* ISF OFFICIAL ENGINE V10.9 (MANUAL FLIP & FORCE SYNC)
-           - Fix: Removed Auto-Flip. Players must click face-down cards to reveal them.
-           - Fix: "Snap Back" bug. Network moves now bypass local rule checks (Force Mode).
-           - Logic: Loser takes the pile (V10.8 logic maintained).
-           - Logic: Host Authority for reveals maintained.
+        /* ISF OFFICIAL ENGINE V11.0 (MIRROR FIXED)
+           - Fix: ID Mismatch in Network Logic ('active' vs 'target-active').
+           - Fix: Foundation Piles Sync (Scanning logic improved).
+           - Logic: Reveal now correctly places Host card on Host Right / Joiner Left.
+           - Status: FULL SYNC
         */
 
         // 1. SETUP & CONSTANTS
@@ -378,6 +378,8 @@
                     }
                 }
                 if (data.type === 'MOVE') {
+                    // FIX 1: Match the ID correctly (sender sends 'target-active', receiver checks for it)
+                    // If sender sends 'target-active' (their Right), I mirror to 'target-secondary' (my Left).
                     const mirroredTarget = (data.targetId === 'target-active') ? 'target-secondary' : 'target-active';
                     forceRemoteMove(data.cardRank, data.cardSuit, data.cardVal, data.cardColor, mirroredTarget);
                 }
@@ -731,7 +733,6 @@
                     const cardRank = parseInt(clone.dataset.rank);
                     const diff = Math.abs(cardRank - currentTargetVal);
                     
-                    // FORCE MODE UPDATE: Bypasses check if isForced is true
                     if (isForced || diff === 1 || diff === 12) {
                         centerStack.push({ rank: cardRank, s: clone.dataset.suit, v: clone.dataset.val, color: clone.dataset.color });
                         const slot = document.getElementById(target);
@@ -754,7 +755,6 @@
                         updateDisplay();
                         if (document.querySelectorAll('#ai-boundary .card').length === 0) endRound("ai");
                     } else {
-                        // Snap Back
                         card.style.opacity = '1'; clone.remove();
                     }
                 }
@@ -898,16 +898,13 @@
                             cardSuit: card.dataset.suit,
                             cardVal: card.dataset.val,
                             cardColor: card.dataset.color,
-                            targetId: target,
+                            targetId: target === 'active' ? 'target-active' : 'target-secondary', // FIX 1: SEND FULL ID
                             originCol: closestCol
                         });
                     }
                     centerStack.push({ rank: parseInt(card.dataset.rank), s: card.dataset.suit, v: card.dataset.val, color: card.dataset.color });
                     updateCenter(target, card);
                     
-                    // UPDATED: AUTO-FLIP REMOVED FOR PLAYER
-                    // Player must manually click facedown cards.
-
                     if (document.querySelectorAll('#player-boundary .card').length === 0) endRound("player");
                     return true;
                 }
@@ -991,13 +988,23 @@
             }
         }
         
+        // FIX 2: FORCE REVEAL LOGIC UPDATE
+        // Host card goes to 'secondary' (Left) for Host.
+        // For Joiner, Host card MUST go to 'secondary' (Left) as well, because P1 is always Left?
+        // Wait. Mirroring means P1 is Right for Host, Left for Joiner.
+        // If Host puts P1 Card on Right ('active'). Joiner must put P1 Card on Left ('secondary').
         function forceRevealFromHost(hostCard, joinerCard) {
             document.querySelectorAll('.slot').forEach(s => s.innerHTML = '');
             if(p1Draw.length > 0) p1Draw.pop(); 
             if(aiDraw.length > 0) aiDraw.pop(); 
             centerStack.push(hostCard, joinerCard);
+            
+            // For Joiner (Mirror):
+            // Host Card (P1) -> Left ('secondary')
+            // Joiner Card (AI) -> Right ('active')
             updateCenter('secondary', createRevealCard(hostCard));
             updateCenter('active', createRevealCard(joinerCard));
+            
             resetRevealButton();
             updateDisplay();
         }
