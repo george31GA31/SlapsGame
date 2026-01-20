@@ -1235,43 +1235,54 @@
             }
         });
         
-        // --- NEW ROUND END LOGIC (PERSISTENT OWNERSHIP) ---
-        function gatherCardsForRoundEnd(winner) {
-            const p1Foundation = Array.from(document.querySelectorAll('#player-boundary .card')).map(domToCard);
-            const aiFoundation = Array.from(document.querySelectorAll('#ai-boundary .card')).map(domToCard);
-            const p1Reserves = [...p1Draw];
-            const aiReserves = [...aiDraw];
-            const centerPot = [...centerStack];
+        // --- FIXED ROUND END LOGIC (WINNER SHEDS EVERYTHING) ---
+function gatherCardsForRoundEnd(winner) {
+    const p1F = Array.from(document.querySelectorAll('#player-boundary .card')).map(domToCard);
+    const aiF = Array.from(document.querySelectorAll('#ai-boundary .card')).map(domToCard);
+    const p1D = [...p1Draw];
+    const aiD = [...aiDraw];
+    const center = [...centerStack];
+    const p1Pen = [...p1Penalty];
+    const aiPen = [...aiPenalty];
 
-            let newP1Inventory = [];
-            let newAiInventory = [];
+    let newP1 = [];
+    let newAi = [];
 
-            // Winner takes their Draw + Opponent's Draw + Their Slapped Cards
-            // Loser takes their Foundation + Center Pot + Their Slapped Cards
-            
-            if (winner === 'player') {
-                // WINNER (P1)
-                newP1Inventory.push(...p1Foundation); // Leftovers
-                newP1Inventory.push(...p1Reserves);   // Own Draw
-                newP1Inventory.push(...aiReserves);   // Opponent's Draw (THE PRIZE)
-                newP1Inventory.push(...p1Penalty);    // Slapped cards
+    if (winner === 'player') {
+        // --- PLAYER WINS ---
+        // Winner keeps ONLY their remaining Draw Deck (Safe Cards)
+        // This results in your "10" cards starting count.
+        newP1.push(...p1D); 
+        
+        // Loser (AI) takes EVERYTHING ELSE
+        // Opponent Draw + Center Pot + AI Penalties + Winner's Shedded Penalties + Leftover Board
+        newAi.push(...aiD); 
+        newAi.push(...center);
+        newAi.push(...aiPen); 
+        newAi.push(...p1Pen); // Winner sheds their penalty pile to the loser
+        newAi.push(...aiF);   // Loser's board leftovers
+        newAi.push(...p1F);   // Should be empty if P1 won, but added just in case
+        
+    } else {
+        // --- AI WINS ---
+        // AI keeps ONLY their remaining Draw Deck
+        newAi.push(...aiD);
 
-                // LOSER (AI)
-                newAiInventory.push(...aiFoundation); // Leftovers
-                newAiInventory.push(...centerPot);    // The Mess (PENALTY)
-                newAiInventory.push(...aiPenalty);    // Slapped cards
-            } else {
-                // WINNER (AI)
-                newAiInventory.push(...aiFoundation); // Leftovers (should be 0)
-                newAiInventory.push(...aiReserves);   // Own Draw
-                newAiInventory.push(...p1Reserves);   // Opponent's Draw (THE PRIZE)
-                newAiInventory.push(...aiPenalty);    // Slapped cards
+        // Player (Loser) takes EVERYTHING ELSE
+        newP1.push(...p1D);
+        newP1.push(...center);
+        newP1.push(...p1Pen);
+        newP1.push(...aiPen); // AI sheds their penalty to Player
+        newP1.push(...p1F);
+        newP1.push(...aiF);   // Should be empty
+    }
 
-                // LOSER (P1)
-                newP1Inventory.push(...p1Foundation); // Leftovers
-                newP1Inventory.push(...centerPot);    // The Mess (PENALTY)
-                newP1Inventory.push(...p1Penalty);    // Slapped cards
-            }
+    // Shuffle
+    newP1.sort(() => Math.random() - 0.5);
+    newAi.sort(() => Math.random() - 0.5);
+
+    return { p1: newP1, ai: newAi };
+}
 
             newP1Inventory.sort(() => Math.random() - 0.5);
             newAiInventory.sort(() => Math.random() - 0.5);
@@ -1281,39 +1292,39 @@
 
         // --- FIXED END ROUND (Preserves Deck Ownership) ---
         function endRound(winner) {
-            if (isOnline && !isHost) return; 
+    if (isOnline && !isHost) return; 
 
-            if(isOnline && isHost) conn.send({ type: 'ROUND_WIN' });
+    if(isOnline && isHost) conn.send({ type: 'ROUND_WIN' });
 
-            if (winner === 'player') stats.p1Rounds++; else stats.aiRounds++;
-            updateStatsUI();
-            
-            // 1. Calculate the new snowball decks
-            const newDecks = gatherCardsForRoundEnd(winner);
-            
-            // 2. Clear table state (but do NOT reset stats or generate new deck)
-            centerStack = [];
-            p1Penalty = []; aiPenalty = [];
-            p1Draw = []; aiDraw = [];
-            
-            // 3. Assign the Snowballed Decks to Inventory
-            p1Inventory = newDecks.p1;
-            aiInventory = newDecks.ai;
+    if (winner === 'player') stats.p1Rounds++; else stats.aiRounds++;
+    updateStatsUI();
+    
+    // 1. Calculate new decks
+    const newDecks = gatherCardsForRoundEnd(winner);
+    
+    // 2. Clear state
+    centerStack = [];
+    p1Penalty = []; aiPenalty = [];
+    p1Draw = []; aiDraw = [];
+    
+    // 3. Assign
+    p1Inventory = newDecks.p1;
+    aiInventory = newDecks.ai;
 
-            alert(`${winner.toUpperCase()} WINS ROUND! \nCards Owned: You: ${p1Inventory.length} | Opp: ${aiInventory.length}`);
+    alert(`${winner.toUpperCase()} WINS ROUND! \nCards for next round: You: ${p1Inventory.length} | Opp: ${aiInventory.length}`);
 
-            // 4. Start the next round using the existing inventories
-            if(isOnline && isHost) {
-                conn.send({
-                    type: 'SYNC_ROUND',
-                    p1: newDecks.p1,
-                    p2: newDecks.ai
-                });
-                setupRound(); // Call setup directly, don't call initGameOnline
-            } else {
-                setupRound(); // Call setup directly, don't call initGameAI
-            }
-        }
+    // 4. Start Next Round (Direct Call)
+    if(isOnline && isHost) {
+        conn.send({
+            type: 'SYNC_ROUND',
+            p1: newDecks.p1,
+            p2: newDecks.ai
+        });
+        setupRound(); 
+    } else {
+        setupRound(); 
+    }
+}
         
         function domToCard(c) {
             return { v: c.dataset.val, s: c.dataset.suit, rank: parseInt(c.dataset.rank), color: c.classList.contains('red') ? 'red' : 'black', owner: c.dataset.owner };
