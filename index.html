@@ -3,17 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ISF Card Engine V11.0 (Mirror Fixed)</title>
+    <title>ISF Card Engine V11.1 (Final Round Sync)</title>
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 </head>
 <body>
     <script>
     (function() {
-        /* ISF OFFICIAL ENGINE V11.0 (MIRROR FIXED)
-           - Fix: ID Mismatch in Network Logic ('active' vs 'target-active').
-           - Fix: Foundation Piles Sync (Scanning logic improved).
-           - Logic: Reveal now correctly places Host card on Host Right / Joiner Left.
-           - Status: FULL SYNC
+        /* ISF OFFICIAL ENGINE V11.1 (FINAL ROUND SYNC)
+           - Fix: Round End Math is now calculated ONLY by Host.
+           - Fix: Joiner receives pre-calculated decks from Host (100% Sync).
+           - Logic: Winner keeps inventory. Loser takes their inventory + Center Stack.
+           - Logic: "Blind Trust" moves and Host Authority reveals maintained.
         */
 
         // 1. SETUP & CONSTANTS
@@ -378,8 +378,6 @@
                     }
                 }
                 if (data.type === 'MOVE') {
-                    // FIX 1: Match the ID correctly (sender sends 'target-active', receiver checks for it)
-                    // If sender sends 'target-active' (their Right), I mirror to 'target-secondary' (my Left).
                     const mirroredTarget = (data.targetId === 'target-active') ? 'target-secondary' : 'target-active';
                     forceRemoteMove(data.cardRank, data.cardSuit, data.cardVal, data.cardColor, mirroredTarget);
                 }
@@ -390,7 +388,11 @@
                     triggerSlap('ai', true);
                 }
                 if (data.type === 'ROUND_WIN') {
-                    endRound('ai');
+                    endRound('ai'); // Triggered by loser
+                }
+                if (data.type === 'SYNC_ROUND') {
+                    // NEW: SYNC ROUND HANDLER FOR JOINER
+                    initGameOnline(data.p1, data.p2);
                 }
                 if (data.type === 'FLIP_CARD') {
                     executeFlip(data.cardRank, data.cardSuit);
@@ -432,7 +434,6 @@
                 <div class="card-corner bottom-right"><div>${val}</div><div>${suit}</div></div>
                 `;
                 
-                // FORCE MODE: TRUE (Skips logic check)
                 animateAiMove(targetCard, targetId, 'play', true);
             }
         }
@@ -898,7 +899,7 @@
                             cardSuit: card.dataset.suit,
                             cardVal: card.dataset.val,
                             cardColor: card.dataset.color,
-                            targetId: target === 'active' ? 'target-active' : 'target-secondary', // FIX 1: SEND FULL ID
+                            targetId: target === 'active' ? 'target-active' : 'target-secondary',
                             originCol: closestCol
                         });
                     }
@@ -988,23 +989,13 @@
             }
         }
         
-        // FIX 2: FORCE REVEAL LOGIC UPDATE
-        // Host card goes to 'secondary' (Left) for Host.
-        // For Joiner, Host card MUST go to 'secondary' (Left) as well, because P1 is always Left?
-        // Wait. Mirroring means P1 is Right for Host, Left for Joiner.
-        // If Host puts P1 Card on Right ('active'). Joiner must put P1 Card on Left ('secondary').
         function forceRevealFromHost(hostCard, joinerCard) {
             document.querySelectorAll('.slot').forEach(s => s.innerHTML = '');
             if(p1Draw.length > 0) p1Draw.pop(); 
             if(aiDraw.length > 0) aiDraw.pop(); 
             centerStack.push(hostCard, joinerCard);
-            
-            // For Joiner (Mirror):
-            // Host Card (P1) -> Left ('secondary')
-            // Joiner Card (AI) -> Right ('active')
             updateCenter('secondary', createRevealCard(hostCard));
             updateCenter('active', createRevealCard(joinerCard));
-            
             resetRevealButton();
             updateDisplay();
         }
@@ -1060,6 +1051,7 @@
             if (winner === 'player') stats.p1Rounds++; else stats.aiRounds++;
             updateStatsUI();
             
+            // LOGIC: LOSER TAKES CENTER STACK (V11.1 Logic)
             if (p1IsBorrowing) { aiDraw.push(...p1Draw); p1Draw = []; }
             if (aiIsBorrowing) { p1Draw.push(...aiDraw); aiDraw = []; }
             const p1RemF = Array.from(document.querySelectorAll('#player-boundary .card')).map(domToCard);
@@ -1078,12 +1070,18 @@
             p1Inventory.sort(() => Math.random() - 0.5); aiInventory.sort(() => Math.random() - 0.5);
             alert(`${winner.toUpperCase()} WINS ROUND!`);
             
+            // HOST AUTHORITY ROUND SYNC
             if(isOnline && isHost) {
+                conn.send({
+                    type: 'SYNC_ROUND',
+                    p1: p1Inventory,
+                    p2: aiInventory
+                });
                 setupRound();
             } else if (!isOnline) {
                 setupRound();
             } else {
-                setupRound();
+                // Joiner waits for SYNC_ROUND
             }
         }
         
