@@ -3,16 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ISF Card Engine V10.1 (Online Sync)</title>
+    <title>ISF Card Engine V10.2 (Full Online Play)</title>
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 </head>
 <body>
     <script>
     (function() {
-        /* ISF OFFICIAL ENGINE V10.1 (ONLINE SYNC)
-           - Fix: Wired up "Start Match" button
-           - Logic: Host generates deck and sends half to Joiner
-           - Sync: Both players start with coordinated decks
+        /* ISF OFFICIAL ENGINE V10.2 (FULL ONLINE PLAY)
+           - Fix: "Player 2" Label
+           - Feature: Networked "Pass" (Drawing works now)
+           - Feature: Networked Card Movement (Opponent moves are visible)
+           - Logic: AI completely disabled during Online Play
         */
 
         // 1. SETUP & CONSTANTS
@@ -25,7 +26,7 @@
         let conn = null;
         let isHost = false;
         let netId = null;
-        let isOnline = false; // Flag to disable AI brain in online mode
+        let isOnline = false; 
 
         let p1Inventory = [], aiInventory = [];
         let p1Draw = [], aiDraw = [];
@@ -223,11 +224,11 @@
                 <button id="new-match-btn" style="padding: 15px 40px; font-size: 20px; margin-top: 40px; cursor: pointer; background: white; border: none; border-radius: 5px; font-weight: bold;">NEW MATCH</button>
             </div>
             <div id="slap-alert">PLAYER 1 SLAPS WON!</div>
-            <div class="inventory-hud ai-hud"><small>Opponent</small><span id="ai-t">26</span></div>
+            <div class="inventory-hud ai-hud"><small>Player 2</small><span id="ai-t">26</span></div>
             <div id="ai-boundary" class="foundation-area ai-side"></div>
 
             <div id="center-arena">
-                <div id="deck-ai" class="draw-stack">OPP DECK<div class="sideways-card"></div></div>
+                <div id="deck-ai" class="draw-stack">PLAYER 2<div class="sideways-card"></div></div>
                 <div id="target-secondary" class="slot"></div>
                 <div id="target-active" class="slot"></div>
                 <div id="deck-p1" class="draw-stack">START<div class="sideways-card"></div></div>
@@ -374,14 +375,58 @@
 
         function setupConnection() {
             conn.on('data', (data) => {
-                // START HANDSHAKE
+                // 1. START GAME HANDSHAKE
                 if (data.type === 'START_GAME') {
                     document.getElementById('screen-lobby-join').classList.add('hidden');
                     document.getElementById('isf-stadium').classList.remove('hidden');
-                    // Initialize with received decks
                     initGame(data.myCards, data.oppCards);
                 }
+                
+                // 2. RECEIVE "PASS" SIGNAL
+                if (data.type === 'PASS') {
+                    // This means the opponent clicked their deck
+                    if (!aiPass) {
+                        aiPass = true;
+                        document.getElementById('deck-ai').classList.add('ready');
+                        checkSyncReveal();
+                    }
+                }
+
+                // 3. RECEIVE "MOVE" SIGNAL (Card Played)
+                if (data.type === 'MOVE') {
+                    // data.cardId = ID of card to move
+                    // data.targetId = 'target-active' or 'target-secondary'
+                    // BUT: We are mirrored!
+                    // If Opponent sends 'target-active' (Right for them), it is 'target-secondary' (Left for me)
+                    // IF they send 'target-secondary' (Left for them), it is 'target-active' (Right for me)
+                    
+                    const mirroredTarget = (data.targetId === 'target-active') ? 'target-secondary' : 'target-active';
+                    executeRemoteMove(data.cardRank, data.cardSuit, data.cardVal, data.cardColor, mirroredTarget);
+                }
             });
+        }
+        
+        function executeRemoteMove(rank, suit, val, color, targetId) {
+            // Find a dummy card in the opponent's boundary to animate
+            const oppCards = document.querySelectorAll('#ai-boundary .card');
+            if(oppCards.length > 0) {
+                const dummy = oppCards[oppCards.length - 1]; // Just grab the last one for visual logic
+                dummy.dataset.rank = rank;
+                dummy.dataset.suit = suit;
+                dummy.dataset.val = val;
+                dummy.dataset.color = color;
+                
+                // Visuals for the card
+                dummy.innerHTML = `
+                <div class="card-corner top-left"><div>${val}</div><div>${suit}</div></div>
+                <div class="center-suit">${suit}</div>
+                <div class="card-corner bottom-right"><div>${val}</div><div>${suit}</div></div>
+                `;
+                dummy.className = `card ${color}`;
+                
+                // Animate it
+                animateAiMove(dummy, targetId, 'play');
+            }
         }
 
         // --- GAME LOGIC ---
@@ -459,8 +504,7 @@
                 setTimeout(() => { triggerAiPass(); }, 1500);
                 startAiBrain();
             } else {
-                // ONLINE: We will eventually sync moves here
-                // For now, it's just a sandbox where you can move your own cards
+                document.getElementById('deck-ai').innerText = "PLAYER 2";
             }
         }
 
@@ -801,7 +845,7 @@
 
             const aiBtn = document.getElementById('deck-ai');
             aiBtn.classList.remove('ready', 'counting');
-            aiBtn.innerText = "AI DECK";
+            aiBtn.innerText = isOnline ? "PLAYER 2" : "AI DECK"; // DYNAMIC LABEL
         }
         function performShortageCheck() {
             if (p1Draw.length === 0 && aiDraw.length === 0) return;
@@ -910,6 +954,19 @@
             if (target && targetRanks[target]) {
                 const diff = Math.abs(parseInt(card.dataset.rank) - targetRanks[target]);
                 if (diff === 1 || diff === 12) {
+                    
+                    // --- NETWORKING: SEND MOVE ---
+                    if (isOnline && conn) {
+                        conn.send({
+                            type: 'MOVE',
+                            cardRank: parseInt(card.dataset.rank),
+                            cardSuit: card.dataset.suit,
+                            cardVal: card.dataset.val,
+                            cardColor: card.dataset.color,
+                            targetId: target // We send 'active' or 'secondary'. Opponent will flip it.
+                        });
+                    }
+
                     centerStack.push({ rank: parseInt(card.dataset.rank), s: card.dataset.suit, v: card.dataset.val, color: card.dataset.color });
                     updateCenter(target, card);
                     if (document.querySelectorAll('#player-boundary .card').length === 0) endRound("player");
@@ -929,25 +986,24 @@
             card.remove();
             updateDisplay();
         }
-        function resetRevealButton() {
-            sequenceLocked = false; p1Pass = false; aiPass = false;
-            const btn = document.getElementById('deck-p1');
-            btn.innerText = gameActive ? "PASS / READY" : "START";
-            btn.classList.remove('ready', 'counting');
-
-            const aiBtn = document.getElementById('deck-ai');
-            aiBtn.classList.remove('ready', 'counting');
-            aiBtn.innerText = "AI DECK";
-        }
+        
+        // --- MODIFIED CLICK HANDLER FOR NETWORKING ---
         document.getElementById('deck-p1').onclick = () => {
             if (sequenceLocked) return;
             if (!p1Pass) {
                 p1Pass = true;
                 document.getElementById('deck-p1').classList.add('ready');
                 document.getElementById('deck-p1').innerText = "READY";
+                
+                // NETWORKING: SEND PASS SIGNAL
+                if (isOnline && conn) {
+                    conn.send({ type: 'PASS' });
+                }
+
                 checkSyncReveal();
             }
         };
+
         function checkSyncReveal() {
             if (p1Pass && aiPass) {
                 startCountdown();
