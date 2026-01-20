@@ -3,18 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ISF Card Engine V12.0 (Economy & Widget)</title>
+    <title>ISF Card Engine V12.1 (Slap Sync Fix)</title>
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 </head>
 <body>
     <script>
     (function() {
-        /* ISF OFFICIAL ENGINE V12.0 (ECONOMY & WIDGET)
-           - Feature: Center Pile Counter Widget added.
-           - Logic: "Repatriation" Phase - Borrowed cards return to owner before scoring.
-           - Logic: Winner keeps their deck. Loser gets their deck + Center Stack.
-           - Logic: Slaps are now 100% Host Authoritative.
-           - Logic: Shortage check happens immediately on round start.
+        /* ISF OFFICIAL ENGINE V12.1 (SLAP SYNC FIX)
+           - Fix: Added 'SYNC_STATS' network command to force card count alignment.
+           - Fix: Refined 'checkForMatch' to run on both local and remote moves.
+           - Logic: Host now broadcasts exact inventory counts after every slap.
+           - Logic: Center pile widget updates reliably on network moves.
         */
 
         // 1. SETUP & CONSTANTS
@@ -388,7 +387,6 @@
                 if (data.type === 'FORCE_REVEAL') {
                     forceRevealFromHost(data.card1, data.card2);
                 }
-                // JOINER SENDS SLAP REQUEST -> HOST REPLIES WITH RESULT
                 if (data.type === 'SLAP_REQUEST') {
                     if (isHost) evaluateSlapRequest('opponent'); 
                 }
@@ -402,6 +400,14 @@
                 if (data.type === 'SYNC_ROUND') {
                     initGameOnline(data.p1, data.p2);
                 }
+                if (data.type === 'SYNC_STATS') {
+                    // Force stats sync from Host
+                    p1Inventory = data.p1Inv;
+                    aiInventory = data.p2Inv;
+                    p1Penalty = data.p1Pen;
+                    aiPenalty = data.p2Pen;
+                    updateDisplay();
+                }
                 if (data.type === 'FLIP_CARD') {
                     executeFlip(data.cardRank, data.cardSuit);
                 }
@@ -413,13 +419,12 @@
             if (slapLocked || !targetRanks.secondary || targetRanks.secondary !== targetRanks.active) return;
             
             // Valid Slap. Who sent it?
-            // requestor = 'opponent' (Joiner) or 'player' (Host)
             const winner = requestor === 'opponent' ? 'ai' : 'player'; 
             
             // Send result to both
-            const winName = winner; // 'player' or 'ai'
+            const winName = winner; 
             conn.send({ type: 'SLAP_RESULT', winnerName: winName });
-            triggerSlap(winName, true); // Execute locally
+            triggerSlap(winName, true); 
         }
 
         function executeFlip(rank, suit) {
@@ -464,17 +469,10 @@
 
         function generateDeck() {
             let d = [];
-            // Assign Owner P1 initially. Split function will reassign P2.
             suits.forEach(s => values.forEach(v => d.push({ s, v, rank: rankMap[v], color: (s===' ♥ '||s===' ♦ ') ? 'red' : 'black', id: Math.random().toString(36), owner: 'p1' })));
-            
             d.sort(() => Math.random() - 0.5);
-            
-            // Re-tag owners after shuffle split? No, better to tag 26 p1, 26 p2.
-            // ACTUALLY: Let's tag them based on who holds them.
-            // Pre-tag 26 as P1, 26 as P2 (AI)
             for(let i=0; i<26; i++) d[i].owner = 'p1';
             for(let i=26; i<52; i++) d[i].owner = 'ai';
-            
             return d;
         }
 
@@ -572,7 +570,7 @@
                     const aiCards = document.querySelectorAll('#ai-boundary .card');
                     if (aiCards.length > 0) {
                         const c = aiCards[aiCards.length - 1];
-                        p1Draw.push({ v: c.dataset.val, s: c.dataset.suit, rank: parseInt(c.dataset.rank), color: c.dataset.color, owner: c.dataset.owner });
+                        p1Draw.push({ v: c.dataset.val, s: c.dataset.suit, rank: parseInt(c.dataset.rank), color: c.dataset.color });
                         c.remove(); stolen++;
                     }
                 }
@@ -1073,6 +1071,17 @@
                 p1Penalty.push(...wonCards); 
             }
             
+            // HOST SYNC STATS
+            if(isOnline && isHost && conn) {
+                conn.send({
+                    type: 'SYNC_STATS',
+                    p1Inv: p1Inventory,
+                    p2Inv: aiInventory,
+                    p1Pen: p1Penalty,
+                    p2Pen: aiPenalty
+                });
+            }
+
             setTimeout(() => {
                 msg.style.display = 'none';
                 document.querySelectorAll('.slot').forEach(s => s.innerHTML = '');
