@@ -562,15 +562,16 @@
             document.getElementById('stat-ai-s').innerText = stats.aiSlaps;
         }
 
-        // --- NEW SETUP ROUND LOGIC (DYNAMIC DEALING) ---
+        // --- FIXED SETUP ROUND (Correct Victory Check) ---
 function setupRound() {
     // 1. MATCH WIN CONDITION CHECK
-    // If a player has absolutely NO cards (Inventory, Draw, or Penalty), they lose the MATCH.
+    // If a player has NO cards (Inventory is empty, and we just cleared Draw/Penalty in endRound)
     const p1Total = p1Inventory.length;
     const aiTotal = aiInventory.length;
 
-    if (p1Total === 0 && !gameActive) return showVictory("OPPONENT WINS THE MATCH!");
-    if (aiTotal === 0 && !gameActive) return showVictory("YOU WIN THE MATCH!");
+    // Fix: Remove the '!' before gameActive. We want to show victory IF the game is active.
+    if (p1Total === 0 && gameActive) return showVictory("OPPONENT WINS THE MATCH!");
+    if (aiTotal === 0 && gameActive) return showVictory("YOU WIN THE MATCH!");
 
     // 2. Clean Board
     document.querySelectorAll('.foundation-area, .slot').forEach(el => el.innerHTML = '');
@@ -580,22 +581,20 @@ function setupRound() {
     p1Pass = false; aiPass = false;
 
     // 3. Deal Player 1
-    // Try to deal 10. If we have less, deal all of them.
+    // Logic: If you have 26 cards -> Deal 10 to board, 16 to Draw Stack.
+    // Logic: If you have 6 cards  -> Deal 6 to board, 0 to Draw Stack.
     const p1DealCount = Math.min(10, p1Inventory.length);
     const p1FCards = p1Inventory.splice(0, p1DealCount);
-    // The rest go to Draw Deck
-    p1Draw = [...p1Inventory];
-    p1Inventory = []; // Clear inventory, it's now all on board or in draw
+    p1Draw = [...p1Inventory]; // The rest go to Draw Deck
+    p1Inventory = []; // Clear inventory, they are now 'in play'
 
     // 4. Deal AI
     const aiDealCount = Math.min(10, aiInventory.length);
     const aiFCards = aiInventory.splice(0, aiDealCount);
-    aiDraw = [...aiInventory];
+    aiDraw = [...aiInventory]; // The rest go to Draw Deck
     aiInventory = [];
 
     // 5. Shortage / Stalemate Logic
-    // If one player has NO draw deck (e.g. they only had 6 cards total), 
-    // the game handles this via the "Borrowing" logic already in place in performShortageCheck.
     performShortageCheck();
 
     // 6. Render
@@ -1316,30 +1315,41 @@ function gatherCardsForRoundEnd(winner) {
 
     return { p1: newP1Inventory, ai: newAiInventory };
 }
-        function endRound(winner) {
-            if (isOnline && !isHost) return; 
+        // --- FIXED END ROUND (Preserves Deck Ownership) ---
+function endRound(winner) {
+    if (isOnline && !isHost) return; 
 
-            if(isOnline && isHost) conn.send({ type: 'ROUND_WIN' });
+    if(isOnline && isHost) conn.send({ type: 'ROUND_WIN' });
 
-            if (winner === 'player') stats.p1Rounds++; else stats.aiRounds++;
-            updateStatsUI();
-            
-            alert(`${winner.toUpperCase()} WINS ROUND!`);
-            
-            const newDecks = gatherCardsForRoundEnd(winner);
-            p1Draw = []; aiDraw = []; p1Penalty = []; aiPenalty = []; centerStack = [];
+    if (winner === 'player') stats.p1Rounds++; else stats.aiRounds++;
+    updateStatsUI();
+    
+    // 1. Calculate the new snowball decks
+    const newDecks = gatherCardsForRoundEnd(winner);
+    
+    // 2. Clear table state (but do NOT reset stats or generate new deck)
+    centerStack = [];
+    p1Penalty = []; aiPenalty = [];
+    p1Draw = []; aiDraw = [];
+    
+    // 3. Assign the Snowballed Decks to Inventory
+    p1Inventory = newDecks.p1;
+    aiInventory = newDecks.ai;
 
-            if(isOnline && isHost) {
-                conn.send({
-                    type: 'SYNC_ROUND',
-                    p1: newDecks.p1,
-                    p2: newDecks.ai
-                });
-                initGameOnline(newDecks.p1, newDecks.ai);
-            } else {
-                initGameAI(); // FIX: Calling initGameAI instead of initGame
-            }
-        }
+    alert(`${winner.toUpperCase()} WINS ROUND! \nCards Owned: You: ${p1Inventory.length} | Opp: ${aiInventory.length}`);
+
+    // 4. Start the next round using the existing inventories
+    if(isOnline && isHost) {
+        conn.send({
+            type: 'SYNC_ROUND',
+            p1: newDecks.p1,
+            p2: newDecks.ai
+        });
+        setupRound(); // Call setup directly, don't call initGameOnline
+    } else {
+        setupRound(); // Call setup directly, don't call initGameAI
+    }
+}
         
         function domToCard(c) {
             return { v: c.dataset.val, s: c.dataset.suit, rank: parseInt(c.dataset.rank), color: c.classList.contains('red') ? 'red' : 'black', owner: c.dataset.owner };
