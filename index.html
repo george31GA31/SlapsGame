@@ -3,18 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ISF Card Engine V16.0 (Logic Master)</title>
+    <title>ISF Card Engine V16.3 (Stable)</title>
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 </head>
 <body>
     <script>
     (function() {
-        /* ISF OFFICIAL ENGINE V16.0 (LOGIC MASTER)
-           - Logic: "Repatriation" implemented. Unplayed borrowed cards return to owner at round end.
-           - Logic: "Center Penalty" implemented. Loser takes the full center stack (played cards).
-           - Logic: Shortage Rule ignores Penalty Pile (Dead cards remain dead).
-           - UI: "NEW CARD REVEAL" button text fixed.
-           - UI: Opponent Foundation Reorganization is now synced.
+        /* ISF OFFICIAL ENGINE V16.3 (STABLE FIX)
+           - Base: V15.1 from Word Doc.
+           - Fix: Online Start button variable names corrected (Fixed "Reset" bug).
+           - Fix: Dealing Logic reverted to V15.1 standard (Fixed "No Cards" bug).
+           - Feature: "Strict 52" Math, Nicknames, Countdown, New Button Text.
         */
 
         const suits = ['  ♥  ', '  ♦  ', '  ♣  ', '  ♠  '];
@@ -42,7 +41,7 @@
         let aiThinking = false; 
         let aiThinkingStartTime = 0;
 
-        // UI SETUP
+        // UI CONSTRUCTION
         document.body.innerHTML = `
         <style>
         :root { --bg-color: #1a4731; --accent-gold: #f1c40f; --card-yellow: #f1c40f; --card-red: #e74c3c; --title-color: #ff7575; }
@@ -177,14 +176,27 @@
         </div>
         `;
 
-        // MENU LOGIC
+        // 3. MENU LOGIC
         document.getElementById('btn-play-ai').onclick = () => { isOnline = false; document.getElementById('screen-main').classList.add('hidden'); document.getElementById('screen-difficulty').classList.remove('hidden'); };
         document.getElementById('btn-online-menu').onclick = () => { isOnline = true; document.getElementById('screen-main').classList.add('hidden'); document.getElementById('screen-online').classList.remove('hidden'); };
         document.getElementById('btn-back-online').onclick = () => { document.getElementById('screen-online').classList.add('hidden'); document.getElementById('screen-main').classList.remove('hidden'); };
         document.getElementById('btn-host-game').onclick = () => { myNick = document.getElementById('nick-input').value.toUpperCase() || "HOST"; isHost = true; isOnline = true; document.getElementById('screen-online').classList.add('hidden'); document.getElementById('screen-lobby-host').classList.remove('hidden'); initHost(); };
         document.getElementById('btn-join-game').onclick = () => { myNick = document.getElementById('nick-input').value.toUpperCase() || "GUEST"; document.getElementById('screen-online').classList.add('hidden'); document.getElementById('screen-lobby-join').classList.remove('hidden'); };
         document.getElementById('btn-connect').onclick = () => { const code = document.getElementById('join-code-input').value.toUpperCase(); if(code.length > 0) initJoin(code); };
-        document.getElementById('btn-start-online').onclick = () => { if(!conn) return; let deck = generateDeck(); let p1 = deck.slice(0, 26); let p2 = deck.slice(26, 52); conn.send({ type: 'START_GAME', p1: p2, p2: p1, nick: myNick }); initGameOnline(p1, p2); };
+        
+        // FIX: VARIABLE NAME ERROR FIXED HERE
+        document.getElementById('btn-start-online').onclick = () => { 
+            if(!conn) return; 
+            let deck = generateDeck(); 
+            let p1 = deck.slice(0, 26); 
+            let p2 = deck.slice(26, 52); 
+            conn.send({ type: 'START_GAME', p1: p2, p2: p1, nick: myNick }); 
+            oppNick = "Opponent";
+            document.getElementById('screen-lobby-host').classList.add('hidden');
+            document.getElementById('isf-stadium').classList.remove('hidden');
+            initGameOnline(p1, p2); 
+        };
+        
         document.getElementById('btn-back-menu').onclick = () => { document.getElementById('screen-difficulty').classList.add('hidden'); document.getElementById('screen-main').classList.remove('hidden'); };
         document.getElementById('diff-slider').oninput = (e) => { currentDifficulty = parseInt(e.target.value); document.getElementById('diff-label').innerText = currentDifficulty; };
         document.getElementById('btn-start-game').onclick = () => { document.getElementById('screen-difficulty').classList.add('hidden'); document.getElementById('isf-stadium').classList.remove('hidden'); initGameAI(); };
@@ -198,15 +210,12 @@
         function setupConnection() {
             conn.on('open', () => { if(!isHost) { document.getElementById('join-status').innerText = "CONNECTED! WAITING FOR HOST..."; document.getElementById('join-status').style.color = "#2ecc71"; } });
             conn.on('data', (data) => {
-                if(data.type === 'START_GAME') { oppNick = data.nick; conn.send({type:'NICK_SYNC', nick:myNick}); document.querySelectorAll('.screen').forEach(s=>s.classList.add('hidden')); document.getElementById('isf-stadium').classList.remove('hidden'); initGameOnline(data.p1, data.p2); }
+                if(data.type === 'START_GAME') { oppNick = data.nick; document.getElementById('opp-name-label').innerText = oppNick; conn.send({type:'NICK_SYNC', nick:myNick}); document.querySelectorAll('.screen').forEach(s=>s.classList.add('hidden')); document.getElementById('isf-stadium').classList.remove('hidden'); initGameOnline(data.p1, data.p2); }
                 if(data.type === 'NICK_SYNC') { oppNick = data.nick; document.getElementById('opp-name-label').innerText = oppNick; }
                 if(data.type === 'MOVE') { const mir = (data.tid === 'target-active') ? 'target-secondary' : 'target-active'; forceRemoteMove(data.rank, data.suit, data.val, data.col, data.own, mir); }
-                if(data.type === 'REORGANIZE') { 
-                    // Opponent reorganized foundation. Refresh their view?
-                    // V16.0 Simple fix: We don't visualize opponent shuffle for now to prevent lag, focus on plays.
-                }
+                if(data.type === 'REORGANIZE') { /* Placeholder for V16 polish */ }
                 if(data.type === 'FORCE_REVEAL') { forceRevealFromHost(data.c1, data.c2); }
-                if(data.type === 'PASS') { if(!aiPass) { aiPass = true; document.getElementById('deck-ai').classList.add('ready'); if(p1Pass && aiPass) startCountdown(); } }
+                if(data.type === 'PASS') { if(!aiPass) { aiPass = true; document.getElementById('deck-ai').classList.add('ready'); document.getElementById('deck-ai').innerText = "READY"; if(p1Pass && aiPass) startCountdown(); } }
                 if(data.type === 'COUNTDOWN_TICK') { document.getElementById('deck-p1').innerText = data.count; document.getElementById('deck-ai').innerText = data.count; document.getElementById('deck-p1').classList.add('counting'); document.getElementById('deck-ai').classList.add('counting'); }
                 if(data.type === 'SLAP_REQUEST' && isHost) evaluateSlapRequest('opponent');
                 if(data.type === 'SLAP_RESULT') { let localWin = (data.win === 'player') ? 'ai' : 'player'; if(isHost) localWin = data.win; if(!isHost) applySlapResult(localWin, data.inv2, data.inv1, data.pen2, data.pen1); else applySlapResult(localWin, data.inv1, data.inv2, data.pen1, data.pen2); }
@@ -214,9 +223,9 @@
                 if(data.type === 'SYNC_ROUND') { 
                     if(!isHost) { 
                         alert(`${data.winnerName === 'player' ? oppNick : myNick} WINS ROUND!`); 
+                        stats = { p1Rounds: data.stats.aiRounds, p1Slaps: data.stats.aiSlaps, aiRounds: data.stats.p1Rounds, aiSlaps: data.stats.p1Slaps };
+                        updateStatsUI();
                         initGameOnline(data.p2, data.p1); 
-                        stats = { p1Rounds: data.stats.aiRounds, p1Slaps: data.stats.aiSlaps, aiRounds: data.stats.p1Rounds, aiSlaps: data.stats.p1Slaps }; 
-                        updateStatsUI(); 
                     } 
                 }
                 if(data.type === 'FLIP_CARD') executeFlip(data.rank, data.suit);
@@ -227,7 +236,7 @@
         // GAME LOGIC
         function generateDeck() {
             let d = [];
-            suits.forEach(s => values.forEach(v => d.push({ s, v, rank: rankMap[v], color: (s==='  ♥  '||s==='  ♦  ') ? 'red' : 'black', id: Math.random(), owner: 'p1' })));
+            suits.forEach(s => values.forEach(v => d.push({ s, v, rank: rankMap[v], color: (s==='  ♥  '||s==='  ♦  ') ? 'red' : 'black', id: Math.random().toString(36), owner: 'p1' })));
             d.sort(() => Math.random() - 0.5);
             for(let i=0; i<26; i++) d[i].owner = 'p1';
             for(let i=26; i<52; i++) d[i].owner = 'ai';
@@ -256,14 +265,14 @@
             document.getElementById('deck-ai').innerText = isOnline ? oppNick : "AI DECK";
             document.getElementById('deck-ai').classList.remove('ready', 'counting');
 
-            // CORRECTED DEAL LOGIC
-            p1Draw = [...p1Inventory]; 
-            const p1FCount = Math.min(p1Draw.length, 10);
-            const p1FCards = p1Draw.splice(0, p1FCount); // Splice removes from p1Draw
+            // DEAL LOGIC REVERTED TO V15.1 (SPLICE FIRST)
+            const p1FCount = Math.min(p1Inventory.length, 10);
+            const p1FCards = p1Inventory.splice(0, p1FCount); // Remove foundation cards from inventory
+            p1Draw = [...p1Inventory]; // Remaining inventory becomes Draw Deck
             
+            const aiFCount = Math.min(aiInventory.length, 10);
+            const aiFCards = aiInventory.splice(0, aiFCount);
             aiDraw = [...aiInventory];
-            const aiFCount = Math.min(aiDraw.length, 10);
-            const aiFCards = aiDraw.splice(0, aiFCount);
 
             performShortageCheck();
             layout(p1FCards, document.getElementById('player-boundary'), 'player');
@@ -288,9 +297,7 @@
             card.style.left = `${x}px`; card.style.top = `${y}px`;
             card.dataset.rank = data.rank; card.dataset.suit = data.s; card.dataset.val = data.v; card.dataset.owner = data.owner;
             card.innerHTML = `<div class="card-corner top-left"><div>${data.v}</div><div>${data.s}</div></div><div class="center-suit">${data.s}</div><div class="card-corner bottom-right"><div>${data.v}</div><div>${data.s}</div></div>`;
-            
             if(owner === 'player') {
-                // DRAG LOGIC
                 card.onmousedown = (e) => {
                     if(card.classList.contains('face-down')) {
                         const pileX = parseInt(card.style.left);
@@ -468,8 +475,8 @@
         // END ROUND LOGIC
         function gatherCardsForRoundEnd(winner) {
             // Unplayed Cards
-            let p1Temp = [...p1Draw];
-            let aiTemp = [...aiDraw];
+            let p1Temp = [...p1Draw]; // Was Draw
+            let aiTemp = [...aiDraw]; // Was Draw
             
             // Unplayed Foundations
             const p1F = Array.from(document.querySelectorAll('#player-boundary .card')).map(domToCard);
@@ -511,6 +518,47 @@
                 setupRound();
             }
         }
+
+        // AI
+        function startAiBrain() {
+            if (!gameActive || isOnline) return;
+            setInterval(() => {
+                if (aiThinking || !gameActive || sequenceLocked || slapLocked) return;
+                const aiF = document.querySelectorAll('#ai-boundary .card');
+                if(aiF.length === 0) return; // AI WON?
+                
+                // Flip Logic
+                const cols = getColumns(Array.from(aiF));
+                for(let k in cols) {
+                    if(cols[k].length > 0 && cols[k][cols[k].length-1].classList.contains('face-down')) {
+                        cols[k][cols[k].length-1].classList.replace('face-down','face-up');
+                        return;
+                    }
+                }
+                
+                // Move Logic
+                if(Date.now() - aiThinkingStartTime < 2000) return;
+                attemptAiMove();
+            }, 800);
+        }
+        function attemptAiMove() {
+            const aiCards = Array.from(document.querySelectorAll('#ai-boundary .card'));
+            const targets = [{id:'target-active', v:targetRanks.active}, {id:'target-secondary', v:targetRanks.secondary}];
+            
+            for(let c of aiCards) {
+                if(c.classList.contains('face-down')) continue;
+                let r = parseInt(c.dataset.rank);
+                for(let t of targets) {
+                    if(t.v !== null && (Math.abs(r - t.v) === 1 || Math.abs(r - t.v) === 12)) {
+                        aiThinking = true; aiThinkingStartTime = Date.now();
+                        animateAiMove(c, t.id, 'play', true);
+                        return;
+                    }
+                }
+            }
+            if(!aiPass) triggerAiPass();
+        }
+        function triggerAiPass() { aiPass = true; checkSyncReveal(); }
 
         // UTILS
         function updateStatsUI() {
