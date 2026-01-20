@@ -113,7 +113,7 @@
         .card.red { color: #e74c3c; }
         .card.face-down { background: #2c3e50; color: transparent !important; background-image: repeating-linear-gradient(45deg, #34495e, #34495e 5px, #2c3e50 5px, #2c3e50 10px); }
         .card.in-center { position: relative !important; top: 0 !important; left: 0 !important; z-index: 10 !important; }
-        .card.moving-ai { transition: all 0.2s ease-out !important; z-index: 9999 !important; box-shadow: 0 10px 20px rgba(0,0,0,0.5); }
+        .card.moving-ai { transition: all 0.5s ease-out !important; z-index: 9999 !important; box-shadow: 0 10px 20px rgba(0,0,0,0.5); }
         .card-corner { position: absolute; display: flex; flex-direction: column; align-items: center; line-height: 1; font-size: 18px; }
         .top-left { top: 5px; left: 5px; }
         .bottom-right { bottom: 5px; right: 5px; transform: rotate(180deg); }
@@ -472,76 +472,63 @@
             checkSyncReveal();
         }
         function animateAiMove(card, target, type) {
-    card.classList.add('moving-ai');
-    let startRect = card.getBoundingClientRect();
-    let targetX, targetY, targetRot;
-    
-    // 1. HANDLE 'PLAY' MOVES (Card goes to center)
-    if (type === 'play') {
-        const slotRect = document.getElementById(target).getBoundingClientRect();
-        targetX = slotRect.left;
-        targetY = slotRect.top;
-        targetRot = '0deg';
-    } 
-    // 2. HANDLE 'REARRANGE' MOVES (Card moves between columns)
-    else {
-        // SMOOTHNESS FIX: We keep the class on, move the card, then wait for the transition
-        card.style.left = target.targetX + 'px';
-        card.style.top = target.targetY + 'px';
-        
-        // Wait 200ms (matches CSS) then unlock the AI
-        setTimeout(() => {
-            card.classList.remove('moving-ai');
-            aiThinking = false; 
-        }, 200);
-        return;
-    }
-
-    // LOGIC FOR CLONING (Only used for 'Play' moves)
-    const clone = card.cloneNode(true);
-    card.style.opacity = '0';
-    document.body.appendChild(clone);
-    clone.style.position = 'absolute';
-    clone.style.left = startRect.left + 'px';
-    clone.style.top = startRect.top + 'px';
-    clone.style.transform = 'rotate(180deg)';
-    void clone.offsetWidth; // Force reflow
-    clone.style.left = targetX + 'px';
-    clone.style.top = targetY + 'px';
-    clone.style.transform = targetRot;
-
-    // Wait 200ms (Matches new CSS speed)
-    setTimeout(() => {
-        if (type === 'play') {
-            const currentTargetVal = target === 'target-active' ? targetRanks.active : targetRanks.secondary;
-            const cardRank = parseInt(clone.dataset.rank);
-            const diff = Math.abs(cardRank - currentTargetVal);
-            if (diff === 1 || diff === 12) {
-                centerStack.push({ rank: cardRank, s: clone.dataset.suit, v: clone.dataset.val, color: clone.dataset.color });
-                const slot = document.getElementById(target);
-                if (target === 'target-active') targetRanks.active = cardRank; else targetRanks.secondary = cardRank;
-                slot.innerHTML = '';
-                const finalCard = clone.cloneNode(true);
-                finalCard.classList.remove('moving-ai');
-                finalCard.className = `card in-center ${clone.dataset.color === 'red' ? 'red' : 'black'}`;
-                finalCard.style.left = '0'; finalCard.style.top = '0'; finalCard.style.position = 'relative';
-                slot.appendChild(finalCard);
-                card.remove(); clone.remove();
-
-                if (targetRanks.active !== null && targetRanks.secondary !== null && targetRanks.active === targetRanks.secondary) {
-                    const slapReaction = Math.max(100, currentActionDelay * 0.1);
-                    setTimeout(() => { triggerSlap('ai'); }, slapReaction);
-                }
-                resetPasses();
-                updateDisplay();
-                if (document.querySelectorAll('#ai-boundary .card').length === 0) endRound("ai");
+            card.classList.add('moving-ai');
+            let startRect = card.getBoundingClientRect();
+            let targetX, targetY, targetRot;
+            if (type === 'play') {
+                const slotRect = document.getElementById(target).getBoundingClientRect();
+                targetX = slotRect.left;
+                targetY = slotRect.top;
+                targetRot = '0deg';
             } else {
-                card.style.opacity = '1'; clone.remove();
+                card.style.left = target.targetX + 'px';
+                card.style.top = target.targetY + 'px';
+                card.classList.remove('moving-ai');
+                aiThinking = false;
+                return;
             }
-        }
-        aiThinking = false;
-    }, 200); // Updated from 500 to 200
-}
+            const clone = card.cloneNode(true);
+            card.style.opacity = '0';
+            document.body.appendChild(clone);
+            clone.style.position = 'absolute';
+            clone.style.left = startRect.left + 'px';
+            clone.style.top = startRect.top + 'px';
+            clone.style.transform = 'rotate(180deg)';
+            void clone.offsetWidth;
+            clone.style.left = targetX + 'px';
+            clone.style.top = targetY + 'px';
+            clone.style.transform = targetRot;
+
+            setTimeout(() => {
+                if (type === 'play') {
+                    const currentTargetVal = target === 'target-active' ? targetRanks.active : targetRanks.secondary;
+                    const cardRank = parseInt(clone.dataset.rank);
+                    const diff = Math.abs(cardRank - currentTargetVal);
+                    if (diff === 1 || diff === 12) {
+                        centerStack.push({ rank: cardRank, s: clone.dataset.suit, v: clone.dataset.val, color: clone.dataset.color });
+                        const slot = document.getElementById(target);
+                        if (target === 'target-active') targetRanks.active = cardRank; else targetRanks.secondary = cardRank;
+                        slot.innerHTML = '';
+                        const finalCard = clone.cloneNode(true);
+                        finalCard.classList.remove('moving-ai');
+                        finalCard.className = `card in-center ${clone.dataset.color === 'red' ? 'red' : 'black'}`;
+                        finalCard.style.left = '0'; finalCard.style.top = '0'; finalCard.style.position = 'relative';
+                        slot.appendChild(finalCard);
+                        card.remove(); clone.remove();
+
+                        if (targetRanks.active !== null && targetRanks.secondary !== null && targetRanks.active === targetRanks.secondary) {
+                            const slapReaction = Math.max(100, currentActionDelay * 0.1);
+                            setTimeout(() => { triggerSlap('ai'); }, slapReaction);
+                        }
+                        resetPasses();
+                        updateDisplay();
+                        if (document.querySelectorAll('#ai-boundary .card').length === 0) endRound("ai");
+                    } else {
+                        card.style.opacity = '1'; clone.remove();
+                    }
+                }
+                aiThinking = false;
+            }, 500);
         }
         function resetPasses() {
             p1Pass = false; aiPass = false;
