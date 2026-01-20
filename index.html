@@ -562,32 +562,54 @@
             document.getElementById('stat-ai-s').innerText = stats.aiSlaps;
         }
 
-        function setupRound() {
-            if (gameActive) {
-                if (p1Inventory.length === 0) return showVictory("YOU WIN THE MATCH!");
-                if (aiInventory.length === 0) return showVictory("OPP WINS THE MATCH!");
-            }
-            document.querySelectorAll('.foundation-area, .slot').forEach(el => el.innerHTML = '');
-            centerStack = [];
-            targetRanks = { secondary: null, active: null };
-            slapLocked = false; sequenceLocked = false;
-            p1Pass = false; aiPass = false;
-            const p1FCount = 10;
-            const p1FCards = p1Inventory.splice(0, p1FCount);
-            p1Draw = [...p1Inventory];
-            const aiFCount = 10;
-            const aiFCards = aiInventory.splice(0, aiFCount);
-            aiDraw = [...aiInventory];
-            performShortageCheck();
-            layout(p1FCards, document.getElementById('player-boundary'), 'player');
-            layout(aiFCards, document.getElementById('ai-boundary'), 'ai');
-            updateDisplay();
-            resetRevealButton();
-            if (!isOnline) {
-                setTimeout(() => { triggerAiPass(); }, 1500);
-                startAiBrain();
-            }
-        }
+        // --- NEW SETUP ROUND LOGIC (DYNAMIC DEALING) ---
+function setupRound() {
+    // 1. MATCH WIN CONDITION CHECK
+    // If a player has absolutely NO cards (Inventory, Draw, or Penalty), they lose the MATCH.
+    const p1Total = p1Inventory.length;
+    const aiTotal = aiInventory.length;
+
+    if (p1Total === 0 && !gameActive) return showVictory("OPPONENT WINS THE MATCH!");
+    if (aiTotal === 0 && !gameActive) return showVictory("YOU WIN THE MATCH!");
+
+    // 2. Clean Board
+    document.querySelectorAll('.foundation-area, .slot').forEach(el => el.innerHTML = '');
+    centerStack = [];
+    targetRanks = { secondary: null, active: null };
+    slapLocked = false; sequenceLocked = false;
+    p1Pass = false; aiPass = false;
+
+    // 3. Deal Player 1
+    // Try to deal 10. If we have less, deal all of them.
+    const p1DealCount = Math.min(10, p1Inventory.length);
+    const p1FCards = p1Inventory.splice(0, p1DealCount);
+    // The rest go to Draw Deck
+    p1Draw = [...p1Inventory];
+    p1Inventory = []; // Clear inventory, it's now all on board or in draw
+
+    // 4. Deal AI
+    const aiDealCount = Math.min(10, aiInventory.length);
+    const aiFCards = aiInventory.splice(0, aiDealCount);
+    aiDraw = [...aiInventory];
+    aiInventory = [];
+
+    // 5. Shortage / Stalemate Logic
+    // If one player has NO draw deck (e.g. they only had 6 cards total), 
+    // the game handles this via the "Borrowing" logic already in place in performShortageCheck.
+    performShortageCheck();
+
+    // 6. Render
+    layout(p1FCards, document.getElementById('player-boundary'), 'player');
+    layout(aiFCards, document.getElementById('ai-boundary'), 'ai');
+    updateDisplay();
+    resetRevealButton();
+
+    // 7. Start AI
+    if (!isOnline) {
+        setTimeout(() => { triggerAiPass(); }, 1500);
+        startAiBrain();
+    }
+}
 
         function issueYellowCard() {
             p1Yellows++;
@@ -1229,39 +1251,71 @@
             }
         });
         
-        function gatherCardsForRoundEnd(winner) {
-            let p1Temp = [...p1Draw, ...p1Penalty];
-            let aiTemp = [...aiDraw, ...aiPenalty];
-            
-            const p1F = Array.from(document.querySelectorAll('#player-boundary .card')).map(domToCard);
-            const aiF = Array.from(document.querySelectorAll('#ai-boundary .card')).map(domToCard);
-            p1Temp.push(...p1F);
-            aiTemp.push(...aiF);
+        // --- NEW ROUND END LOGIC (PERSISTENT OWNERSHIP) ---
+function gatherCardsForRoundEnd(winner) {
+    // 1. Identify what's on the board (Foundation Piles)
+    const p1Foundation = Array.from(document.querySelectorAll('#player-boundary .card')).map(domToCard);
+    const aiFoundation = Array.from(document.querySelectorAll('#ai-boundary .card')).map(domToCard);
 
-            let p1Final = [];
-            let aiFinal = [];
+    // 2. Identify what's in the Reserve (Draw Decks)
+    const p1Reserves = [...p1Draw];
+    const aiReserves = [...aiDraw];
 
-            p1Temp.forEach(c => {
-                if(c.owner === 'p1') p1Final.push(c);
-                else aiFinal.push(c);
-            });
-            aiTemp.forEach(c => {
-                if(c.owner === 'ai' || c.owner === 'p2') aiFinal.push(c);
-                else p1Final.push(c);
-            });
+    // 3. Identify the "Mess" (Center Pot)
+    const centerPot = [...centerStack];
 
-            if(winner === 'player') {
-                aiFinal.push(...centerStack);
-            } else {
-                p1Final.push(...centerStack);
-            }
+    let newP1Inventory = [];
+    let newAiInventory = [];
 
-            p1Final.sort(() => Math.random() - 0.5);
-            aiFinal.sort(() => Math.random() - 0.5);
+    // 4. Apply "Winner Takes Draw Decks, Loser Takes Center" Rule
+    if (winner === 'player') {
+        // --- PLAYER WINS THE ROUND ---
+        
+        // Winner keeps their Foundation (cleaned up)
+        // (Actually, standard rules usually recycle these, let's keep them in the winner's inventory)
+        newP1Inventory.push(...p1Foundation); // Player's leftovers (if any, usually 0 if won)
+        
+        // Winner takes BOTH remaining Draw Decks (The "2 remaining draw deck piles")
+        newP1Inventory.push(...p1Reserves);
+        newP1Inventory.push(...aiReserves);
 
-            return { p1: p1Final, ai: aiFinal };
-        }
+        // Winner keeps cards they slapped/won during the round
+        newP1Inventory.push(...p1Penalty);
 
+        // --- LOSER (AI) PENALTY ---
+        
+        // Loser takes their leftover Foundation
+        newAiInventory.push(...aiFoundation);
+        
+        // Loser takes the Center Pot (The mess)
+        newAiInventory.push(...centerPot);
+        
+        // Loser keeps cards they slapped/won during the round
+        newAiInventory.push(...aiPenalty);
+
+    } else {
+        // --- AI WINS THE ROUND ---
+        
+        // Winner (AI) takes BOTH Draw Decks
+        newAiInventory.push(...aiReserves);
+        newAiInventory.push(...p1Reserves);
+        newAiInventory.push(...aiPenalty); // Keep slapped cards
+        // AI cleared foundation, so no aiFoundation to add (it's empty)
+
+        // --- LOSER (PLAYER) PENALTY ---
+        
+        // Loser takes Leftover Foundation + Center Pot
+        newP1Inventory.push(...p1Foundation);
+        newP1Inventory.push(...centerPot);
+        newP1Inventory.push(...p1Penalty); // Keep slapped cards
+    }
+
+    // 5. Shuffle the new decks for the next round
+    newP1Inventory.sort(() => Math.random() - 0.5);
+    newAiInventory.sort(() => Math.random() - 0.5);
+
+    return { p1: newP1Inventory, ai: newAiInventory };
+}
         function endRound(winner) {
             if (isOnline && !isHost) return; 
 
