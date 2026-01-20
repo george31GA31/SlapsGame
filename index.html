@@ -16,47 +16,42 @@
            - Logic: Host arbitrates slaps and end-round math.
            - UI: Center Widget removed.
         */
-
         // 1. SETUP & CONSTANTS
-        const suits = [' ♥ ', ' ♦ ', ' ♣ ', ' ♠ '];
+        const suits = ['  ♥  ', '  ♦  ', '  ♣  ', '  ♠  '];
         const values = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
         const rankMap = { 'A': 1, '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, '10': 10, 'J': 11, 'Q': 12, 'K': 13 };
-        
+
         // GAME STATE
         let p1Inventory = [], aiInventory = [];
         let p1Draw = [], aiDraw = [];
         let p1Penalty = [], aiPenalty = [];
         let centerStack = [];
-
         let p1IsBorrowing = false, aiIsBorrowing = false;
         let targetRanks = { secondary: null, active: null };
         let topZ = 10000;
-
         let p1Pass = false, aiPass = false;
         let slapLocked = false, sequenceLocked = false;
         let gameActive = false;
-        let slapInProgress = false; 
-        
+        let slapInProgress = false;
+
         // AI STATE
         let aiThinking = false;
         let aiThinkingStartTime = 0;
-        
+
         // NETWORKING STATE
         let peer = null;
         let conn = null;
         let isHost = false;
         let netId = null;
-        let isOnline = false; 
-        
+        let isOnline = false;
+
         // STATS & REF STATE
         let p1Yellows = 0;
         let p1Reds = 0;
-
         let stats = {
             p1Rounds: 0, p1Slaps: 0,
             aiRounds: 0, aiSlaps: 0
         };
-
         // DIFFICULTY STATE
         let currentDifficulty = 5;
         let currentActionDelay = 2000;
@@ -66,1160 +61,1083 @@
             3: { min: 1000, max: 2000 },
             4: { min: 250,  max: 1500 }
         };
-
         // 2. UI CONSTRUCTION
         document.body.innerHTML = `
         <style>
         :root {
-            --bg-color: #1a4731;
-            --accent-gold: #f1c40f;
-            --card-yellow: #f1c40f;
-            --card-red: #e74c3c;
-            --title-color: #ff7575;
+        --bg-color: #1a4731;
+        --accent-gold: #f1c40f;
+        --card-yellow: #f1c40f;
+        --card-red: #e74c3c;
+        --title-color: #ff7575;
         }
         body { background: var(--bg-color); color: white; font-family: 'Segoe UI', sans-serif; margin: 0; overflow: hidden; height: 100vh; user-select: none; }
         .screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center;
-            z-index: 1000; background: var(--bg-color); }
+        z-index: 1000; background: var(--bg-color); }
         .hidden { display: none !important; }
-
         h1.logo { font-size: 80px; margin: 0; color: var(--title-color); letter-spacing: 5px; font-family: serif; }
-
         .menu-btn { background: transparent; border: 2px solid white; color: white; padding: 15px 40px; font-size: 18px; margin: 10px; cursor: pointer;
-            width: 250px; font-weight: bold; text-transform: uppercase; transition: 0.2s; }
+        width: 250px; font-weight: bold; text-transform: uppercase; transition: 0.2s; }
         .menu-btn:hover { background: white; color: var(--bg-color); }
         .menu-btn.disabled { opacity: 0.5; cursor: not-allowed; }
-
         input.code-input {
-            background: rgba(0,0,0,0.5); border: 2px solid white; color: gold; font-size: 30px; text-align: center;
-            padding: 10px; margin: 20px; font-family: monospace; letter-spacing: 5px; width: 300px; text-transform: uppercase;
+        background: rgba(0,0,0,0.5); border: 2px solid white; color: gold; font-size: 30px; text-align: center;
+        padding: 10px; margin: 20px; font-family: monospace; letter-spacing: 5px; width: 300px; text-transform: uppercase;
         }
-
         #screen-difficulty, #screen-online, #screen-lobby {
-            font-family: 'Courier New', Courier, monospace; 
-            background: #000; 
+        font-family: 'Courier New', Courier, monospace;
+        background: #000;
         }
         .lobby-status { font-size: 24px; color: gold; margin-bottom: 20px; text-align: center; }
         .code-display { font-size: 60px; color: white; border: 4px dashed rgba(255,255,255,0.3); padding: 10px 40px; margin: 20px; font-weight: bold; }
-
         #isf-stadium { display: flex; flex-direction: column; align-items: center; justify-content: space-between; height: 100vh; padding: 20px 0; }
-
         #top-nav { position: absolute; top: 20px; right: 20px; z-index: 2000; display: flex; gap: 10px; }
         .nav-btn { background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.3); color: white; padding: 8px 15px; cursor: pointer; font-size: 12px; font-weight: bold;
-            border-radius: 4px; }
+        border-radius: 4px; }
         .nav-btn:hover { background: white; color: black; }
-
         #stats-panel {
-            position: absolute; top: 65px; right: 20px; z-index: 2000;
-            display: flex; flex-direction: column; gap: 5px;
-            background: rgba(0,0,0,0.6); padding: 10px 15px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2);
-            font-family: monospace; font-size: 16px; font-weight: bold; text-shadow: 0 1px 2px black;
-            width: 180px;
+        position: absolute; top: 65px; right: 20px; z-index: 2000;
+        display: flex; flex-direction: column; gap: 5px;
+        background: rgba(0,0,0,0.6); padding: 10px 15px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2);
+        font-family: monospace; font-size: 16px; font-weight: bold; text-shadow: 0 1px 2px black;
+        width: 180px;
         }
         .stat-row { display: flex; justify-content: space-between; align-items: center; }
         .stat-p1 { color: var(--accent-gold); border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 5px; margin-bottom: 5px; }
         .stat-ai { color: var(--title-color); }
         .stat-label { font-size: 12px; opacity: 0.8; margin-right: 5px; }
-
         .foundation-area { position: relative; width: 900px; height: 240px; border: 4px solid white; background: rgba(0,0,0,0.1); box-sizing: border-box; }
         .ai-side { transform: rotate(180deg); opacity: 0.9; }
         #center-arena { display: flex; align-items: center; gap: 40px; z-index: 500; position: relative;}
-
         .draw-stack { width: 100px; height: 140px; border: 3px solid #fff; border-radius: 10px; background: #1e3a5f; cursor: pointer; display: flex; align-items: center;
-            justify-content: center; font-size: 14px; text-align: center; font-weight: bold; transition: all 0.2s; position: relative; z-index: 2; box-shadow: 0 5px 0 #0d1b2a;
+        justify-content: center; font-size: 14px; text-align: center; font-weight: bold; transition: all 0.2s; position: relative; z-index: 2; box-shadow: 0 5px 0 #0d1b2a;
         }
         .draw-stack.ready { background: #27ae60 !important; box-shadow: 0 0 20px #2ecc71; border-color: #2ecc71; transform: scale(1.05); }
         .draw-stack.counting { background: #e67e22; cursor: wait; transform: scale(1.05); border-color: #f39c12; }
-
         .sideways-card { position: absolute; bottom: 0; left: 0; width: 100px; height: 140px; background: #34495e; border: 1px solid #fff; border-radius: 10px;
-            transform: rotate(90deg); z-index: -1; display: none; box-shadow: 0 0 5px rgba(0,0,0,0.5); }
+        transform: rotate(90deg); z-index: -1; display: none; box-shadow: 0 0 5px rgba(0,0,0,0.5); }
         .has-borrowed .sideways-card { display: block; }
         .has-borrowed::after { content: 'BORROWED'; position: absolute; bottom: -25px; font-size: 10px; color: #f1c40f; width: 100%; text-align: center; font-weight: bold;
-            text-shadow: 0 1px 2px black; }
+        text-shadow: 0 1px 2px black; }
         .slot { width: 110px; height: 155px; border: 2px solid rgba(255,255,255,0.2); border-radius: 12px; position: relative; background: rgba(0,0,0,0.2); }
-
         .card { width: 100px; height: 140px; border-radius: 8px; border: 1px solid #777; background: white; color: black; display: flex; flex-direction: column;
-            justify-content: center; align-items: center; font-size: 24px; font-weight: bold; position: absolute; box-shadow: 0 4px 6px rgba(0,0,0,0.3); transition: transform 0.1s; }
+        justify-content: center; align-items: center; font-size: 24px; font-weight: bold; position: absolute; box-shadow: 0 4px 6px rgba(0,0,0,0.3); transition: transform 0.1s; }
         .card.red { color: #e74c3c; }
         .card.face-down { background: #2c3e50; color: transparent !important; background-image: repeating-linear-gradient(45deg, #34495e, #34495e 5px, #2c3e50 5px, #2c3e50 10px); }
         .card.in-center { position: relative !important; top: 0 !important; left: 0 !important; z-index: 10 !important; }
-        
         .card.moving-ai { transition: all 0.2s ease-out !important; z-index: 9999 !important; box-shadow: 0 10px 20px rgba(0,0,0,0.5); }
-        
         .card-corner { position: absolute; display: flex; flex-direction: column; align-items: center; line-height: 1; font-size: 18px; }
         .top-left { top: 5px; left: 5px; }
         .bottom-right { bottom: 5px; right: 5px; transform: rotate(180deg); }
         .center-suit { font-size: 48px; line-height: 1; }
         .inventory-hud { position: absolute; left: 30px; bottom: 30px; font-size: 32px; font-weight: 800; background: rgba(0,0,0,0.6); padding: 15px 25px; border-radius: 12px;
-            border-left: 8px solid gold; box-shadow: 0 4px 10px black; display: flex; gap: 15px; align-items: center; }
+        border-left: 8px solid gold; box-shadow: 0 4px 10px black; display: flex; gap: 15px; align-items: center; }
         .inventory-hud.ai-hud { bottom: auto; top: 30px; border-left-color: #e74c3c; }
         .inventory-hud small { display: block; font-size: 12px; font-weight: 400; opacity: 0.8; text-transform: uppercase; letter-spacing: 1px; }
-
         .ref-card { width: 30px; height: 45px; border-radius: 4px; border: 1px solid white; display: none; box-shadow: 0 2px 5px black;
-            justify-content: center; align-items: center; font-size: 20px; font-weight: bold; color: white; text-shadow: 0 1px 2px black; }
+        justify-content: center; align-items: center; font-size: 20px; font-weight: bold; color: white; text-shadow: 0 1px 2px black; }
         .ref-card.yellow { background: var(--card-yellow); }
         .ref-card.red { background: var(--card-red); }
         #slap-alert { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 60px; font-weight: 900; color: gold;
-            text-shadow: 0 0 20px black; pointer-events: none; display: none; z-index: 10000; text-align: center; width: 100%; white-space: nowrap; }
+        text-shadow: 0 0 20px black; pointer-events: none; display: none; z-index: 10000; text-align: center; width: 100%; white-space: nowrap; }
         #victory-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 20000; display: flex; flex-direction: column;
-            align-items: center; justify-content: center; color: white; display: none; }
+        align-items: center; justify-content: center; color: white; display: none; }
         </style>
-
         <div id="screen-main" class="screen">
-            <h1 class="logo">ISF</h1>
-            <button id="btn-play-ai" class="menu-btn">Play AI</button>
-            <button id="btn-online-menu" class="menu-btn" style="border-color: gold; color: gold;">Play Online</button>
+        <h1 class="logo">ISF</h1>
+        <button id="btn-play-ai" class="menu-btn">Play AI</button>
+        <button id="btn-online-menu" class="menu-btn" style="border-color: gold; color: gold;">Play Online</button>
         </div>
-
         <div id="screen-online" class="screen hidden">
-            <h1 class="logo" style="font-size: 40px;">MULTIPLAYER</h1>
-            <button id="btn-host-game" class="menu-btn">HOST GAME</button>
-            <button id="btn-join-game" class="menu-btn">JOIN GAME</button>
-            <button id="btn-back-online" class="menu-btn" style="border:none; margin-top:30px; font-size: 14px;">Back</button>
+        <h1 class="logo" style="font-size: 40px;">MULTIPLAYER</h1>
+        <button id="btn-host-game" class="menu-btn">HOST GAME</button>
+        <button id="btn-join-game" class="menu-btn">JOIN GAME</button>
+        <button id="btn-back-online" class="menu-btn" style="border:none; margin-top:30px; font-size: 14px;">Back</button>
         </div>
-
         <div id="screen-lobby-host" class="screen hidden" style="background: #111;">
-            <div class="lobby-status">YOUR ROOM CODE</div>
-            <div id="host-code-display" class="code-display">...</div>
-            <div class="lobby-status" id="host-status-text">Waiting for opponent...</div>
-            <button id="btn-start-online" class="menu-btn disabled">START MATCH</button>
-            <button class="menu-btn" onclick="location.reload()" style="font-size:12px; border:none; margin-top: 20px;">CANCEL</button>
+        <div class="lobby-status">YOUR ROOM CODE</div>
+        <div id="host-code-display" class="code-display">...</div>
+        <div class="lobby-status" id="host-status-text">Waiting for opponent...</div>
+        <button id="btn-start-online" class="menu-btn disabled">START MATCH</button>
+        <button class="menu-btn" onclick="location.reload()" style="font-size:12px; border:none; margin-top: 20px;">CANCEL</button>
         </div>
-
         <div id="screen-lobby-join" class="screen hidden" style="background: #111;">
-            <div class="lobby-status">ENTER ROOM CODE</div>
-            <input type="text" id="join-code-input" class="code-input" maxlength="10" placeholder="CODE">
-            <button id="btn-connect" class="menu-btn">CONNECT</button>
-            <div id="join-status" class="lobby-status" style="font-size:16px; margin-top:10px;"></div>
-            <button class="menu-btn" onclick="location.reload()" style="font-size:12px; border:none; margin-top: 20px;">CANCEL</button>
+        <div class="lobby-status">ENTER ROOM CODE</div>
+        <input type="text" id="join-code-input" class="code-input" maxlength="10" placeholder="CODE">
+        <button id="btn-connect" class="menu-btn">CONNECT</button>
+        <div id="join-status" class="lobby-status" style="font-size:16px; margin-top:10px;"></div>
+        <button class="menu-btn" onclick="location.reload()" style="font-size:12px; border:none; margin-top: 20px;">CANCEL</button>
         </div>
-
         <div id="screen-difficulty" class="screen hidden">
-            <h1 class="logo" style="font-size: 40px;">DIFFICULTY LEVEL</h1>
-            <div style="margin: 30px 0; text-align: center; width: 300px;">
-                <input type="range" id="diff-slider" min="1" max="10" value="5" style="width: 100%;">
-                <span id="diff-label" style="font-size: 48px; font-weight: 900; color: gold; display: block; margin-top: 10px;">5</span>
-                <span style="font-size: 14px; opacity: 0.7; display: block;">1 (EASY) - 10 (IMPOSSIBLE)</span>
-            </div>
-            <button id="btn-start-game" class="menu-btn" style="border-color: gold; color: gold;">GO</button>
-            <button id="btn-back-menu" class="menu-btn" style="font-size: 12px; width: 100px; border: none; margin-top: 20px;">Back</button>
+        <h1 class="logo" style="font-size: 40px;">DIFFICULTY LEVEL</h1>
+        <div style="margin: 30px 0; text-align: center; width: 300px;">
+        <input type="range" id="diff-slider" min="1" max="10" value="5" style="width: 100%;">
+        <span id="diff-label" style="font-size: 48px; font-weight: 900; color: gold; display: block; margin-top: 10px;">5</span>
+        <span style="font-size: 14px; opacity: 0.7; display: block;">1 (EASY) - 10 (IMPOSSIBLE)</span>
         </div>
-
+        <button id="btn-start-game" class="menu-btn" style="border-color: gold; color: gold;">GO</button>
+        <button id="btn-back-menu" class="menu-btn" style="font-size: 12px; width: 100px; border: none; margin-top: 20px;">Back</button>
+        </div>
         <div id="isf-stadium" class="hidden">
-            <div id="top-nav">
-                <button id="nav-restart" class="nav-btn">RESTART</button>
-                <button id="nav-menu" class="nav-btn">MAIN MENU</button>
-            </div>
-            <div id="stats-panel">
-                <div class="stat-row stat-p1">
-                    <span>YOU</span>
-                    <span><span class="stat-label">R:</span><span id="stat-p1-r">0</span> <span class="stat-label">S:</span><span id="stat-p1-s">0</span></span>
-                </div>
-                <div class="stat-row stat-ai">
-                    <span>OPP</span>
-                    <span><span class="stat-label">R:</span><span id="stat-ai-r">0</span> <span class="stat-label">S:</span><span id="stat-ai-s">0</span></span>
-                </div>
-            </div>
-            <div id="victory-screen">
-                <h1 id="vic-title" style="font-size: 60px; color: gold; margin-bottom: 10px;">MATCH COMPLETE</h1>
-                <h2 id="vic-sub" style="font-size: 30px;"></h2>
-                <button id="new-match-btn" style="padding: 15px 40px; font-size: 20px; margin-top: 40px; cursor: pointer; background: white; border: none; border-radius: 5px; font-weight: bold;">NEW MATCH</button>
-            </div>
-            <div id="slap-alert">PLAYER 1 SLAPS WON!</div>
-            <div class="inventory-hud ai-hud"><small id="opp-name-label">Opponent</small><span id="ai-t">26</span></div>
-            <div id="ai-boundary" class="foundation-area ai-side"></div>
-
-            <div id="center-arena">
-                <div id="deck-ai" class="draw-stack">OPPONENT<div class="sideways-card"></div></div>
-                <div id="target-secondary" class="slot"></div>
-                <div id="target-active" class="slot"></div>
-                <div id="deck-p1" class="draw-stack">PASS<div class="sideways-card"></div></div>
-            </div>
-            <div id="player-boundary" class="foundation-area"></div>
-            <div class="inventory-hud">
-                <div><small>Your Cards</small><span id="p1-t">26</span></div>
-                <div id="p1-red-card" class="ref-card red"></div>
-                <div id="p1-yellow-card" class="ref-card yellow"></div>
-            </div>
+        <div id="top-nav">
+        <button id="nav-restart" class="nav-btn">RESTART</button>
+        <button id="nav-menu" class="nav-btn">MAIN MENU</button>
+        </div>
+        <div id="stats-panel">
+        <div class="stat-row stat-p1">
+        <span>YOU</span>
+        <span><span class="stat-label">R:</span><span id="stat-p1-r">0</span> <span class="stat-label">S:</span><span id="stat-p1-s">0</span></span>
+        </div>
+        <div class="stat-row stat-ai">
+        <span>OPP</span>
+        <span><span class="stat-label">R:</span><span id="stat-ai-r">0</span> <span class="stat-label">S:</span><span id="stat-ai-s">0</span></span>
+        </div>
+        </div>
+        <div id="victory-screen">
+        <h1 id="vic-title" style="font-size: 60px; color: gold; margin-bottom: 10px;">MATCH COMPLETE</h1>
+        <h2 id="vic-sub" style="font-size: 30px;"></h2>
+        <button id="new-match-btn" style="padding: 15px 40px; font-size: 20px; margin-top: 40px; cursor: pointer; background: white; border: none; border-radius: 5px; font-weight: bold;">NEW MATCH</button>
+        </div>
+        <div id="slap-alert">PLAYER 1 SLAPS WON!</div>
+        <div class="inventory-hud ai-hud"><small id="opp-name-label">Opponent</small><span id="ai-t">26</span></div>
+        <div id="ai-boundary" class="foundation-area ai-side"></div>
+        <div id="center-arena">
+        <div id="deck-ai" class="draw-stack">OPPONENT<div class="sideways-card"></div></div>
+        <div id="target-secondary" class="slot"></div>
+        <div id="target-active" class="slot"></div>
+        <div id="deck-p1" class="draw-stack">PASS<div class="sideways-card"></div></div>
+        </div>
+        <div id="player-boundary" class="foundation-area"></div>
+        <div class="inventory-hud">
+        <div><small>Your Cards</small><span id="p1-t">26</span></div>
+        <div id="p1-red-card" class="ref-card red"></div>
+        <div id="p1-yellow-card" class="ref-card yellow"></div>
+        </div>
         </div>
         `;
-        
+
         // 3. MENU LOGIC
-        document.getElementById('btn-play-ai').onclick = () => { 
-            isOnline = false;
-            document.getElementById('screen-main').classList.add('hidden'); 
-            document.getElementById('screen-difficulty').classList.remove('hidden'); 
+        document.getElementById('btn-play-ai').onclick = () => {
+        isOnline = false;
+        document.getElementById('screen-main').classList.add('hidden');
+        document.getElementById('screen-difficulty').classList.remove('hidden');
         };
-        
+
         document.getElementById('btn-online-menu').onclick = () => {
-            isOnline = true;
-            document.getElementById('screen-main').classList.add('hidden');
-            document.getElementById('screen-online').classList.remove('hidden');
+        isOnline = true;
+        document.getElementById('screen-main').classList.add('hidden');
+        document.getElementById('screen-online').classList.remove('hidden');
         };
-
         document.getElementById('btn-back-online').onclick = () => {
-            document.getElementById('screen-online').classList.add('hidden');
-            document.getElementById('screen-main').classList.remove('hidden');
+        document.getElementById('screen-online').classList.add('hidden');
+        document.getElementById('screen-main').classList.remove('hidden');
         };
-
         document.getElementById('btn-host-game').onclick = () => {
-            document.getElementById('screen-online').classList.add('hidden');
-            document.getElementById('screen-lobby-host').classList.remove('hidden');
-            initHost();
+        document.getElementById('screen-online').classList.add('hidden');
+        document.getElementById('screen-lobby-host').classList.remove('hidden');
+        initHost();
         };
-
         document.getElementById('btn-join-game').onclick = () => {
-            document.getElementById('screen-online').classList.add('hidden');
-            document.getElementById('screen-lobby-join').classList.remove('hidden');
+        document.getElementById('screen-online').classList.add('hidden');
+        document.getElementById('screen-lobby-join').classList.remove('hidden');
         };
-
         document.getElementById('btn-connect').onclick = () => {
-            const code = document.getElementById('join-code-input').value.toUpperCase();
-            if(code.length > 0) initJoin(code);
+        const code = document.getElementById('join-code-input').value.toUpperCase();
+        if(code.length > 0) initJoin(code);
         };
-
         document.getElementById('btn-start-online').onclick = () => {
-            if(!conn) return;
-            let fullDeck = generateDeck(); // TAGS ADDED HERE
-            let hostCards = fullDeck.slice(0, 26);
-            let joinerCards = fullDeck.slice(26, 52);
-
-            conn.send({
-                type: 'START_GAME',
-                myCards: joinerCards, 
-                oppCards: hostCards   
-            });
-
-            document.getElementById('screen-lobby-host').classList.add('hidden');
-            document.getElementById('isf-stadium').classList.remove('hidden');
-            initGameOnline(hostCards, joinerCards); 
+        if(!conn) return;
+        let fullDeck = generateDeck(); // TAGS ADDED HERE
+        let hostCards = fullDeck.slice(0, 26);
+        let joinerCards = fullDeck.slice(26, 52);
+        conn.send({
+        type: 'START_GAME',
+        myCards: joinerCards,
+        oppCards: hostCards
+        });
+        document.getElementById('screen-lobby-host').classList.add('hidden');
+        document.getElementById('isf-stadium').classList.remove('hidden');
+        initGameOnline(hostCards, joinerCards);
         };
-
         document.getElementById('btn-back-menu').onclick = () => { document.getElementById('screen-difficulty').classList.add('hidden'); document.getElementById('screen-main').classList.remove('hidden'); };
         document.getElementById('diff-slider').oninput = (e) => {
-            currentDifficulty = parseInt(e.target.value);
-            document.getElementById('diff-label').innerText = currentDifficulty;
+        currentDifficulty = parseInt(e.target.value);
+        document.getElementById('diff-label').innerText = currentDifficulty;
         };
         document.getElementById('btn-start-game').onclick = () => {
-            document.getElementById('screen-difficulty').classList.add('hidden');
-            document.getElementById('isf-stadium').classList.remove('hidden');
-            initGameAI(); 
+        document.getElementById('screen-difficulty').classList.add('hidden');
+        document.getElementById('isf-stadium').classList.remove('hidden');
+        initGameAI();
         };
         document.getElementById('nav-restart').onclick = () => {
-            if(isOnline) alert("Restart not supported in online beta yet.");
-            else initGameAI();
+        if(isOnline) alert("Restart not supported in online beta yet.");
+        else initGameAI();
         };
         document.getElementById('nav-menu').onclick = () => { gameActive = false; document.getElementById('isf-stadium').classList.add('hidden'); document.getElementById('screen-main').classList.remove('hidden'); document.getElementById('victory-screen').style.display = 'none'; };
-        
+
         // --- NETWORKING LOGIC ---
         function generateId() {
-            return 'ISF-' + Math.floor(Math.random() * 900 + 100);
+        return 'ISF-' + Math.floor(Math.random() * 900 + 100);
         }
-
         function initHost() {
-            isHost = true;
-            netId = generateId();
-            document.getElementById('host-code-display').innerText = netId;
-            peer = new Peer(netId);
-            peer.on('open', (id) => { console.log('My peer ID is: ' + id); });
-            peer.on('connection', (c) => {
-                conn = c;
-                setupConnection();
-                document.getElementById('host-status-text').innerText = "PLAYER CONNECTED!";
-                document.getElementById('host-status-text').style.color = "#2ecc71";
-                document.getElementById('screen-lobby-host').style.background = "#052205";
-                document.getElementById('btn-start-online').classList.remove('disabled');
-            });
+        isHost = true;
+        netId = generateId();
+        document.getElementById('host-code-display').innerText = netId;
+        peer = new Peer(netId);
+        peer.on('open', (id) => { console.log('My peer ID is: ' + id); });
+        peer.on('connection', (c) => {
+        conn = c;
+        setupConnection();
+        document.getElementById('host-status-text').innerText = "PLAYER CONNECTED!";
+        document.getElementById('host-status-text').style.color = "#2ecc71";
+        document.getElementById('screen-lobby-host').style.background = "#052205";
+        document.getElementById('btn-start-online').classList.remove('disabled');
+        });
         }
-
         function initJoin(hostId) {
-            isHost = false;
-            let myTempId = 'P2-' + Math.floor(Math.random()*1000);
-            peer = new Peer(myTempId);
-            peer.on('open', (id) => {
-                document.getElementById('join-status').innerText = "Connecting to " + hostId + "...";
-                conn = peer.connect(hostId);
-                conn.on('open', () => {
-                    document.getElementById('join-status').innerText = "CONNECTED! WAITING FOR HOST...";
-                    document.getElementById('join-status').style.color = "#2ecc71";
-                    document.getElementById('screen-lobby-join').style.background = "#052205";
-                    document.getElementById('join-code-input').disabled = true;
-                    document.getElementById('btn-connect').classList.add('disabled');
-                });
-                conn.on('error', (err) => {
-                    document.getElementById('join-status').innerText = "CONNECTION FAILED";
-                    document.getElementById('join-status').style.color = "red";
-                });
-                setupConnection();
-            });
+        isHost = false;
+        let myTempId = 'P2-' + Math.floor(Math.random()*1000);
+        peer = new Peer(myTempId);
+        peer.on('open', (id) => {
+        document.getElementById('join-status').innerText = "Connecting to " + hostId + "...";
+        conn = peer.connect(hostId);
+        conn.on('open', () => {
+        document.getElementById('join-status').innerText = "CONNECTED! WAITING FOR HOST...";
+        document.getElementById('join-status').style.color = "#2ecc71";
+        document.getElementById('screen-lobby-join').style.background = "#052205";
+        document.getElementById('join-code-input').disabled = true;
+        document.getElementById('btn-connect').classList.add('disabled');
+        });
+        conn.on('error', (err) => {
+        document.getElementById('join-status').innerText = "CONNECTION FAILED";
+        document.getElementById('join-status').style.color = "red";
+        });
+        setupConnection();
+        });
         }
-
         function setupConnection() {
-            conn.on('data', (data) => {
-                if (data.type === 'START_GAME') {
-                    document.getElementById('screen-lobby-join').classList.add('hidden');
-                    document.getElementById('isf-stadium').classList.remove('hidden');
-                    initGameOnline(data.myCards, data.oppCards);
-                }
-                if (data.type === 'PASS') {
-                    if (!aiPass) {
-                        aiPass = true;
-                        document.getElementById('deck-ai').classList.add('ready');
-                        document.getElementById('deck-ai').innerText = "READY";
-                        checkSyncReveal();
-                    }
-                }
-                if (data.type === 'MOVE') {
-                    const mirroredTarget = (data.targetId === 'target-active') ? 'target-secondary' : 'target-active';
-                    forceRemoteMove(data.cardRank, data.cardSuit, data.cardVal, data.cardColor, data.cardOwner, mirroredTarget);
-                }
-                if (data.type === 'FORCE_REVEAL') {
-                    forceRevealFromHost(data.card1, data.card2);
-                }
-                if (data.type === 'SLAP_REQUEST') {
-                    if (isHost) evaluateSlapRequest('opponent'); 
-                }
-                if (data.type === 'SLAP_RESULT') {
-                    // MAPPING SLAP RESULT for JOINER
-                    let localWinner = data.winnerName; 
-                    if (!isHost) {
-                        localWinner = (data.winnerName === 'player') ? 'ai' : 'player';
-                        applySlapResult(localWinner, data.newP2, data.newP1, data.newPenP2, data.newPenP1);
-                    } else {
-                        applySlapResult(localWinner, data.newP1, data.newP2, data.newPenP1, data.newPenP2);
-                    }
-                }
-                if (data.type === 'ROUND_WIN') {
-                    if(isHost) endRound('ai');
-                }
-                if (data.type === 'SYNC_ROUND') {
-                    if (!isHost) {
-                        initGameOnline(data.p2, data.p1);
-                    }
-                }
-                if (data.type === 'SYNC_STATS') {
-                    if (!isHost) {
-                        p1Inventory = data.p2Inv;
-                        aiInventory = data.p1Inv;
-                        p1Penalty = data.p2Pen;
-                        aiPenalty = data.p1Pen;
-                        updateDisplay();
-                    }
-                }
-                if (data.type === 'FLIP_CARD') {
-                    executeFlip(data.cardRank, data.cardSuit);
-                }
-            });
+        conn.on('data', (data) => {
+        if (data.type === 'START_GAME') {
+        document.getElementById('screen-lobby-join').classList.add('hidden');
+        document.getElementById('isf-stadium').classList.remove('hidden');
+        initGameOnline(data.myCards, data.oppCards);
         }
-        
+        if (data.type === 'PASS') {
+        if (!aiPass) {
+        aiPass = true;
+        document.getElementById('deck-ai').classList.add('ready');
+        document.getElementById('deck-ai').innerText = "READY";
+        checkSyncReveal();
+        }
+        }
+        if (data.type === 'MOVE') {
+        const mirroredTarget = (data.targetId === 'target-active') ? 'target-secondary' : 'target-active';
+        forceRemoteMove(data.cardRank, data.cardSuit, data.cardVal, data.cardColor, data.cardOwner, mirroredTarget);
+        }
+        if (data.type === 'FORCE_REVEAL') {
+        forceRevealFromHost(data.card1, data.card2);
+        }
+        if (data.type === 'SLAP_REQUEST') {
+        if (isHost) evaluateSlapRequest('opponent');
+        }
+        if (data.type === 'SLAP_RESULT') {
+        // MAPPING SLAP RESULT for JOINER
+        let localWinner = data.winnerName;
+        if (!isHost) {
+        localWinner = (data.winnerName === 'player') ? 'ai' : 'player';
+        applySlapResult(localWinner, data.newP2, data.newP1, data.newPenP2, data.newPenP1);
+        } else {
+        applySlapResult(localWinner, data.newP1, data.newP2, data.newPenP1, data.newPenP2);
+        }
+        }
+        if (data.type === 'ROUND_WIN') {
+        if(isHost) endRound('ai');
+        }
+        if (data.type === 'SYNC_ROUND') {
+        if (!isHost) {
+        initGameOnline(data.p2, data.p1);
+        }
+        }
+        if (data.type === 'SYNC_STATS') {
+        if (!isHost) {
+        p1Inventory = data.p2Inv;
+        aiInventory = data.p1Inv;
+        p1Penalty = data.p2Pen;
+        aiPenalty = data.p1Pen;
+        updateDisplay();
+        }
+        }
+        if (data.type === 'FLIP_CARD') {
+        executeFlip(data.cardRank, data.cardSuit);
+        }
+        });
+        }
+
         function evaluateSlapRequest(requestor) {
-            if (slapLocked || slapInProgress) return;
-            slapInProgress = true;
+        if (slapLocked || slapInProgress) return;
+        slapInProgress = true;
+        // SIMPLIFIED SLAP CHECK: MATCHING RANKS
+        if (centerStack.length < 2) { slapInProgress = false; return; }
+        const top1 = centerStack[centerStack.length - 1];
+        const top2 = centerStack[centerStack.length - 2];
 
-            // SIMPLIFIED SLAP CHECK: MATCHING RANKS
-            if (centerStack.length < 2) { slapInProgress = false; return; }
-            const top1 = centerStack[centerStack.length - 1];
-            const top2 = centerStack[centerStack.length - 2];
-            
-            if (top1.rank !== top2.rank) {
-                slapInProgress = false; 
-                return; 
-            }
-            
-            const winner = requestor === 'opponent' ? 'ai' : 'player'; 
-            const wonCards = [...centerStack];
-            centerStack = [];
-            
-            if (winner === 'player') {
-                aiPenalty.push(...wonCards); 
-            } else {
-                p1Penalty.push(...wonCards); 
-            }
-            
-            conn.send({ 
-                type: 'SLAP_RESULT', 
-                winnerName: winner,
-                newP1: p1Inventory,
-                newP2: aiInventory,
-                newPenP1: p1Penalty,
-                newPenP2: aiPenalty
-            });
-            
-            applySlapResult(winner, p1Inventory, aiInventory, p1Penalty, aiPenalty);
+        if (top1.rank !== top2.rank) {
+        slapInProgress = false;
+        return;
         }
-        
+
+        const winner = requestor === 'opponent' ? 'ai' : 'player';
+        const wonCards = [...centerStack];
+        centerStack = [];
+
+        if (winner === 'player') {
+        aiPenalty.push(...wonCards);
+        } else {
+        p1Penalty.push(...wonCards);
+        }
+
+        conn.send({
+        type: 'SLAP_RESULT',
+        winnerName: winner,
+        newP1: p1Inventory,
+        newP2: aiInventory,
+        newPenP1: p1Penalty,
+        newPenP2: aiPenalty
+        });
+
+        applySlapResult(winner, p1Inventory, aiInventory, p1Penalty, aiPenalty);
+        }
+
         function applySlapResult(winner, inv1, inv2, pen1, pen2) {
-            slapLocked = true;
-            slapInProgress = true;
-            p1Inventory = inv1; aiInventory = inv2; p1Penalty = pen1; aiPenalty = pen2;
-            centerStack = [];
+        slapLocked = true;
+        slapInProgress = true;
+        p1Inventory = inv1; aiInventory = inv2; p1Penalty = pen1; aiPenalty = pen2;
+        centerStack = [];
+        const msg = document.getElementById('slap-alert');
+        msg.innerText = winner === 'player' ? "PLAYER 1 SLAPS WON!" : "OPP SLAPS WON!";
+        msg.style.display = 'block';
+        updateDisplay();
 
-            const msg = document.getElementById('slap-alert');
-            msg.innerText = winner === 'player' ? "PLAYER 1 SLAPS WON!" : "OPP SLAPS WON!";
-            msg.style.display = 'block';
-            updateDisplay(); 
-            
-            setTimeout(() => {
-                msg.style.display = 'none';
-                document.querySelectorAll('.slot').forEach(s => s.innerHTML = '');
-                targetRanks = { secondary: null, active: null };
-                resetRevealButton(); 
-                updateDisplay(); 
-                slapLocked = false; slapInProgress = false;
-            }, 1500);
+        setTimeout(() => {
+        msg.style.display = 'none';
+        document.querySelectorAll('.slot').forEach(s => s.innerHTML = '');
+        targetRanks = { secondary: null, active: null };
+        resetRevealButton();
+        updateDisplay();
+        slapLocked = false; slapInProgress = false;
+        }, 1500);
         }
-
         function executeFlip(rank, suit) {
-            const oppCards = Array.from(document.querySelectorAll('#ai-boundary .card'));
-            for(let c of oppCards) {
-                if (parseInt(c.dataset.rank) === rank && c.dataset.suit === suit) {
-                    c.classList.replace('face-down', 'face-up');
-                    break;
-                }
-            }
+        const oppCards = Array.from(document.querySelectorAll('#ai-boundary .card'));
+        for(let c of oppCards) {
+        if (parseInt(c.dataset.rank) === rank && c.dataset.suit === suit) {
+        c.classList.replace('face-down', 'face-up');
+        break;
         }
-
+        }
+        }
         function forceRemoteMove(rank, suit, val, color, owner, targetId) {
-            const oppCards = Array.from(document.querySelectorAll('#ai-boundary .card'));
-            let targetCard = null;
-            
-            for(let c of oppCards) {
-                if (parseInt(c.dataset.rank) === rank && c.dataset.suit === suit) {
-                    targetCard = c;
-                    break;
-                }
-            }
+        const oppCards = Array.from(document.querySelectorAll('#ai-boundary .card'));
+        let targetCard = null;
 
-            if (!targetCard && oppCards.length > 0) targetCard = oppCards[oppCards.length - 1];
-
-            if(targetCard) {
-                centerStack.push({ rank: rank, s: suit, v: val, color: color, owner: owner });
-                if (targetId === 'target-active') targetRanks.active = rank; else targetRanks.secondary = rank;
-
-                targetCard.className = `card ${color}`;
-                targetCard.innerHTML = `
-                <div class="card-corner top-left"><div>${val}</div><div>${suit}</div></div>
-                <div class="center-suit">${suit}</div>
-                <div class="card-corner bottom-right"><div>${val}</div><div>${suit}</div></div>
-                `;
-                
-                animateAiMove(targetCard, targetId, 'play', true);
-            }
+        for(let c of oppCards) {
+        if (parseInt(c.dataset.rank) === rank && c.dataset.suit === suit) {
+        targetCard = c;
+        break;
         }
+        }
+        if (!targetCard && oppCards.length > 0) targetCard = oppCards[oppCards.length - 1];
+        if(targetCard) {
+        centerStack.push({ rank: rank, s: suit, v: val, color: color, owner: owner });
+        if (targetId === 'target-active') targetRanks.active = rank; else targetRanks.secondary = rank;
+        targetCard.className = `card ${color}`;
+        targetCard.innerHTML = `
+        <div class="card-corner top-left"><div>${val}</div><div>${suit}</div></div>
+        <div class="center-suit">${suit}</div>
+        <div class="card-corner bottom-right"><div>${val}</div><div>${suit}</div></div>
+        `;
 
+        animateAiMove(targetCard, targetId, 'play', true);
+        }
+        }
         // --- GAME LOGIC ---
-
         function generateDeck() {
-            let d = [];
-            suits.forEach(s => values.forEach(v => d.push({ s, v, rank: rankMap[v], color: (s===' ♥ '||s===' ♦ ') ? 'red' : 'black', id: Math.random().toString(36), owner: 'p1' })));
-            d.sort(() => Math.random() - 0.5);
-            for(let i=0; i<26; i++) d[i].owner = 'p1';
-            for(let i=26; i<52; i++) d[i].owner = 'ai';
-            return d;
+        let d = [];
+        suits.forEach(s => values.forEach(v => d.push({ s, v, rank: rankMap[v], color: (s==='  ♥  '||s==='  ♦  ') ? 'red' : 'black', id: Math.random().toString(36), owner: 'p1' })));
+        d.sort(() => Math.random() - 0.5);
+        for(let i=0; i<26; i++) d[i].owner = 'p1';
+        for(let i=26; i<52; i++) d[i].owner = 'ai';
+        return d;
         }
-
         function resetCommonState() {
-            p1Penalty = []; aiPenalty = []; centerStack = [];
-            p1Draw = []; aiDraw = [];
-            targetRanks = { secondary: null, active: null };
-            slapLocked = false; sequenceLocked = false;
-            slapInProgress = false;
-            p1Pass = false; aiPass = false;
-            p1IsBorrowing = false; aiIsBorrowing = false;
-            aiThinking = false;
-            stats = { p1Rounds: 0, p1Slaps: 0, aiRounds: 0, aiSlaps: 0 };
-            updateStatsUI();
-            updateRefUI();
-            document.querySelectorAll('.foundation-area, .slot').forEach(el => el.innerHTML = '');
+        p1Penalty = []; aiPenalty = []; centerStack = [];
+        p1Draw = []; aiDraw = [];
+        targetRanks = { secondary: null, active: null };
+        slapLocked = false; sequenceLocked = false;
+        slapInProgress = false;
+        p1Pass = false; aiPass = false;
+        p1IsBorrowing = false; aiIsBorrowing = false;
+        aiThinking = false;
+        stats = { p1Rounds: 0, p1Slaps: 0, aiRounds: 0, aiSlaps: 0 };
+        updateStatsUI();
+        updateRefUI();
+        document.querySelectorAll('.foundation-area, .slot').forEach(el => el.innerHTML = '');
         }
-
         function initGameAI() {
-            document.getElementById('victory-screen').style.display = 'none';
-            isOnline = false; 
-            resetCommonState();
-            let d = generateDeck();
-            p1Inventory = d.splice(0, 26);
-            aiInventory = d.splice(0, 26);
-            gameActive = true;
-            document.getElementById('deck-ai').innerText = "AI DECK";
-            document.getElementById('opp-name-label').innerText = "CPU (LVL " + currentDifficulty + ")";
-            setupRound();
+        document.getElementById('victory-screen').style.display = 'none';
+        isOnline = false;
+        resetCommonState();
+        let d = generateDeck();
+        p1Inventory = d.splice(0, 26);
+        aiInventory = d.splice(0, 26);
+        gameActive = true;
+        document.getElementById('deck-ai').innerText = "AI DECK";
+        document.getElementById('opp-name-label').innerText = "CPU (LVL " + currentDifficulty + ")";
+        setupRound();
         }
-
         function initGameOnline(myCards, oppCards) {
-            document.getElementById('victory-screen').style.display = 'none';
-            isOnline = true; 
-            resetCommonState();
-            p1Inventory = myCards;
-            aiInventory = oppCards;
-            gameActive = true;
-            document.getElementById('deck-ai').innerText = "PLAYER 2";
-            document.getElementById('opp-name-label').innerText = "OPPONENT";
-            setupRound();
+        document.getElementById('victory-screen').style.display = 'none';
+        isOnline = true;
+        resetCommonState();
+        p1Inventory = myCards;
+        aiInventory = oppCards;
+        gameActive = true;
+        document.getElementById('deck-ai').innerText = "PLAYER 2";
+        document.getElementById('opp-name-label').innerText = "OPPONENT";
+        setupRound();
         }
-
         function updateStatsUI() {
-            document.getElementById('stat-p1-r').innerText = stats.p1Rounds;
-            document.getElementById('stat-p1-s').innerText = stats.p1Slaps;
-            document.getElementById('stat-ai-r').innerText = stats.aiRounds;
-            document.getElementById('stat-ai-s').innerText = stats.aiSlaps;
+        document.getElementById('stat-p1-r').innerText = stats.p1Rounds;
+        document.getElementById('stat-p1-s').innerText = stats.p1Slaps;
+        document.getElementById('stat-ai-r').innerText = stats.aiRounds;
+        document.getElementById('stat-ai-s').innerText = stats.aiSlaps;
         }
-
         function setupRound() {
-            if (gameActive) {
-                if (p1Inventory.length === 0) return showVictory("YOU WIN THE MATCH!");
-                if (aiInventory.length === 0) return showVictory("OPP WINS THE MATCH!");
-            }
-            document.querySelectorAll('.foundation-area, .slot').forEach(el => el.innerHTML = '');
-            centerStack = [];
-            targetRanks = { secondary: null, active: null };
-            slapLocked = false; sequenceLocked = false;
-            p1Pass = false; aiPass = false;
-            const p1FCount = 10;
-            const p1FCards = p1Inventory.splice(0, p1FCount);
-            p1Draw = [...p1Inventory];
-            const aiFCount = 10;
-            const aiFCards = aiInventory.splice(0, aiFCount);
-            aiDraw = [...aiInventory];
-            performShortageCheck();
-            layout(p1FCards, document.getElementById('player-boundary'), 'player');
-            layout(aiFCards, document.getElementById('ai-boundary'), 'ai');
-            updateDisplay();
-            resetRevealButton();
-            if (!isOnline) {
-                setTimeout(() => { triggerAiPass(); }, 1500);
-                startAiBrain();
-            }
+        if (gameActive) {
+        if (p1Inventory.length === 0) return showVictory("YOU WIN THE MATCH!");
+        if (aiInventory.length === 0) return showVictory("OPP WINS THE MATCH!");
         }
-
+        document.querySelectorAll('.foundation-area, .slot').forEach(el => el.innerHTML = '');
+        centerStack = [];
+        targetRanks = { secondary: null, active: null };
+        slapLocked = false; sequenceLocked = false;
+        p1Pass = false; aiPass = false;
+        const p1FCount = 10;
+        const p1FCards = p1Inventory.splice(0, p1FCount);
+        p1Draw = [...p1Inventory];
+        const aiFCount = 10;
+        const aiFCards = aiInventory.splice(0, aiFCount);
+        aiDraw = [...aiInventory];
+        performShortageCheck();
+        layout(p1FCards, document.getElementById('player-boundary'), 'player');
+        layout(aiFCards, document.getElementById('ai-boundary'), 'ai');
+        updateDisplay();
+        resetRevealButton();
+        if (!isOnline) {
+        setTimeout(() => { triggerAiPass(); }, 1500);
+        startAiBrain();
+        }
+        }
         function issueYellowCard() {
-            p1Yellows++;
-            const alertBox = document.getElementById('slap-alert');
-            alertBox.innerText = `YELLOW CARD!`;
-            alertBox.style.display = 'block';
-            alertBox.style.color = '#f1c40f';
-            setTimeout(() => { alertBox.style.display = 'none'; }, 1000);
-            if (p1Yellows >= 2) { issueRedCard(); } else { updateRefUI(); }
+        p1Yellows++;
+        const alertBox = document.getElementById('slap-alert');
+        alertBox.innerText = `YELLOW CARD!`;
+        alertBox.style.display = 'block';
+        alertBox.style.color = '#f1c40f';
+        setTimeout(() => { alertBox.style.display = 'none'; }, 1000);
+        if (p1Yellows >= 2) { issueRedCard(); } else { updateRefUI(); }
         }
         function issueRedCard() {
-            p1Reds++; p1Yellows = 0; updateRefUI();
-            const aiFoundationCount = document.querySelectorAll('#ai-boundary .card').length;
-            const aiTotal = aiDraw.length + aiFoundationCount + aiPenalty.length;
-            if (aiTotal <= 2) { showVictory("OPP WINS! (Red Card)"); return; }
-            let stolen = 0;
-            for(let i=0; i<2; i++) {
-                if (aiDraw.length > 0) { p1Draw.push(aiDraw.pop()); stolen++; }
-                else {
-                    const aiCards = document.querySelectorAll('#ai-boundary .card');
-                    if (aiCards.length > 0) {
-                        const c = aiCards[aiCards.length - 1];
-                        p1Draw.push({ v: c.dataset.val, s: c.dataset.suit, rank: parseInt(c.dataset.rank), color: c.dataset.color });
-                        c.remove(); stolen++;
-                    }
-                }
-            }
-            const alertBox = document.getElementById('slap-alert');
-            alertBox.innerText = `RED CARD! +${stolen} CARDS`;
-            alertBox.style.display = 'block';
-            alertBox.style.color = '#e74c3c';
-            setTimeout(() => { alertBox.style.display = 'none'; }, 1500);
-            updateDisplay();
+        p1Reds++; p1Yellows = 0; updateRefUI();
+        const aiFoundationCount = document.querySelectorAll('#ai-boundary .card').length;
+        const aiTotal = aiDraw.length + aiFoundationCount + aiPenalty.length;
+        if (aiTotal <= 2) { showVictory("OPP WINS! (Red Card)"); return; }
+        let stolen = 0;
+        for(let i=0; i<2; i++) {
+        if (aiDraw.length > 0) { p1Draw.push(aiDraw.pop()); stolen++; }
+        else {
+        const aiCards = document.querySelectorAll('#ai-boundary .card');
+        if (aiCards.length > 0) {
+        const c = aiCards[aiCards.length - 1];
+        p1Draw.push({ v: c.dataset.val, s: c.dataset.suit, rank: parseInt(c.dataset.rank), color: c.dataset.color });
+        c.remove(); stolen++;
+        }
+        }
+        }
+        const alertBox = document.getElementById('slap-alert');
+        alertBox.innerText = `RED CARD! +${stolen} CARDS`;
+        alertBox.style.display = 'block';
+        alertBox.style.color = '#e74c3c';
+        setTimeout(() => { alertBox.style.display = 'none'; }, 1500);
+        updateDisplay();
         }
         function updateRefUI() {
-            const redEl = document.getElementById('p1-red-card');
-            const yelEl = document.getElementById('p1-yellow-card');
-            redEl.style.display = p1Reds > 0 ? 'flex' : 'none';
-            redEl.innerText = p1Reds > 1 ? p1Reds : '';
-            yelEl.style.display = p1Yellows > 0 ? 'flex' : 'none';
+        const redEl = document.getElementById('p1-red-card');
+        const yelEl = document.getElementById('p1-yellow-card');
+        redEl.style.display = p1Reds > 0 ? 'flex' : 'none';
+        redEl.innerText = p1Reds > 1 ? p1Reds : '';
+        yelEl.style.display = p1Yellows > 0 ? 'flex' : 'none';
         }
-
         function startAiBrain() {
-            if (!gameActive || isOnline) return; 
-            const loopId = setInterval(() => {
-                if (!gameActive || document.getElementById('victory-screen').style.display === 'flex') {
-                    clearInterval(loopId); return;
-                }
-                if (!aiThinking && !aiPass && !slapLocked && !sequenceLocked && targetRanks.active !== null) {
-                    const settings = difficultySettings[Math.ceil(currentDifficulty / 2.5)] || difficultySettings[2];
-                    const minDelay = Math.max(200, 3500 - (currentDifficulty * 350));
-                    const maxDelay = Math.max(400, 4500 - (currentDifficulty * 400));
-                    const delay = minDelay + Math.random() * (maxDelay - minDelay);
-                    currentActionDelay = delay;
-                    aiThinking = true;
-                    aiThinkingStartTime = Date.now();
-                    setTimeout(() => { attemptAiMove(); }, delay);
-                }
-            }, 800);
-            setInterval(() => {
-                if (!gameActive || sequenceLocked) return;
-                if (aiThinking && (Date.now() - aiThinkingStartTime > 4000)) aiThinking = false;
-                if (!aiThinking && !aiPass) {
-                    const canFlip = checkForForcedFlip();
-                    if (canFlip) { canFlip.classList.replace('face-down', 'face-up'); return; }
-                    if (!checkAnyPossibleAiMove()) triggerAiPass();
-                }
-            }, 2000);
+        if (!gameActive || isOnline) return;
+        const loopId = setInterval(() => {
+        if (!gameActive || document.getElementById('victory-screen').style.display === 'flex') {
+        clearInterval(loopId); return;
+        }
+        if (!aiThinking && !aiPass && !slapLocked && !sequenceLocked && targetRanks.active !== null) {
+        const settings = difficultySettings[Math.ceil(currentDifficulty / 2.5)] || difficultySettings[2];
+        const minDelay = Math.max(200, 3500 - (currentDifficulty * 350));
+        const maxDelay = Math.max(400, 4500 - (currentDifficulty * 400));
+        const delay = minDelay + Math.random() * (maxDelay - minDelay);
+        currentActionDelay = delay;
+        aiThinking = true;
+        aiThinkingStartTime = Date.now();
+        setTimeout(() => { attemptAiMove(); }, delay);
+        }
+        }, 800);
+        setInterval(() => {
+        if (!gameActive || sequenceLocked) return;
+        if (aiThinking && (Date.now() - aiThinkingStartTime > 4000)) aiThinking = false;
+        if (!aiThinking && !aiPass) {
+        const canFlip = checkForForcedFlip();
+        if (canFlip) { canFlip.classList.replace('face-down', 'face-up'); return; }
+        if (!checkAnyPossibleAiMove()) triggerAiPass();
+        }
+        }, 2000);
         }
         setInterval(() => {
-            if (isOnline) return; 
-            if (!slapLocked && !sequenceLocked && targetRanks.secondary === targetRanks.active && targetRanks.secondary) {
-                const chance = currentDifficulty * 0.05;
-                if (Math.random() < chance) {
-                    const reactionBase = 2000 - (currentDifficulty * 180);
-                    setTimeout(() => { triggerSlap('ai'); }, Math.max(100, reactionBase + Math.random()*200));
-                }
-            }
+        if (isOnline) return;
+        if (!slapLocked && !sequenceLocked && targetRanks.secondary === targetRanks.active && targetRanks.secondary) {
+        const chance = currentDifficulty * 0.05;
+        if (Math.random() < chance) {
+        const reactionBase = 2000 - (currentDifficulty * 180);
+        setTimeout(() => { triggerSlap('ai'); }, Math.max(100, reactionBase + Math.random()*200));
+        }
+        }
         }, 500);
         function checkForForcedFlip() {
-            const allAiCards = Array.from(document.querySelectorAll('#ai-boundary .card'));
-            const columns = getColumns(allAiCards);
-            for (let k in columns) {
-                const pile = columns[k];
-                if (pile.length === 0) continue;
-                const topCard = pile[pile.length - 1];
-                if (topCard.classList.contains('face-down')) return topCard;
-            }
-            return null;
+        const allAiCards = Array.from(document.querySelectorAll('#ai-boundary .card'));
+        const columns = getColumns(allAiCards);
+        for (let k in columns) {
+        const pile = columns[k];
+        if (pile.length === 0) continue;
+        const topCard = pile[pile.length - 1];
+        if (topCard.classList.contains('face-down')) return topCard;
+        }
+        return null;
         }
         function checkAnyPossibleAiMove() {
-            const allAiCards = Array.from(document.querySelectorAll('#ai-boundary .card'));
-            const columns = getColumns(allAiCards);
-            for (let k in columns) {
-                const pile = columns[k];
-                if (pile.length === 0) continue;
-                const topCard = pile[pile.length - 1];
-                if (topCard.classList.contains('face-down')) return true;
-                const rank = parseInt(topCard.dataset.rank);
-                if (targetRanks.active !== null) { if (Math.abs(rank - targetRanks.active) === 1 || Math.abs(rank - targetRanks.active) === 12) return true; }
-                if (targetRanks.secondary !== null) { if (Math.abs(rank - targetRanks.secondary) === 1 || Math.abs(rank - targetRanks.secondary) === 12) return true; }
-            }
-            return false;
+        const allAiCards = Array.from(document.querySelectorAll('#ai-boundary .card'));
+        const columns = getColumns(allAiCards);
+        for (let k in columns) {
+        const pile = columns[k];
+        if (pile.length === 0) continue;
+        const topCard = pile[pile.length - 1];
+        if (topCard.classList.contains('face-down')) return true;
+        const rank = parseInt(topCard.dataset.rank);
+        if (targetRanks.active !== null) { if (Math.abs(rank - targetRanks.active) === 1 || Math.abs(rank - targetRanks.active) === 12) return true; }
+        if (targetRanks.secondary !== null) { if (Math.abs(rank - targetRanks.secondary) === 1 || Math.abs(rank - targetRanks.secondary) === 12) return true; }
+        }
+        return false;
         }
         function getColumns(cardArray) {
-            const columns = { 80: [], 280: [], 480: [], 680: [] };
-            const tolerance = 50;
-            cardArray.forEach(c => {
-                const x = parseInt(c.style.left);
-                for (let colX of [80, 280, 480, 680]) {
-                    if (Math.abs(x - colX) < tolerance) { columns[colX].push(c); break; }
-                }
-            });
-            for (let k in columns) { columns[k].sort((a,b) => parseInt(a.style.top) - parseInt(b.style.top)); }
-            return columns;
+        const columns = { 80: [], 280: [], 480: [], 680: [] };
+        const tolerance = 50;
+        cardArray.forEach(c => {
+        const x = parseInt(c.style.left);
+        for (let colX of [80, 280, 480, 680]) {
+        if (Math.abs(x - colX) < tolerance) { columns[colX].push(c); break; }
         }
-
+        });
+        for (let k in columns) { columns[k].sort((a,b) => parseInt(a.style.top) - parseInt(b.style.top)); }
+        return columns;
+        }
         function attemptAiMove() {
-            if (slapLocked || sequenceLocked) { aiThinking = false; return; }
-            const allAiCards = Array.from(document.querySelectorAll('#ai-boundary .card'));
-            const columns = getColumns(allAiCards);
-            const playerFoundationCount = document.querySelectorAll('#player-boundary .card').length;
-            const aiFoundationCount = allAiCards.length;
-            const aiTotal = aiDraw.length + aiFoundationCount;
-            const isDangerZone = playerFoundationCount <= 4;
-            const isAiAggressive = aiTotal <= 6;
-            const killerInstinct = aiFoundationCount <= 1;
-
-            let possibleMoves = [];
-            let flipMove = null;
-            let rearrangeMove = null;
-            let emptyColumnX = null;
-
-            for (let colX of [80, 280, 480, 680]) { if (columns[colX].length === 0) emptyColumnX = colX; }
-
-            for (let k in columns) {
-                const pile = columns[k];
-                if (pile.length === 0) continue;
-                const topCard = pile[pile.length - 1];
-                if (topCard.classList.contains('face-down')) { flipMove = topCard; break; }
-                const rank = parseInt(topCard.dataset.rank);
-                const targets = [ { id: 'target-active', val: targetRanks.active }, { id: 'target-secondary', val: targetRanks.secondary } ];
-                for (let t of targets) {
-                    if (t.val !== null) {
-                        const diff = Math.abs(rank - t.val);
-                        if (diff === 1 || diff === 12) {
-                            const risky = killerInstinct ? false : checkIfMoveHelpsPlayer(rank);
-                            possibleMoves.push({ card: topCard, targetId: t.id, isRisky: risky });
-                        }
-                    }
-                }
-                if (emptyColumnX !== null && pile.length > 1 && !rearrangeMove) {
-                    const cardUnder = pile[pile.length - 2];
-                    if (cardUnder.classList.contains('face-down')) { rearrangeMove = { card: topCard, targetX: emptyColumnX, targetY: 40 }; }
-                }
-            }
-
-            if (flipMove) { flipMove.classList.replace('face-down', 'face-up'); aiThinking = false; } 
-            else if (possibleMoves.length > 0) {
-                const safeMoves = possibleMoves.filter(m => !m.isRisky);
-                const riskyMoves = possibleMoves.filter(m => m.isRisky);
-                let finalMove = (safeMoves.length > 0) ? safeMoves[0] : null;
-                if (!finalMove) {
-                    const shouldRiskIt = (possibleMoves.length > 1) || isAiAggressive || !isDangerZone || killerInstinct;
-                    if (shouldRiskIt) finalMove = riskyMoves[0];
-                }
-                if (finalMove) animateAiMove(finalMove.card, finalMove.targetId, 'play');
-                else { aiThinking = false; triggerAiPass(); }
-            } 
-            else if (rearrangeMove) { animateAiMove(rearrangeMove.card, rearrangeMove, 'rearrange'); } 
-            else { aiThinking = false; triggerAiPass(); }
+        if (slapLocked || sequenceLocked) { aiThinking = false; return; }
+        const allAiCards = Array.from(document.querySelectorAll('#ai-boundary .card'));
+        const columns = getColumns(allAiCards);
+        const playerFoundationCount = document.querySelectorAll('#player-boundary .card').length;
+        const aiFoundationCount = allAiCards.length;
+        const aiTotal = aiDraw.length + aiFoundationCount;
+        const isDangerZone = playerFoundationCount <= 4;
+        const isAiAggressive = aiTotal <= 6;
+        const killerInstinct = aiFoundationCount <= 1;
+        let possibleMoves = [];
+        let flipMove = null;
+        let rearrangeMove = null;
+        let emptyColumnX = null;
+        for (let colX of [80, 280, 480, 680]) { if (columns[colX].length === 0) emptyColumnX = colX; }
+        for (let k in columns) {
+        const pile = columns[k];
+        if (pile.length === 0) continue;
+        const topCard = pile[pile.length - 1];
+        if (topCard.classList.contains('face-down')) { flipMove = topCard; break; }
+        const rank = parseInt(topCard.dataset.rank);
+        const targets = [ { id: 'target-active', val: targetRanks.active }, { id: 'target-secondary', val: targetRanks.secondary } ];
+        for (let t of targets) {
+        if (t.val !== null) {
+        const diff = Math.abs(rank - t.val);
+        if (diff === 1 || diff === 12) {
+        const risky = killerInstinct ? false : checkIfMoveHelpsPlayer(rank);
+        possibleMoves.push({ card: topCard, targetId: t.id, isRisky: risky });
         }
-
+        }
+        }
+        if (emptyColumnX !== null && pile.length > 1 && !rearrangeMove) {
+        const cardUnder = pile[pile.length - 2];
+        if (cardUnder.classList.contains('face-down')) { rearrangeMove = { card: topCard, targetX: emptyColumnX, targetY: 40 }; }
+        }
+        }
+        if (flipMove) { flipMove.classList.replace('face-down', 'face-up'); aiThinking = false; }
+        else if (possibleMoves.length > 0) {
+        const safeMoves = possibleMoves.filter(m => !m.isRisky);
+        const riskyMoves = possibleMoves.filter(m => m.isRisky);
+        let finalMove = (safeMoves.length > 0) ? safeMoves[0] : null;
+        if (!finalMove) {
+        const shouldRiskIt = (possibleMoves.length > 1) || isAiAggressive || !isDangerZone || killerInstinct;
+        if (shouldRiskIt) finalMove = riskyMoves[0];
+        }
+        if (finalMove) animateAiMove(finalMove.card, finalMove.targetId, 'play');
+        else { aiThinking = false; triggerAiPass(); }
+        }
+        else if (rearrangeMove) { animateAiMove(rearrangeMove.card, rearrangeMove, 'rearrange'); }
+        else { aiThinking = false; triggerAiPass(); }
+        }
         function checkIfMoveHelpsPlayer(futurePileRank) {
-            const playerFaceUpCards = document.querySelectorAll('#player-boundary .face-up');
-            for (let i = 0; i < playerFaceUpCards.length; i++) {
-                const pCard = playerFaceUpCards[i];
-                const pRank = parseInt(pCard.dataset.rank);
-                const diff = Math.abs(pRank - futurePileRank);
-                if (diff === 1 || diff === 12) return true;
-            }
-            return false;
+        const playerFaceUpCards = document.querySelectorAll('#player-boundary .face-up');
+        for (let i = 0; i < playerFaceUpCards.length; i++) {
+        const pCard = playerFaceUpCards[i];
+        const pRank = parseInt(pCard.dataset.rank);
+        const diff = Math.abs(pRank - futurePileRank);
+        if (diff === 1 || diff === 12) return true;
+        }
+        return false;
         }
         function triggerAiPass() {
-            if (aiPass) return;
-            aiPass = true;
-            checkSyncReveal();
+        if (aiPass) return;
+        aiPass = true;
+        checkSyncReveal();
         }
-
         function animateAiMove(card, target, type, isForced = false) {
-            card.classList.add('moving-ai');
-            let startRect = card.getBoundingClientRect();
-            let targetX, targetY, targetRot;
-            if (type === 'play') {
-                const slotRect = document.getElementById(target).getBoundingClientRect();
-                targetX = slotRect.left; targetY = slotRect.top; targetRot = '0deg';
-            } else {
-                card.style.left = target.targetX + 'px'; card.style.top = target.targetY + 'px';
-                setTimeout(() => { card.classList.remove('moving-ai'); aiThinking = false; }, 200);
-                return;
-            }
-            const clone = card.cloneNode(true);
-            card.style.opacity = '0';
-            document.body.appendChild(clone);
-            clone.style.position = 'absolute';
-            clone.style.left = startRect.left + 'px'; clone.style.top = startRect.top + 'px';
-            clone.style.transform = 'rotate(180deg)';
-            void clone.offsetWidth;
-            clone.style.left = targetX + 'px'; clone.style.top = targetY + 'px'; clone.style.transform = targetRot;
-
-            setTimeout(() => {
-                if (type === 'play') {
-                    const currentTargetVal = target === 'target-active' ? targetRanks.active : targetRanks.secondary;
-                    const cardRank = parseInt(clone.dataset.rank);
-                    const diff = Math.abs(cardRank - currentTargetVal);
-                    
-                    if (isForced || diff === 1 || diff === 12) {
-                        centerStack.push({ rank: cardRank, s: clone.dataset.suit, v: clone.dataset.val, color: clone.dataset.color, owner: card.dataset.owner });
-                        const slot = document.getElementById(target);
-                        if (target === 'target-active') targetRanks.active = cardRank; else targetRanks.secondary = cardRank;
-                        slot.innerHTML = '';
-                        const finalCard = clone.cloneNode(true);
-                        finalCard.classList.remove('moving-ai');
-                        finalCard.className = `card in-center ${clone.dataset.color === 'red' ? 'red' : 'black'}`;
-                        finalCard.style.left = '0'; finalCard.style.top = '0'; finalCard.style.position = 'relative';
-                        slot.appendChild(finalCard);
-                        card.remove(); clone.remove();
-
-                        if (targetRanks.active !== null && targetRanks.secondary !== null && targetRanks.active === targetRanks.secondary) {
-                            if(!isOnline) {
-                                const slapReaction = Math.max(100, currentActionDelay * 0.1);
-                                setTimeout(() => { triggerSlap('ai'); }, slapReaction);
-                            } else if(isHost) {
-                                evaluateSlapRequest('player'); 
-                            }
-                        }
-                        resetPasses();
-                        updateDisplay();
-                        if (document.querySelectorAll('#ai-boundary .card').length === 0) endRound("ai");
-                    } else {
-                        card.style.opacity = '1'; clone.remove();
-                    }
-                }
-                aiThinking = false;
-            }, 200);
+        card.classList.add('moving-ai');
+        let startRect = card.getBoundingClientRect();
+        let targetX, targetY, targetRot;
+        if (type === 'play') {
+        const slotRect = document.getElementById(target).getBoundingClientRect();
+        targetX = slotRect.left; targetY = slotRect.top; targetRot = '0deg';
+        } else {
+        card.style.left = target.targetX + 'px'; card.style.top = target.targetY + 'px';
+        setTimeout(() => { card.classList.remove('moving-ai'); aiThinking = false; }, 200);
+        return;
         }
+        const clone = card.cloneNode(true);
+        card.style.opacity = '0';
+        document.body.appendChild(clone);
+        clone.style.position = 'absolute';
+        clone.style.left = startRect.left + 'px'; clone.style.top = startRect.top + 'px';
+        clone.style.transform = 'rotate(180deg)';
+        void clone.offsetWidth;
+        clone.style.left = targetX + 'px'; clone.style.top = targetY + 'px'; clone.style.transform = targetRot;
+        setTimeout(() => {
+        if (type === 'play') {
+        const currentTargetVal = target === 'target-active' ? targetRanks.active : targetRanks.secondary;
+        const cardRank = parseInt(clone.dataset.rank);
+        const diff = Math.abs(cardRank - currentTargetVal);
 
+        if (isForced || diff === 1 || diff === 12) {
+        centerStack.push({ rank: cardRank, s: clone.dataset.suit, v: clone.dataset.val, color: clone.dataset.color, owner: card.dataset.owner });
+        const slot = document.getElementById(target);
+        if (target === 'target-active') targetRanks.active = cardRank; else targetRanks.secondary = cardRank;
+        slot.innerHTML = '';
+        const finalCard = clone.cloneNode(true);
+        finalCard.classList.remove('moving-ai');
+        finalCard.className = `card in-center ${clone.dataset.color === 'red' ? 'red' : 'black'}`;
+        finalCard.style.left = '0'; finalCard.style.top = '0'; finalCard.style.position = 'relative';
+        slot.appendChild(finalCard);
+        card.remove(); clone.remove();
+        if (targetRanks.active !== null && targetRanks.secondary !== null && targetRanks.active === targetRanks.secondary) {
+        if(!isOnline) {
+        const slapReaction = Math.max(100, currentActionDelay * 0.1);
+        setTimeout(() => { triggerSlap('ai'); }, slapReaction);
+        } else if(isHost) {
+        evaluateSlapRequest('player');
+        }
+        }
+        resetPasses();
+        updateDisplay();
+        if (document.querySelectorAll('#ai-boundary .card').length === 0) endRound("ai");
+        } else {
+        card.style.opacity = '1'; clone.remove();
+        }
+        }
+        aiThinking = false;
+        }, 200);
+        }
         function resetPasses() {
-            p1Pass = false; 
-            aiPass = false;
-            const btn = document.getElementById('deck-p1');
-            btn.classList.remove('ready', 'counting');
-            btn.innerText = "PASS";
-            const aiBtn = document.getElementById('deck-ai');
-            aiBtn.classList.remove('ready', 'counting');
-            aiBtn.innerText = isOnline ? "PLAYER 2" : "AI DECK";
-            sequenceLocked = false;
-        }
-        
-        function resetRevealButton() {
-            resetPasses(); 
+        p1Pass = false;
+        aiPass = false;
+        const btn = document.getElementById('deck-p1');
+        btn.classList.remove('ready', 'counting');
+        btn.innerText = "PASS";
+        const aiBtn = document.getElementById('deck-ai');
+        aiBtn.classList.remove('ready', 'counting');
+        aiBtn.innerText = isOnline ? "PLAYER 2" : "AI DECK";
+        sequenceLocked = false;
         }
 
+        function resetRevealButton() {
+        resetPasses();
+        }
         function performShortageCheck() {
-            if (p1Draw.length === 0 && aiDraw.length === 0) return;
-            if (p1Draw.length === 0 && aiDraw.length > 0) {
-                const loanSize = Math.floor(aiDraw.length / 2);
-                p1Draw = aiDraw.splice(0, loanSize);
-                p1IsBorrowing = true;
-            }
-            if (aiDraw.length === 0 && p1Draw.length > 0) {
-                const loanSize = Math.floor(p1Draw.length / 2);
-                aiDraw = p1Draw.splice(0, loanSize);
-                aiIsBorrowing = true;
-            }
-            updateBorrowVisuals();
+        if (p1Draw.length === 0 && aiDraw.length === 0) return;
+        if (p1Draw.length === 0 && aiDraw.length > 0) {
+        const loanSize = Math.floor(aiDraw.length / 2);
+        p1Draw = aiDraw.splice(0, loanSize);
+        p1IsBorrowing = true;
+        }
+        if (aiDraw.length === 0 && p1Draw.length > 0) {
+        const loanSize = Math.floor(p1Draw.length / 2);
+        aiDraw = p1Draw.splice(0, loanSize);
+        aiIsBorrowing = true;
+        }
+        updateBorrowVisuals();
         }
         function updateBorrowVisuals() {
-            document.getElementById('deck-p1').classList.toggle('has-borrowed', p1IsBorrowing);
-            document.getElementById('deck-ai').classList.toggle('has-borrowed', aiIsBorrowing);
+        document.getElementById('deck-p1').classList.toggle('has-borrowed', p1IsBorrowing);
+        document.getElementById('deck-ai').classList.toggle('has-borrowed', aiIsBorrowing);
         }
         function layout(cards, container, owner) {
-            const piles = [[],[],[],[]];
-            const counts = [4, 3, 2, 1];
-            counts.forEach((count, colIndex) => {
-                for(let i=0; i<count; i++) { if (cards.length > 0) piles[colIndex].push(cards.pop()); }
-            });
-            let xPos = 80;
-            piles.forEach(pile => {
-                if (pile.length > 0) {
-                    pile.forEach((data, idx) => {
-                        const isFaceUp = idx === pile.length - 1;
-                        createCard(data, xPos, 30+(idx*35), !isFaceUp, container, owner);
-                    });
-                }
-                xPos += 200;
-            });
+        const piles = [[],[],[],[]];
+        const counts = [4, 3, 2, 1];
+        counts.forEach((count, colIndex) => {
+        for(let i=0; i<count; i++) { if (cards.length > 0) piles[colIndex].push(cards.pop()); }
+        });
+        let xPos = 80;
+        piles.forEach(pile => {
+        if (pile.length > 0) {
+        pile.forEach((data, idx) => {
+        const isFaceUp = idx === pile.length - 1;
+        createCard(data, xPos, 30+(idx*35), !isFaceUp, container, owner);
+        });
         }
-
+        xPos += 200;
+        });
+        }
         function createCard(data, x, y, isFaceDown, container, owner) {
-            if (!data) return;
-            const card = document.createElement('div');
-            card.className = `card ${data.color} ${isFaceDown ? 'face-down' : 'face-up'}`;
-            card.style.left = `${x}px`; card.style.top = `${y}px`;
-            card.innerHTML = `
-            <div class="card-corner top-left"><div>${data.v}</div><div>${data.s}</div></div>
-            <div class="center-suit">${data.s}</div>
-            <div class="card-corner bottom-right"><div>${data.v}</div><div>${data.s}</div></div>
-            `;
-            card.dataset.rank = data.rank; card.dataset.suit = data.s; card.dataset.val = data.v; card.dataset.color = data.color;
-            card.dataset.owner = data.owner || (owner === 'player' ? 'p1' : 'ai');
-
-            if (owner === 'player') {
-                card.onmousedown = (e) => {
-                    if (card.classList.contains('face-down')) {
-                        if (document.querySelectorAll('#player-boundary .face-up').length < 4) {
-                            card.classList.replace('face-down', 'face-up');
-                            if(isOnline && conn) {
-                                conn.send({
-                                    type: 'FLIP_CARD',
-                                    cardRank: parseInt(card.dataset.rank),
-                                    cardSuit: card.dataset.suit
-                                });
-                            }
-                            resetPasses();
-                        }
-                        return;
-                    }
-                    const rank = parseInt(card.dataset.rank);
-                    let isPlayable = false;
-                    if (targetRanks.active) { if (Math.abs(rank - targetRanks.active) === 1 || Math.abs(rank - targetRanks.active) === 12) isPlayable = true; }
-                    if (targetRanks.secondary) { if (Math.abs(rank - targetRanks.secondary) === 1 || Math.abs(rank - targetRanks.secondary) === 12) isPlayable = true; }
-                    if (targetRanks.active === null) isPlayable = false;
-                    topZ++; card.style.zIndex = topZ;
-                    let offset = { x: e.clientX - card.offsetLeft, y: e.clientY - card.offsetTop };
-                    const startLeft = card.style.left; const startTop = card.style.top;
-
-                    const move = (mE) => {
-                        let newX = mE.clientX - offset.x; let newY = mE.clientY - offset.y;
-                        if (!isPlayable) { newX = Math.max(0, Math.min(newX, 800)); newY = Math.max(0, Math.min(newY, 100)); }
-                        card.style.left = `${newX}px`; card.style.top = `${newY}px`;
-                    };
-
-                    const up = (uE) => {
-                        window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up);
-                        const success = handleDrop(card, uE.clientX, uE.clientY);
-                        if (success) {
-                            resetPasses();
-                            if (aiPass) { aiPass = false; }
-                        } else {
-                            const curX = parseInt(card.style.left); const curY = parseInt(card.style.top);
-                            if (!(curX >= -20 && curX <= 820 && curY >= -20 && curY <= 140)) { card.style.left = startLeft; card.style.top = startTop; }
-                        }
-                    };
-                    window.addEventListener('mousemove', move); window.addEventListener('mouseup', up);
-                };
-            }
-            container.appendChild(card);
+        if (!data) return;
+        const card = document.createElement('div');
+        card.className = `card ${data.color} ${isFaceDown ? 'face-down' : 'face-up'}`;
+        card.style.left = `${x}px`; card.style.top = `${y}px`;
+        card.innerHTML = `
+        <div class="card-corner top-left"><div>${data.v}</div><div>${data.s}</div></div>
+        <div class="center-suit">${data.s}</div>
+        <div class="card-corner bottom-right"><div>${data.v}</div><div>${data.s}</div></div>
+        `;
+        card.dataset.rank = data.rank; card.dataset.suit = data.s; card.dataset.val = data.v; card.dataset.color = data.color;
+        card.dataset.owner = data.owner || (owner === 'player' ? 'p1' : 'ai');
+        if (owner === 'player') {
+        card.onmousedown = (e) => {
+        if (card.classList.contains('face-down')) {
+        if (document.querySelectorAll('#player-boundary .face-up').length < 4) {
+        card.classList.replace('face-down', 'face-up');
+        if(isOnline && conn) {
+        conn.send({
+        type: 'FLIP_CARD',
+        cardRank: parseInt(card.dataset.rank),
+        cardSuit: card.dataset.suit
+        });
+        }
+        resetPasses();
+        }
+        return;
+        }
+        const rank = parseInt(card.dataset.rank);
+        let isPlayable = false;
+        if (targetRanks.active) { if (Math.abs(rank - targetRanks.active) === 1 || Math.abs(rank - targetRanks.active) === 12) isPlayable = true; }
+        if (targetRanks.secondary) { if (Math.abs(rank - targetRanks.secondary) === 1 || Math.abs(rank - targetRanks.secondary) === 12) isPlayable = true; }
+        if (targetRanks.active === null) isPlayable = false;
+        topZ++; card.style.zIndex = topZ;
+        let offset = { x: e.clientX - card.offsetLeft, y: e.clientY - card.offsetTop };
+        const startLeft = card.style.left; const startTop = card.style.top;
+        const move = (mE) => {
+        let newX = mE.clientX - offset.x; let newY = mE.clientY - offset.y;
+        if (!isPlayable) { newX = Math.max(0, Math.min(newX, 800)); newY = Math.max(0, Math.min(newY, 100)); }
+        card.style.left = `${newX}px`; card.style.top = `${newY}px`;
+        };
+        const up = (uE) => {
+        window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up);
+        const success = handleDrop(card, uE.clientX, uE.clientY);
+        if (success) {
+        resetPasses();
+        if (aiPass) { aiPass = false; }
+        } else {
+        const curX = parseInt(card.style.left); const curY = parseInt(card.style.top);
+        if (!(curX >= -20 && curX <= 820 && curY >= -20 && curY <= 140)) { card.style.left = startLeft;
+        card.style.top = startTop; }
+        }
+        };
+        window.addEventListener('mousemove', move); window.addEventListener('mouseup', up);
+        };
+        }
+        container.appendChild(card);
         }
         function handleDrop(card, x, y) {
-            const rectL = document.getElementById('target-secondary').getBoundingClientRect();
-            const rectR = document.getElementById('target-active').getBoundingClientRect();
-            let target = (x >= rectL.left && x <= rectL.right && y >= rectL.top && y <= rectL.bottom) ? 'secondary' :
-                         (x >= rectR.left && x <= rectR.right && y >= rectR.top && y <= rectR.bottom) ? 'active' : null;
-            if (target && targetRanks[target]) {
-                const diff = Math.abs(parseInt(card.dataset.rank) - targetRanks[target]);
-                if (diff === 1 || diff === 12) {
-                    
-                    const cardLeft = parseInt(card.style.left);
-                    const colCenters = [80, 280, 480, 680];
-                    let closestCol = 0;
-                    let minDiff = 1000;
-                    colCenters.forEach(cx => {
-                        const diff = Math.abs(cardLeft - cx);
-                        if(diff < minDiff) { minDiff = diff; closestCol = cx; }
-                    });
-                    
-                    if (isOnline && conn) {
-                        conn.send({
-                            type: 'MOVE',
-                            cardRank: parseInt(card.dataset.rank),
-                            cardSuit: card.dataset.suit,
-                            cardVal: card.dataset.val,
-                            cardColor: card.dataset.color,
-                            cardOwner: card.dataset.owner, // SEND OWNER
-                            targetId: target === 'active' ? 'target-active' : 'target-secondary',
-                            originCol: closestCol
-                        });
-                    }
-                    centerStack.push({ rank: parseInt(card.dataset.rank), s: card.dataset.suit, v: card.dataset.val, color: card.dataset.color, owner: card.dataset.owner });
-                    updateCenter(target, card);
-                    
-                    if (document.querySelectorAll('#player-boundary .card').length === 0) endRound("player");
-                    return true;
-                }
-            }
-            return false;
+        const rectL = document.getElementById('target-secondary').getBoundingClientRect();
+        const rectR = document.getElementById('target-active').getBoundingClientRect();
+        let target = (x >= rectL.left && x <= rectL.right && y >= rectL.top && y <= rectL.bottom) ?
+        'secondary' :
+        (x >= rectR.left && x <= rectR.right && y >= rectR.top && y <= rectR.bottom) ? 'active' : null;
+        if (target && targetRanks[target]) {
+        const diff = Math.abs(parseInt(card.dataset.rank) - targetRanks[target]);
+        if (diff === 1 || diff === 12) {
+
+        const cardLeft = parseInt(card.style.left);
+        const colCenters = [80, 280, 480, 680];
+        let closestCol = 0;
+        let minDiff = 1000;
+        colCenters.forEach(cx => {
+        const diff = Math.abs(cardLeft - cx);
+        if(diff < minDiff) { minDiff = diff; closestCol = cx; }
+        });
+
+        if (isOnline && conn) {
+        conn.send({
+        type: 'MOVE',
+        cardRank: parseInt(card.dataset.rank),
+        cardSuit: card.dataset.suit,
+        cardVal: card.dataset.val,
+        cardColor: card.dataset.color,
+        cardOwner: card.dataset.owner, // SEND OWNER
+        targetId: target === 'active' ? 'target-active' : 'target-secondary',
+        originCol: closestCol
+        });
+        }
+        centerStack.push({ rank: parseInt(card.dataset.rank), s: card.dataset.suit, v: card.dataset.val, color: card.dataset.color, owner: card.dataset.owner });
+        updateCenter(target, card);
+
+        if (document.querySelectorAll('#player-boundary .card').length === 0) endRound("player");
+        return true;
+        }
+        }
+        return false;
         }
         function updateCenter(type, card) {
-            const slot = document.getElementById(type === 'secondary' ? 'target-secondary' : 'target-active');
-            targetRanks[type] = parseInt(card.dataset.rank);
-            slot.innerHTML = '';
-            const clone = card.cloneNode(true);
-            clone.className = `card in-center ${card.classList.contains('red') ? 'red' : 'black'}`;
-            clone.style.left = '0'; clone.style.top = '0'; clone.style.position = 'relative';
-            slot.appendChild(clone);
-            card.remove();
-            updateDisplay();
+        const slot = document.getElementById(type === 'secondary' ? 'target-secondary' : 'target-active');
+        targetRanks[type] = parseInt(card.dataset.rank);
+        slot.innerHTML = '';
+        const clone = card.cloneNode(true);
+        clone.className = `card in-center ${card.classList.contains('red') ? 'red' : 'black'}`;
+        clone.style.left = '0'; clone.style.top = '0'; clone.style.position = 'relative';
+        slot.appendChild(clone);
+        card.remove();
+        updateDisplay();
         }
-        
-        document.getElementById('deck-p1').onclick = () => {
-            if (sequenceLocked) return;
-            if (!p1Pass) {
-                p1Pass = true;
-                document.getElementById('deck-p1').classList.add('ready');
-                document.getElementById('deck-p1').innerText = "READY";
-                if (isOnline && conn) conn.send({ type: 'PASS' });
-                checkSyncReveal();
-            }
-        };
 
+        document.getElementById('deck-p1').onclick = () => {
+        if (sequenceLocked) return;
+        if (!p1Pass) {
+        p1Pass = true;
+        document.getElementById('deck-p1').classList.add('ready');
+        document.getElementById('deck-p1').innerText = "READY";
+        if (isOnline && conn) conn.send({ type: 'PASS' });
+        checkSyncReveal();
+        }
+        };
         function checkSyncReveal() {
-            if (p1Pass && aiPass) { startCountdown(); }
+        if (p1Pass && aiPass) { startCountdown(); }
         }
         function startCountdown() {
-            if(isOnline && !isHost) {
-                sequenceLocked = true;
-                document.getElementById('deck-p1').innerText = "WAIT";
-                document.getElementById('deck-ai').innerText = "WAIT";
-                return;
-            }
-
-            sequenceLocked = true;
-            let count = 3;
-            const p1Btn = document.getElementById('deck-p1');
-            const aiBtn = document.getElementById('deck-ai');
-            p1Btn.classList.replace('ready', 'counting');
-            aiBtn.classList.replace('ready', 'counting');
-            const timer = setInterval(() => {
-                p1Btn.innerText = count; aiBtn.innerText = count;
-                count--;
-                if (count < 0) { clearInterval(timer); executeReveal(); }
-            }, 800);
+        if(isOnline && !isHost) {
+        sequenceLocked = true;
+        document.getElementById('deck-p1').innerText = "WAIT";
+        document.getElementById('deck-ai').innerText = "WAIT";
+        return;
+        }
+        sequenceLocked = true;
+        let count = 3;
+        const p1Btn = document.getElementById('deck-p1');
+        const aiBtn = document.getElementById('deck-ai');
+        p1Btn.classList.replace('ready', 'counting');
+        aiBtn.classList.replace('ready', 'counting');
+        const timer = setInterval(() => {
+        p1Btn.innerText = count; aiBtn.innerText = count;
+        count--;
+        if (count < 0) { clearInterval(timer); executeReveal(); }
+        }, 800);
         }
         function executeReveal() {
-            if (p1Draw.length === 0 || aiDraw.length === 0) performShortageCheck();
-            if (p1Draw.length > 0 && aiDraw.length > 0) {
-                document.querySelectorAll('.slot').forEach(s => s.innerHTML = '');
-                let cP1 = p1Draw.pop(); let cAI = aiDraw.pop();
-                centerStack.push(cP1, cAI);
-                
-                if(isOnline && isHost && conn) {
-                    conn.send({
-                        type: 'FORCE_REVEAL',
-                        card1: cP1, 
-                        card2: cAI  
-                    });
-                }
+        if (p1Draw.length === 0 || aiDraw.length === 0) performShortageCheck();
+        if (p1Draw.length > 0 && aiDraw.length > 0) {
+        document.querySelectorAll('.slot').forEach(s => s.innerHTML = '');
+        let cP1 = p1Draw.pop(); let cAI = aiDraw.pop();
+        centerStack.push(cP1, cAI);
 
-                updateCenter('secondary', createRevealCard(cAI));
-                updateCenter('active', createRevealCard(cP1));
-                resetRevealButton();
-                updateDisplay();
-            } else {
-                if (centerStack.length > 0) {
-                    const recycled = centerStack.sort(() => Math.random() - 0.5);
-                    const half = Math.floor(recycled.length / 2);
-                    p1Draw = recycled.slice(0, half); aiDraw = recycled.slice(half);
-                    centerStack = [];
-                    document.querySelectorAll('.slot').forEach(s => s.innerHTML = '');
-                    updateDisplay(); resetRevealButton();
-                } else { location.reload(); }
-            }
+        if(isOnline && isHost && conn) {
+        conn.send({
+        type: 'FORCE_REVEAL',
+        card1: cP1,
+        card2: cAI
+        });
         }
-        
+        updateCenter('secondary', createRevealCard(cAI));
+        updateCenter('active', createRevealCard(cP1));
+        resetRevealButton();
+        updateDisplay();
+        } else {
+        if (centerStack.length > 0) {
+        const recycled = centerStack.sort(() => Math.random() - 0.5);
+        const half = Math.floor(recycled.length / 2);
+        p1Draw = recycled.slice(0, half); aiDraw = recycled.slice(half);
+        centerStack = [];
+        document.querySelectorAll('.slot').forEach(s => s.innerHTML = '');
+        updateDisplay(); resetRevealButton();
+        } else { location.reload(); }
+        }
+        }
+
         function forceRevealFromHost(hostCard, joinerCard) {
-            document.querySelectorAll('.slot').forEach(s => s.innerHTML = '');
-            if(p1Draw.length > 0) p1Draw.pop(); 
-            if(aiDraw.length > 0) aiDraw.pop(); 
-            
-            // FIX: HARD WIPE CENTER STACK TO PREVENT DUPLICATION
-            centerStack = [];
-            centerStack.push(hostCard, joinerCard);
-            
-            updateCenter('secondary', createRevealCard(hostCard));
-            updateCenter('active', createRevealCard(joinerCard));
-            resetRevealButton();
-            updateDisplay();
-        }
+        document.querySelectorAll('.slot').forEach(s => s.innerHTML = '');
+        if(p1Draw.length > 0) p1Draw.pop();
+        if(aiDraw.length > 0) aiDraw.pop();
 
+        // FIX: HARD WIPE CENTER STACK TO PREVENT DUPLICATION
+        centerStack = [];
+        centerStack.push(hostCard, joinerCard);
+
+        updateCenter('secondary', createRevealCard(hostCard));
+        updateCenter('active', createRevealCard(joinerCard));
+        resetRevealButton();
+        updateDisplay();
+        }
         function createRevealCard(data) {
-            const c = document.createElement('div');
-            c.className = `card ${data.color}`;
-            c.innerHTML = `
-            <div class="card-corner top-left"><div>${data.v}</div><div>${data.s}</div></div>
-            <div class="center-suit">${data.s}</div>
-            <div class="card-corner bottom-right"><div>${data.v}</div><div>${data.s}</div></div>
-            `;
-            c.dataset.rank = data.rank; c.dataset.suit = data.s; c.dataset.val = data.v; c.dataset.color = data.color;
-            return c;
+        const c = document.createElement('div');
+        c.className = `card ${data.color}`;
+        c.innerHTML = `
+        <div class="card-corner top-left"><div>${data.v}</div><div>${data.s}</div></div>
+        <div class="center-suit">${data.s}</div>
+        <div class="card-corner bottom-right"><div>${data.v}</div><div>${data.s}</div></div>
+        `;
+        c.dataset.rank = data.rank; c.dataset.suit = data.s; c.dataset.val = data.v; c.dataset.color = data.color;
+        return c;
         }
         function triggerSlap(winner, isNetworkCommand = false) {
-            if (slapLocked || !targetRanks.secondary || targetRanks.secondary !== targetRanks.active) return;
-            
-            // JOINER sends request, HOST decides
-            if (isOnline && !isHost && !isNetworkCommand && conn) {
-                conn.send({ type: 'SLAP_REQUEST' });
-                return; // Stop local execution for joiner
-            }
-            // HOST sends confirmation to everyone
-            if(isOnline && isHost && !isNetworkCommand && conn) {
-                conn.send({ type: 'SLAP_RESULT', winnerName: 'player' }); // Host won locally
-            }
+        if (slapLocked || !targetRanks.secondary || targetRanks.secondary !== targetRanks.active) return;
 
-            slapLocked = true; sequenceLocked = true;
-            const msg = document.getElementById('slap-alert');
-            msg.innerText = winner === 'player' ? "PLAYER 1 SLAPS WON!" : "OPP SLAPS WON!";
-            msg.style.display = 'block';
-            if (winner === 'player') stats.p1Slaps++; else stats.aiSlaps++;
-            updateStatsUI();
-            const wonCards = [...centerStack]; centerStack = [];
-            
-            if (winner === 'player') {
-                aiPenalty.push(...wonCards); 
-            } else {
-                p1Penalty.push(...wonCards); 
-            }
-            
-            // HOST SYNC STATS
-            if(isOnline && isHost && conn) {
-                conn.send({
-                    type: 'SYNC_STATS',
-                    p1Inv: p1Inventory,
-                    p2Inv: aiInventory,
-                    p1Pen: p1Penalty,
-                    p2Pen: aiPenalty
-                });
-            }
+        // JOINER sends request, HOST decides
+        if (isOnline && !isHost && !isNetworkCommand && conn) {
+        conn.send({ type: 'SLAP_REQUEST' });
+        return; // Stop local execution for joiner
+        }
+        // HOST sends confirmation to everyone
+        if(isOnline && isHost && !isNetworkCommand && conn) {
+        conn.send({ type: 'SLAP_RESULT', winnerName: 'player' }); // Host won locally
+        }
+        slapLocked = true; sequenceLocked = true;
+        const msg = document.getElementById('slap-alert');
+        msg.innerText = winner === 'player' ? "PLAYER 1 SLAPS WON!" : "OPP SLAPS WON!";
+        msg.style.display = 'block';
+        if (winner === 'player') stats.p1Slaps++; else stats.aiSlaps++;
+        updateStatsUI();
+        const wonCards = [...centerStack]; centerStack = [];
 
-            setTimeout(() => {
-                msg.style.display = 'none';
-                document.querySelectorAll('.slot').forEach(s => s.innerHTML = '');
-                targetRanks = { secondary: null, active: null };
-                resetRevealButton(); updateDisplay(); slapLocked = false;
-            }, 1500);
+        if (winner === 'player') {
+        aiPenalty.push(...wonCards);
+        } else {
+        p1Penalty.push(...wonCards);
+        }
+
+        // HOST SYNC STATS
+        if(isOnline && isHost && conn) {
+        conn.send({
+        type: 'SYNC_STATS',
+        p1Inv: p1Inventory,
+        p2Inv: aiInventory,
+        p1Pen: p1Penalty,
+        p2Pen: aiPenalty
+        });
+        }
+        setTimeout(() => {
+        msg.style.display = 'none';
+        document.querySelectorAll('.slot').forEach(s => s.innerHTML = '');
+        targetRanks = { secondary: null, active: null };
+        resetRevealButton(); updateDisplay(); slapLocked = false;
+        }, 1500);
         }
         window.addEventListener('keydown', (e) => {
-            if (e.code === 'Space' && gameActive && !slapLocked && !sequenceLocked) {
-                if (targetRanks.active !== null && targetRanks.secondary === targetRanks.active) {
-                    triggerSlap('player');
-                } else {
-                    issueYellowCard();
-                }
-            }
+        if (e.code === 'Space' && gameActive && !slapLocked && !sequenceLocked) {
+        if (targetRanks.active !== null && targetRanks.secondary === targetRanks.active) {
+        triggerSlap('player');
+        } else {
+        issueYellowCard();
+        }
+        }
         });
-        
+
         function gatherCardsForRoundEnd(winner) {
-            let p1Temp = [...p1Draw, ...p1Penalty];
-            let aiTemp = [...aiDraw, ...aiPenalty];
-            
-            const p1F = Array.from(document.querySelectorAll('#player-boundary .card')).map(domToCard);
-            const aiF = Array.from(document.querySelectorAll('#ai-boundary .card')).map(domToCard);
-            p1Temp.push(...p1F);
-            aiTemp.push(...aiF);
+        let p1Temp = [...p1Draw, ...p1Penalty];
+        let aiTemp = [...aiDraw, ...aiPenalty];
 
-            let p1Final = [];
-            let aiFinal = [];
-
-            p1Temp.forEach(c => {
-                if(c.owner === 'p1') p1Final.push(c);
-                else aiFinal.push(c);
-            });
-            aiTemp.forEach(c => {
-                if(c.owner === 'ai' || c.owner === 'p2') aiFinal.push(c);
-                else p1Final.push(c);
-            });
-
-            if(winner === 'player') {
-                aiFinal.push(...centerStack);
-            } else {
-                p1Final.push(...centerStack);
-            }
-
-            p1Final.sort(() => Math.random() - 0.5);
-            aiFinal.sort(() => Math.random() - 0.5);
-
-            return { p1: p1Final, ai: aiFinal };
+        const p1F = Array.from(document.querySelectorAll('#player-boundary .card')).map(domToCard);
+        const aiF = Array.from(document.querySelectorAll('#ai-boundary .card')).map(domToCard);
+        p1Temp.push(...p1F);
+        aiTemp.push(...aiF);
+        let p1Final = [];
+        let aiFinal = [];
+        p1Temp.forEach(c => {
+        if(c.owner === 'p1') p1Final.push(c);
+        else aiFinal.push(c);
+        });
+        aiTemp.forEach(c => {
+        if(c.owner === 'ai' || c.owner === 'p2') aiFinal.push(c);
+        else p1Final.push(c);
+        });
+        if(winner === 'player') {
+        aiFinal.push(...centerStack);
+        } else {
+        p1Final.push(...centerStack);
         }
-
+        p1Final.sort(() => Math.random() - 0.5);
+        aiFinal.sort(() => Math.random() - 0.5);
+        return { p1: p1Final, ai: aiFinal };
+        }
         function endRound(winner) {
-            if (isOnline && !isHost) return; 
+        if (isOnline && !isHost) return;
+        if(isOnline && isHost) conn.send({ type: 'ROUND_WIN' });
+        if (winner === 'player') stats.p1Rounds++; else stats.aiRounds++;
+        updateStatsUI();
 
-            if(isOnline && isHost) conn.send({ type: 'ROUND_WIN' });
+        alert(`${winner.toUpperCase()} WINS ROUND!`);
 
-            if (winner === 'player') stats.p1Rounds++; else stats.aiRounds++;
-            updateStatsUI();
-            
-            alert(`${winner.toUpperCase()} WINS ROUND!`);
-            
-            const newDecks = gatherCardsForRoundEnd(winner);
-            p1Draw = []; aiDraw = []; p1Penalty = []; aiPenalty = []; centerStack = [];
-
-            if(isOnline && isHost) {
-                conn.send({
-                    type: 'SYNC_ROUND',
-                    p1: newDecks.p1,
-                    p2: newDecks.ai
-                });
-                initGameOnline(newDecks.p1, newDecks.ai);
-            } else {
-                initGame(newDecks.p1, newDecks.ai);
-            }
+        const newDecks = gatherCardsForRoundEnd(winner);
+        p1Draw = []; aiDraw = []; p1Penalty = []; aiPenalty = []; centerStack = [];
+        if(isOnline && isHost) {
+        conn.send({
+        type: 'SYNC_ROUND',
+        p1: newDecks.p1,
+        p2: newDecks.ai
+        });
+        initGameOnline(newDecks.p1, newDecks.ai);
+        } else {
+        initGame(newDecks.p1, newDecks.ai);
         }
-        
+        }
+
         function domToCard(c) {
-            return { v: c.dataset.val, s: c.dataset.suit, rank: parseInt(c.dataset.rank), color: c.classList.contains('red') ? 'red' : 'black', owner: c.dataset.owner };
+        return { v: c.dataset.val, s: c.dataset.suit, rank: parseInt(c.dataset.rank), color: c.classList.contains('red') ? 'red' : 'black', owner: c.dataset.owner };
         }
         function showVictory(text) {
-            gameActive = false;
-            document.getElementById('victory-screen').style.display = 'flex';
-            document.getElementById('vic-sub').innerText = text;
+        gameActive = false;
+        document.getElementById('victory-screen').style.display = 'flex';
+        document.getElementById('vic-sub').innerText = text;
         }
         function updateDisplay() {
-            let p1Real = document.querySelectorAll('#player-boundary .card').length + p1Penalty.length;
-            let aiReal = document.querySelectorAll('#ai-boundary .card').length + aiPenalty.length;
-            if (p1IsBorrowing) { aiReal += (p1Draw.length + aiDraw.length); }
-            else if (aiIsBorrowing) { p1Real += (aiDraw.length + p1Draw.length); }
-            else { p1Real += p1Draw.length; aiReal += aiDraw.length; }
-            document.getElementById('p1-t').innerText = p1Real;
-            document.getElementById('ai-t').innerText = aiReal;
+        let p1Real = document.querySelectorAll('#player-boundary .card').length + p1Penalty.length;
+        let aiReal = document.querySelectorAll('#ai-boundary .card').length + aiPenalty.length;
+        if (p1IsBorrowing) { aiReal += (p1Draw.length + aiDraw.length); }
+        else if (aiIsBorrowing) { p1Real += (aiDraw.length + p1Draw.length); }
+        else { p1Real += p1Draw.length; aiReal += aiDraw.length; }
+        document.getElementById('p1-t').innerText = p1Real;
+        document.getElementById('ai-t').innerText = aiReal;
         }
         document.getElementById('new-match-btn').onclick = isOnline ? () => location.reload() : initGameAI;
     })();
