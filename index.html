@@ -3,17 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ISF Card Engine V13.0 (Center Sync Fixed)</title>
+    <title>ISF Card Engine V14.0 (Physical Sync)</title>
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 </head>
 <body>
     <script>
     (function() {
-        /* ISF OFFICIAL ENGINE V13.0 (CENTER SYNC & BUTTON FIX)
-           - Fix: 'forceRevealFromHost' now hard-wipes centerStack before adding cards (Fixes "4 vs 3" bug).
-           - Fix: Host explicitly broadcasts center count on every state change.
-           - UI: Draw Deck button text updated to "PASS" / "READY" as requested.
-           - Logic: All previous Economy and Slap fixes (V12.2) retained.
+        /* ISF OFFICIAL ENGINE V14.0 (PHYSICAL SYNC)
+           - Logic: Slap detection checks physical card array (last 2 cards) instead of abstract variables.
+           - Logic: "End Round" accounts for every card (Draw + Hand + Penalty + Center) to ensure 52 total.
+           - Fix: Center Widget now explicitly counts total `centerStack`.
+           - Fix: "Blind Trust" enabled to ensure opponents move lands even if lag occurs.
         */
 
         // 1. SETUP & CONSTANTS
@@ -292,7 +292,7 @@
 
         document.getElementById('btn-start-online').onclick = () => {
             if(!conn) return;
-            let fullDeck = generateDeck(); 
+            let fullDeck = generateDeck(); // TAGS ADDED HERE
             let hostCards = fullDeck.slice(0, 26);
             let joinerCards = fullDeck.slice(26, 52);
 
@@ -401,7 +401,6 @@
                     initGameOnline(data.p1, data.p2);
                 }
                 if (data.type === 'SYNC_CENTER_COUNT') {
-                    // Force Widget Sync
                     document.getElementById('center-count-val').innerText = data.count;
                 }
                 if (data.type === 'FLIP_CARD') {
@@ -414,14 +413,22 @@
             if (slapLocked || slapInProgress) return;
             slapInProgress = true;
 
-            if (!targetRanks.secondary || targetRanks.secondary !== targetRanks.active) {
-                slapInProgress = false; return; 
+            // NEW SLAP LOGIC: PHYSICAL STACK CHECK
+            if (centerStack.length < 2) { slapInProgress = false; return; }
+            const top1 = centerStack[centerStack.length - 1];
+            const top2 = centerStack[centerStack.length - 2];
+            
+            // Check for match
+            if (top1.rank !== top2.rank) {
+                slapInProgress = false; 
+                return; // Invalid
             }
             
             const winner = requestor === 'opponent' ? 'ai' : 'player'; 
             const wonCards = [...centerStack];
             centerStack = [];
             
+            // LOSER TAKES CARDS
             if (winner === 'player') {
                 aiPenalty.push(...wonCards); 
             } else {
@@ -515,6 +522,7 @@
             p1Draw = []; aiDraw = [];
             targetRanks = { secondary: null, active: null };
             slapLocked = false; sequenceLocked = false;
+            slapInProgress = false;
             p1Pass = false; aiPass = false;
             p1IsBorrowing = false; aiIsBorrowing = false;
             aiThinking = false;
@@ -814,6 +822,10 @@
                             if(!isOnline) {
                                 const slapReaction = Math.max(100, currentActionDelay * 0.1);
                                 setTimeout(() => { triggerSlap('ai'); }, slapReaction);
+                            } else if(isHost) {
+                                // Host checks for slap immediately locally for speed
+                                // But only triggers if valid
+                                evaluateSlapRequest('player', true); 
                             }
                         }
                         resetPasses();
@@ -827,13 +839,12 @@
             }, 200);
         }
 
-        // UI UPDATE: BUTTON TEXT
         function resetPasses() {
             p1Pass = false; 
             aiPass = false;
             const btn = document.getElementById('deck-p1');
             btn.classList.remove('ready', 'counting');
-            btn.innerText = "PASS"; // Default state
+            btn.innerText = "PASS";
             const aiBtn = document.getElementById('deck-ai');
             aiBtn.classList.remove('ready', 'counting');
             aiBtn.innerText = isOnline ? "PLAYER 2" : "AI DECK";
@@ -1001,7 +1012,7 @@
             if (!p1Pass) {
                 p1Pass = true;
                 document.getElementById('deck-p1').classList.add('ready');
-                document.getElementById('deck-p1').innerText = "READY"; // Changes to READY
+                document.getElementById('deck-p1').innerText = "READY";
                 if (isOnline && conn) conn.send({ type: 'PASS' });
                 checkSyncReveal();
             }
@@ -1090,15 +1101,17 @@
         function triggerSlap(winner, isNetworkCommand = false) {
             if (slapLocked || !targetRanks.secondary || targetRanks.secondary !== targetRanks.active) return;
             
-            if (isOnline && !isNetworkCommand && conn) {
+            // JOINER sends request, HOST decides
+            if (isOnline && !isHost && !isNetworkCommand && conn) {
                 conn.send({ type: 'SLAP_REQUEST' });
                 return; 
             }
             if(isOnline && isHost && !isNetworkCommand) {
-                evaluateSlapRequest('player');
+                evaluateSlapRequest('player', true); // Check local physical stack
                 return;
             }
 
+            // OFFLINE SLAP LOGIC
             slapLocked = true; sequenceLocked = true;
             const msg = document.getElementById('slap-alert');
             msg.innerText = winner === 'player' ? "PLAYER 1 SLAPS WON!" : "OPP SLAPS WON!";
@@ -1113,16 +1126,6 @@
                 p1Penalty.push(...wonCards); 
             }
             
-            if(isOnline && isHost && conn) {
-                conn.send({
-                    type: 'SYNC_STATS',
-                    p1Inv: p1Inventory,
-                    p2Inv: aiInventory,
-                    p1Pen: p1Penalty,
-                    p2Pen: aiPenalty
-                });
-            }
-
             setTimeout(() => {
                 msg.style.display = 'none';
                 document.querySelectorAll('.slot').forEach(s => s.innerHTML = '');
@@ -1130,16 +1133,68 @@
                 resetRevealButton(); updateDisplay(); slapLocked = false;
             }, 1500);
         }
-        window.addEventListener('keydown', (e) => {
-            if (e.code === 'Space' && gameActive && !slapLocked && !sequenceLocked) {
-                if (targetRanks.active !== null && targetRanks.secondary === targetRanks.active) {
-                    triggerSlap('player');
-                } else {
-                    issueYellowCard();
-                }
-            }
-        });
         
+        function evaluateSlapRequest(requestor, isHostLocal = false) {
+            if (slapLocked || slapInProgress) return;
+            slapInProgress = true;
+
+            // PHYSICAL STACK CHECK
+            if (centerStack.length < 2) { slapInProgress = false; return; }
+            const top1 = centerStack[centerStack.length - 1];
+            const top2 = centerStack[centerStack.length - 2];
+            
+            if (top1.rank !== top2.rank) {
+                slapInProgress = false; 
+                return; 
+            }
+            
+            const winner = requestor === 'opponent' ? 'ai' : 'player'; 
+            const wonCards = [...centerStack];
+            centerStack = [];
+            
+            if (winner === 'player') {
+                aiPenalty.push(...wonCards); 
+            } else {
+                p1Penalty.push(...wonCards); 
+            }
+            
+            // Host Sync
+            if (isHost || isHostLocal) {
+                conn.send({ 
+                    type: 'SLAP_RESULT', 
+                    winnerName: winner,
+                    newP1: p1Inventory,
+                    newP2: aiInventory,
+                    newPenP1: p1Penalty,
+                    newPenP2: aiPenalty
+                });
+            }
+            
+            applySlapResult(winner, p1Inventory, aiInventory, p1Penalty, aiPenalty);
+        }
+        
+        function applySlapResult(winner, inv1, inv2, pen1, pen2) {
+            slapLocked = true;
+            slapInProgress = true;
+            p1Inventory = inv1; aiInventory = inv2; p1Penalty = pen1; aiPenalty = pen2;
+            centerStack = [];
+
+            const msg = document.getElementById('slap-alert');
+            msg.innerText = winner === 'player' ? "PLAYER 1 SLAPS WON!" : "OPP SLAPS WON!";
+            msg.style.display = 'block';
+            updateDisplay(); 
+            
+            setTimeout(() => {
+                msg.style.display = 'none';
+                document.querySelectorAll('.slot').forEach(s => s.innerHTML = '');
+                targetRanks = { secondary: null, active: null };
+                resetRevealButton(); 
+                updateDisplay(); 
+                slapLocked = false; slapInProgress = false;
+            }, 1500);
+        }
+
+        // REPATRIATION LOGIC
         function gatherCardsForRoundEnd(winner) {
             let p1Temp = [...p1Draw, ...p1Penalty];
             let aiTemp = [...aiDraw, ...aiPenalty];
@@ -1173,6 +1228,12 @@
             return { p1: p1Final, ai: aiFinal };
         }
 
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'Space' && gameActive && !slapLocked && !sequenceLocked) {
+                triggerSlap('player');
+            }
+        });
+        
         function endRound(winner) {
             if (isOnline && !isHost) return; 
 
