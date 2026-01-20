@@ -3,17 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ISF Card Engine</title>
+    <title>ISF Card Engine V9.2 (Smart & Smooth)</title>
 </head>
 <body>
     <script>
     (function() {
-        /* ISF OFFICIAL ENGINE V9.1 (LAYOUT POLISH)
-           - UI Change: Nav buttons moved back to Top-Right
-           - UI Change: Stats Panel moved underneath buttons
-           - Logic: Unchanged (Ref Mode, Predator AI, Watchdog, Stats)
-           - Status: GOLD MASTER
+        /* ISF OFFICIAL ENGINE V9.2
+           - Feature: Custom Fonts for Difficulty Screen
+           - Feature: Smarter "Defensive" AI Logic
+           - Polish: Smoother, faster card animations (0.2s)
         */
+
         // 1. SETUP & CONSTANTS
         const suits = [' ♥ ', ' ♦ ', ' ♣ ', ' ♠ '];
         const values = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
@@ -32,6 +32,7 @@
         let gameActive = false;
         let aiThinking = false;
         let aiThinkingStartTime = 0;
+        
         // STATS & REF STATE
         let p1Yellows = 0;
         let p1Reds = 0;
@@ -40,6 +41,7 @@
             p1Rounds: 0, p1Slaps: 0,
             aiRounds: 0, aiSlaps: 0
         };
+
         // DIFFICULTY STATE
         let currentDifficulty = 5;
         let currentActionDelay = 2000;
@@ -49,6 +51,7 @@
             3: { min: 1000, max: 2000 },
             4: { min: 250,  max: 1500 }
         };
+
         // 2. UI CONSTRUCTION
         document.body.innerHTML = `
         <style>
@@ -66,6 +69,19 @@
 
         h1.logo { font-size: 80px; margin: 0; color: var(--title-color); letter-spacing: 5px; font-family: serif; }
 
+        /* CUSTOM FONT FOR DIFFICULTY SCREEN */
+        #screen-difficulty {
+            font-family: 'Courier New', Courier, monospace; 
+            background: #000; 
+        }
+        #screen-difficulty .logo {
+            font-family: 'Impact', sans-serif; 
+            letter-spacing: 2px;
+        }
+        #diff-label {
+            font-family: 'Impact', sans-serif; 
+        }
+
         .menu-btn { background: transparent; border: 2px solid white; color: white; padding: 15px 40px; font-size: 18px; margin: 10px; cursor: pointer;
             width: 250px; font-weight: bold; text-transform: uppercase; transition: 0.2s; }
         .menu-btn:hover { background: white; color: var(--bg-color); }
@@ -73,12 +89,13 @@
 
         #isf-stadium { display: flex; flex-direction: column; align-items: center; justify-content: space-between; height: 100vh; padding: 20px 0; }
 
-        /* NAV BUTTONS (TOP RIGHT) */
+        /* NAV BUTTONS */
         #top-nav { position: absolute; top: 20px; right: 20px; z-index: 2000; display: flex; gap: 10px; }
         .nav-btn { background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.3); color: white; padding: 8px 15px; cursor: pointer; font-size: 12px; font-weight: bold;
             border-radius: 4px; }
         .nav-btn:hover { background: white; color: black; }
-        /* STATS PANEL (UNDERNEATH BUTTONS) */
+
+        /* STATS PANEL */
         #stats-panel {
             position: absolute; top: 65px; right: 20px; z-index: 2000;
             display: flex; flex-direction: column; gap: 5px;
@@ -113,7 +130,10 @@
         .card.red { color: #e74c3c; }
         .card.face-down { background: #2c3e50; color: transparent !important; background-image: repeating-linear-gradient(45deg, #34495e, #34495e 5px, #2c3e50 5px, #2c3e50 10px); }
         .card.in-center { position: relative !important; top: 0 !important; left: 0 !important; z-index: 10 !important; }
-        .card.moving-ai { transition: all 0.5s ease-out !important; z-index: 9999 !important; box-shadow: 0 10px 20px rgba(0,0,0,0.5); }
+        
+        /* UPDATED: Faster transition for smoother AI (0.2s) */
+        .card.moving-ai { transition: all 0.2s ease-out !important; z-index: 9999 !important; box-shadow: 0 10px 20px rgba(0,0,0,0.5); }
+        
         .card-corner { position: absolute; display: flex; flex-direction: column; align-items: center; line-height: 1; font-size: 18px; }
         .top-left { top: 5px; left: 5px; }
         .bottom-right { bottom: 5px; right: 5px; transform: rotate(180deg); }
@@ -186,6 +206,7 @@
         </div>
         </div>
         `;
+        
         // 3. MENU & INIT
         document.getElementById('btn-play-ai').onclick = () => { document.getElementById('screen-main').classList.add('hidden'); document.getElementById('screen-difficulty').classList.remove('hidden'); };
         document.getElementById('btn-back-menu').onclick = () => { document.getElementById('screen-difficulty').classList.add('hidden'); document.getElementById('screen-main').classList.remove('hidden'); };
@@ -200,6 +221,7 @@
         };
         document.getElementById('nav-restart').onclick = initGame;
         document.getElementById('nav-menu').onclick = () => { gameActive = false; document.getElementById('isf-stadium').classList.add('hidden'); document.getElementById('screen-main').classList.remove('hidden'); document.getElementById('victory-screen').style.display = 'none'; };
+        
         function generateDeck() {
             let d = [];
             suits.forEach(s => values.forEach(v => d.push({ s, v, rank: rankMap[v], color: (s===' ♥ '||s===' ♦ ') ? 'red' : 'black', id: Math.random().toString(36) })));
@@ -256,10 +278,10 @@
             setTimeout(() => { triggerAiPass(); }, 1500);
             startAiBrain();
         }
+
         // --- REFEREE SYSTEM ---
         function issueYellowCard() {
             p1Yellows++;
-
             const alertBox = document.getElementById('slap-alert');
             alertBox.innerText = `YELLOW CARD!`;
             alertBox.style.display = 'block';
@@ -275,7 +297,6 @@
             p1Reds++;
             p1Yellows = 0;
             updateRefUI();
-
             const aiFoundationCount = document.querySelectorAll('#ai-boundary .card').length;
             const aiTotal = aiDraw.length + aiFoundationCount + aiPenalty.length;
             if (aiTotal <= 2) {
@@ -300,13 +321,11 @@
                     }
                 }
             }
-
             const alertBox = document.getElementById('slap-alert');
             alertBox.innerText = `RED CARD! +${stolen} CARDS`;
             alertBox.style.display = 'block';
             alertBox.style.color = '#e74c3c';
             setTimeout(() => { alertBox.style.display = 'none'; }, 1500);
-
             updateDisplay();
         }
         function updateRefUI() {
@@ -324,6 +343,7 @@
                 yelEl.style.display = 'none';
             }
         }
+
         // --- SMART AI BRAIN ---
         function startAiBrain() {
             if (!gameActive) return;
@@ -346,7 +366,6 @@
             }, 800);
             setInterval(() => {
                 if (!gameActive || sequenceLocked) return;
-
                 // Anti-Freeze
                 if (aiThinking && (Date.now() - aiThinkingStartTime > 4000)) {
                     aiThinking = false;
@@ -415,6 +434,8 @@
             }
             return columns;
         }
+
+        /* --- SMARTER AI IMPLEMENTATION --- */
         function attemptAiMove() {
             if (slapLocked || sequenceLocked) { aiThinking = false; return; }
             const allAiCards = Array.from(document.querySelectorAll('#ai-boundary .card'));
@@ -423,6 +444,14 @@
             let rearrangeMove = null;
             let flipMove = null;
             let emptyColumnX = null;
+
+            // DEFENSIVE ANALYSIS
+            const playerFoundationCount = document.querySelectorAll('#player-boundary .card').length;
+            const aiFoundationCount = allAiCards.length;
+            const aiTotal = aiDraw.length + aiFoundationCount;
+            const isDangerZone = playerFoundationCount <= 4;
+            const isAiAggressive = aiTotal <= 6;
+
             for (let colX of [80, 280, 480, 680]) {
                 if (columns[colX].length === 0) emptyColumnX = colX;
             }
@@ -442,11 +471,21 @@
                     if (t.val !== null) {
                         const diff = Math.abs(rank - t.val);
                         if (diff === 1 || diff === 12) {
-                            playMove = { card: topCard, targetId: t.id };
-                            break;
+                            // Defensive Check
+                            let moveIsSafe = true;
+                            if (isDangerZone && !isAiAggressive) {
+                                if (checkIfMoveHelpsPlayer(rank)) {
+                                    moveIsSafe = false;
+                                }
+                            }
+                            if (moveIsSafe) {
+                                playMove = { card: topCard, targetId: t.id };
+                                break;
+                            }
                         }
                     }
                 }
+                if (playMove) break; 
                 if (emptyColumnX !== null && pile.length > 1 && !playMove) {
                     const cardUnder = pile[pile.length - 2];
                     if (cardUnder.classList.contains('face-down')) {
@@ -466,11 +505,25 @@
                 triggerAiPass();
             }
         }
+        function checkIfMoveHelpsPlayer(futurePileRank) {
+            const playerFaceUpCards = document.querySelectorAll('#player-boundary .face-up');
+            for (let i = 0; i < playerFaceUpCards.length; i++) {
+                const pCard = playerFaceUpCards[i];
+                const pRank = parseInt(pCard.dataset.rank);
+                const diff = Math.abs(pRank - futurePileRank);
+                if (diff === 1 || diff === 12) {
+                    return true;
+                }
+            }
+            return false;
+        }
         function triggerAiPass() {
             if (aiPass) return;
             aiPass = true;
             checkSyncReveal();
         }
+
+        /* --- SMOOTHER AI ANIMATION --- */
         function animateAiMove(card, target, type) {
             card.classList.add('moving-ai');
             let startRect = card.getBoundingClientRect();
@@ -481,10 +534,13 @@
                 targetY = slotRect.top;
                 targetRot = '0deg';
             } else {
+                // REARRANGE: Move directly and wait
                 card.style.left = target.targetX + 'px';
                 card.style.top = target.targetY + 'px';
-                card.classList.remove('moving-ai');
-                aiThinking = false;
+                setTimeout(() => {
+                    card.classList.remove('moving-ai');
+                    aiThinking = false; 
+                }, 200);
                 return;
             }
             const clone = card.cloneNode(true);
@@ -528,8 +584,9 @@
                     }
                 }
                 aiThinking = false;
-            }, 500);
+            }, 200);
         }
+
         function resetPasses() {
             p1Pass = false; aiPass = false;
             const btn = document.getElementById('deck-p1');
