@@ -3,18 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ISF Card Engine V15.1 (Reveal Fixed)</title>
+    <title>ISF Card Engine V15.2 (Split Logic)</title>
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 </head>
 <body>
     <script>
     (function() {
-        /* ISF OFFICIAL ENGINE V15.1 (REVEAL FIXED)
-           - Fix: Reverted 'forceRevealFromHost' to V14.1 logic (Guarantees 2 cards).
-           - Fix: "Blind Trust" enabled for smooth syncing.
-           - Logic: Slap checks physical card ranks (e.g. 8 vs 8).
-           - Logic: Host arbitrates slaps and end-round math.
-           - UI: Center Widget removed.
+        /* ISF OFFICIAL ENGINE V15.2
+           - Fix: Separated AI and Online logic completely.
+           - Fix: Corrected scope issues with Slap functions.
+           - Fix: Updated Input handlers to route to correct logic.
         */
 
         // 1. SETUP & CONSTANTS
@@ -665,7 +663,7 @@
                 const chance = currentDifficulty * 0.05;
                 if (Math.random() < chance) {
                     const reactionBase = 2000 - (currentDifficulty * 180);
-                    setTimeout(() => { triggerSlap('ai'); }, Math.max(100, reactionBase + Math.random()*200));
+                    setTimeout(() => { triggerSlapAI('ai'); }, Math.max(100, reactionBase + Math.random()*200));
                 }
             }
         }, 500);
@@ -821,7 +819,7 @@
                         if (targetRanks.active !== null && targetRanks.secondary !== null && targetRanks.active === targetRanks.secondary) {
                             if(!isOnline) {
                                 const slapReaction = Math.max(100, currentActionDelay * 0.1);
-                                setTimeout(() => { triggerSlap('ai'); }, slapReaction);
+                                setTimeout(() => { triggerSlapAI('ai'); }, slapReaction);
                             } else if(isHost) {
                                 evaluateSlapRequest('player'); 
                             }
@@ -935,7 +933,15 @@
 
                     const up = (uE) => {
                         window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up);
-                        const success = handleDrop(card, uE.clientX, uE.clientY);
+                        
+                        // ROUTER LOGIC ADDED HERE
+                        let success = false;
+                        if (isOnline) {
+                            success = handleDropOnline(card, uE.clientX, uE.clientY);
+                        } else {
+                            success = handleDropAI(card, uE.clientX, uE.clientY);
+                        }
+
                         if (success) {
                             resetPasses();
                             if (aiPass) { aiPass = false; }
@@ -949,7 +955,8 @@
             }
             container.appendChild(card);
         }
-        function handleDrop(card, x, y) {
+
+        function handleDropOnline(card, x, y) {
             const rectL = document.getElementById('target-secondary').getBoundingClientRect();
             const rectR = document.getElementById('target-active').getBoundingClientRect();
             let target = (x >= rectL.left && x <= rectL.right && y >= rectL.top && y <= rectL.bottom) ? 'secondary' :
@@ -974,7 +981,7 @@
                             cardSuit: card.dataset.suit,
                             cardVal: card.dataset.val,
                             cardColor: card.dataset.color,
-                            cardOwner: card.dataset.owner, // SEND OWNER
+                            cardOwner: card.dataset.owner, 
                             targetId: target === 'active' ? 'target-active' : 'target-secondary',
                             originCol: closestCol
                         });
@@ -988,6 +995,42 @@
             }
             return false;
         }
+
+        // --- NEW AI-ONLY DROP FUNCTION ---
+        function handleDropAI(card, x, y) {
+            // 1. Determine where the card was dropped
+            const rectL = document.getElementById('target-secondary').getBoundingClientRect();
+            const rectR = document.getElementById('target-active').getBoundingClientRect();
+            let target = (x >= rectL.left && x <= rectL.right && y >= rectL.top && y <= rectL.bottom) ? 'secondary' :
+                        (x >= rectR.left && x <= rectR.right && y >= rectR.top && y <= rectR.bottom) ? 'active' : null;
+
+            // 2. Check Valid Move Logic (Edit THIS for Single Player Rules)
+            if (target && targetRanks[target]) {
+                const diff = Math.abs(parseInt(card.dataset.rank) - targetRanks[target]);
+
+                // Standard Rule: Difference must be 1 (e.g. 7 on 8) or 12 (Ace on King)
+                // Want to change rules? Change this line below!
+                if (diff === 1 || diff === 12) {
+
+                    // 3. Move the card internally
+                    centerStack.push({
+                        rank: parseInt(card.dataset.rank),
+                        s: card.dataset.suit,
+                        v: card.dataset.val,
+                        color: card.dataset.color,
+                        owner: card.dataset.owner
+                    });
+                    updateCenter(target, card);
+
+                    // 4. Check for Win Condition
+                    if (document.querySelectorAll('#player-boundary .card').length === 0) endRound("player");
+
+                    return true; // Success
+                }
+            }
+            return false; // Fail
+        }
+
         function updateCenter(type, card) {
             const slot = document.getElementById(type === 'secondary' ? 'target-secondary' : 'target-active');
             targetRanks[type] = parseInt(card.dataset.rank);
@@ -1091,7 +1134,8 @@
             c.dataset.rank = data.rank; c.dataset.suit = data.s; c.dataset.val = data.v; c.dataset.color = data.color;
             return c;
         }
-        function triggerSlap(winner, isNetworkCommand = false) {
+
+        function triggerSlapOnline(winner, isNetworkCommand = false) {
             if (slapLocked || !targetRanks.secondary || targetRanks.secondary !== targetRanks.active) return;
             
             // JOINER sends request, HOST decides
@@ -1136,10 +1180,49 @@
                 resetRevealButton(); updateDisplay(); slapLocked = false;
             }, 1500);
         }
+
+        // --- NEW AI-ONLY SLAP FUNCTION ---
+        function triggerSlapAI(winner) {
+            if (slapLocked || !targetRanks.secondary || targetRanks.secondary !== targetRanks.active) return;
+
+            slapLocked = true;
+            sequenceLocked = true;
+
+            const msg = document.getElementById('slap-alert');
+            msg.innerText = winner === 'player' ? "YOU SLAPPED!" : "CPU SLAPPED!";
+            msg.style.display = 'block';
+
+            if (winner === 'player') stats.p1Slaps++; else stats.aiSlaps++;
+            updateStatsUI();
+
+            const wonCards = [...centerStack];
+            centerStack = [];
+
+            if (winner === 'player') {
+                aiPenalty.push(...wonCards);
+            } else {
+                p1Penalty.push(...wonCards);
+            }
+
+            setTimeout(() => {
+                msg.style.display = 'none';
+                document.querySelectorAll('.slot').forEach(s => s.innerHTML = '');
+                targetRanks = { secondary: null, active: null };
+                resetRevealButton();
+                updateDisplay();
+                slapLocked = false;
+            }, 1500);
+        }
+
         window.addEventListener('keydown', (e) => {
             if (e.code === 'Space' && gameActive && !slapLocked && !sequenceLocked) {
                 if (targetRanks.active !== null && targetRanks.secondary === targetRanks.active) {
-                    triggerSlap('player');
+                    // ROUTER: Route to the correct function
+                    if (isOnline) {
+                        triggerSlapOnline('player');
+                    } else {
+                        triggerSlapAI('player');
+                    }
                 } else {
                     issueYellowCard();
                 }
@@ -1200,7 +1283,7 @@
                 });
                 initGameOnline(newDecks.p1, newDecks.ai);
             } else {
-                initGame(newDecks.p1, newDecks.ai);
+                initGameAI(); // FIX: Calling initGameAI instead of initGame
             }
         }
         
