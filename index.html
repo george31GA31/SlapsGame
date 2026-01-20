@@ -3,16 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ISF Card Engine V15.3 (Split Logic)</title>
+    <title>ISF Card Engine V15.3 (Persistent Ownership)</title>
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 </head>
 <body>
     <script>
     (function() {
-        /* ISF OFFICIAL ENGINE V15.2
-           - Fix: Separated AI and Online logic completely.
-           - Fix: Corrected scope issues with Slap functions.
-           - Fix: Updated Input handlers to route to correct logic.
+        /* ISF OFFICIAL ENGINE V15.3
+           - Mechanic: Persistent Ownership (Snowballing).
+           - Mechanic: Winner takes Draw Decks, Loser takes Center Pot.
+           - Fix: Game no longer resets to 26-26 after a round.
+           - Fix: AI and Online logic completely separated.
         */
 
         // 1. SETUP & CONSTANTS
@@ -160,6 +161,13 @@
             text-shadow: 0 0 20px black; pointer-events: none; display: none; z-index: 10000; text-align: center; width: 100%; white-space: nowrap; }
         #victory-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 20000; display: flex; flex-direction: column;
             align-items: center; justify-content: center; color: white; display: none; }
+        
+        #round-toast {
+            position: absolute; top: 20%; width: 100%; text-align: center; font-size: 40px; font-weight: bold; 
+            color: white; text-shadow: 0 2px 4px black; z-index: 5000; display: none;
+            animation: fadeInOut 3s forwards;
+        }
+        @keyframes fadeInOut { 0% { opacity:0; transform: translateY(-20px); } 20% { opacity:1; transform: translateY(0); } 80% { opacity:1; } 100% { opacity:0; } }
         </style>
 
         <div id="screen-main" class="screen">
@@ -217,6 +225,7 @@
                     <span><span class="stat-label">R:</span><span id="stat-ai-r">0</span> <span class="stat-label">S:</span><span id="stat-ai-s">0</span></span>
                 </div>
             </div>
+            <div id="round-toast">ROUND STARTED</div>
             <div id="victory-screen">
                 <h1 id="vic-title" style="font-size: 60px; color: gold; margin-bottom: 10px;">MATCH COMPLETE</h1>
                 <h2 id="vic-sub" style="font-size: 30px;"></h2>
@@ -562,53 +571,47 @@
             document.getElementById('stat-ai-s').innerText = stats.aiSlaps;
         }
 
-        // --- FIXED SETUP ROUND (Correct Victory Check) ---
-function setupRound() {
-    // 1. MATCH WIN CONDITION CHECK
-    // If a player has NO cards (Inventory is empty, and we just cleared Draw/Penalty in endRound)
-    const p1Total = p1Inventory.length;
-    const aiTotal = aiInventory.length;
+        // --- NEW SETUP ROUND LOGIC (DYNAMIC DEALING) ---
+        function setupRound() {
+            const p1Total = p1Inventory.length;
+            const aiTotal = aiInventory.length;
 
-    // Fix: Remove the '!' before gameActive. We want to show victory IF the game is active.
-    if (p1Total === 0 && gameActive) return showVictory("OPPONENT WINS THE MATCH!");
-    if (aiTotal === 0 && gameActive) return showVictory("YOU WIN THE MATCH!");
+            if (p1Total === 0 && gameActive) return showVictory("OPPONENT WINS THE MATCH!");
+            if (aiTotal === 0 && gameActive) return showVictory("YOU WIN THE MATCH!");
 
-    // 2. Clean Board
-    document.querySelectorAll('.foundation-area, .slot').forEach(el => el.innerHTML = '');
-    centerStack = [];
-    targetRanks = { secondary: null, active: null };
-    slapLocked = false; sequenceLocked = false;
-    p1Pass = false; aiPass = false;
+            // Show Round Toast
+            const t = document.getElementById('round-toast');
+            t.innerText = `YOU: ${p1Total} | OPP: ${aiTotal}`;
+            t.style.display = 'block';
+            setTimeout(() => { t.style.display = 'none'; }, 3000);
 
-    // 3. Deal Player 1
-    // Logic: If you have 26 cards -> Deal 10 to board, 16 to Draw Stack.
-    // Logic: If you have 6 cards  -> Deal 6 to board, 0 to Draw Stack.
-    const p1DealCount = Math.min(10, p1Inventory.length);
-    const p1FCards = p1Inventory.splice(0, p1DealCount);
-    p1Draw = [...p1Inventory]; // The rest go to Draw Deck
-    p1Inventory = []; // Clear inventory, they are now 'in play'
+            document.querySelectorAll('.foundation-area, .slot').forEach(el => el.innerHTML = '');
+            centerStack = [];
+            targetRanks = { secondary: null, active: null };
+            slapLocked = false; sequenceLocked = false;
+            p1Pass = false; aiPass = false;
 
-    // 4. Deal AI
-    const aiDealCount = Math.min(10, aiInventory.length);
-    const aiFCards = aiInventory.splice(0, aiDealCount);
-    aiDraw = [...aiInventory]; // The rest go to Draw Deck
-    aiInventory = [];
+            const p1DealCount = Math.min(10, p1Inventory.length);
+            const p1FCards = p1Inventory.splice(0, p1DealCount);
+            p1Draw = [...p1Inventory]; 
+            p1Inventory = []; 
 
-    // 5. Shortage / Stalemate Logic
-    performShortageCheck();
+            const aiDealCount = Math.min(10, aiInventory.length);
+            const aiFCards = aiInventory.splice(0, aiDealCount);
+            aiDraw = [...aiInventory]; 
+            aiInventory = [];
 
-    // 6. Render
-    layout(p1FCards, document.getElementById('player-boundary'), 'player');
-    layout(aiFCards, document.getElementById('ai-boundary'), 'ai');
-    updateDisplay();
-    resetRevealButton();
+            performShortageCheck();
+            layout(p1FCards, document.getElementById('player-boundary'), 'player');
+            layout(aiFCards, document.getElementById('ai-boundary'), 'ai');
+            updateDisplay();
+            resetRevealButton();
 
-    // 7. Start AI
-    if (!isOnline) {
-        setTimeout(() => { triggerAiPass(); }, 1500);
-        startAiBrain();
-    }
-}
+            if (!isOnline) {
+                setTimeout(() => { triggerAiPass(); }, 1500);
+                startAiBrain();
+            }
+        }
 
         function issueYellowCard() {
             p1Yellows++;
@@ -1019,21 +1022,14 @@ function setupRound() {
 
         // --- NEW AI-ONLY DROP FUNCTION ---
         function handleDropAI(card, x, y) {
-            // 1. Determine where the card was dropped
             const rectL = document.getElementById('target-secondary').getBoundingClientRect();
             const rectR = document.getElementById('target-active').getBoundingClientRect();
             let target = (x >= rectL.left && x <= rectL.right && y >= rectL.top && y <= rectL.bottom) ? 'secondary' :
                         (x >= rectR.left && x <= rectR.right && y >= rectR.top && y <= rectR.bottom) ? 'active' : null;
 
-            // 2. Check Valid Move Logic (Edit THIS for Single Player Rules)
             if (target && targetRanks[target]) {
                 const diff = Math.abs(parseInt(card.dataset.rank) - targetRanks[target]);
-
-                // Standard Rule: Difference must be 1 (e.g. 7 on 8) or 12 (Ace on King)
-                // Want to change rules? Change this line below!
                 if (diff === 1 || diff === 12) {
-
-                    // 3. Move the card internally
                     centerStack.push({
                         rank: parseInt(card.dataset.rank),
                         s: card.dataset.suit,
@@ -1042,14 +1038,11 @@ function setupRound() {
                         owner: card.dataset.owner
                     });
                     updateCenter(target, card);
-
-                    // 4. Check for Win Condition
                     if (document.querySelectorAll('#player-boundary .card').length === 0) endRound("player");
-
-                    return true; // Success
+                    return true;
                 }
             }
-            return false; // Fail
+            return false;
         }
 
         function updateCenter(type, card) {
@@ -1133,11 +1126,8 @@ function setupRound() {
             document.querySelectorAll('.slot').forEach(s => s.innerHTML = '');
             if(p1Draw.length > 0) p1Draw.pop(); 
             if(aiDraw.length > 0) aiDraw.pop(); 
-            
-            // FIX: HARD WIPE CENTER STACK TO PREVENT DUPLICATION
             centerStack = [];
             centerStack.push(hostCard, joinerCard);
-            
             updateCenter('secondary', createRevealCard(hostCard));
             updateCenter('active', createRevealCard(joinerCard));
             resetRevealButton();
@@ -1159,14 +1149,12 @@ function setupRound() {
         function triggerSlapOnline(winner, isNetworkCommand = false) {
             if (slapLocked || !targetRanks.secondary || targetRanks.secondary !== targetRanks.active) return;
             
-            // JOINER sends request, HOST decides
             if (isOnline && !isHost && !isNetworkCommand && conn) {
                 conn.send({ type: 'SLAP_REQUEST' });
-                return; // Stop local execution for joiner
+                return; 
             }
-            // HOST sends confirmation to everyone
             if(isOnline && isHost && !isNetworkCommand && conn) {
-                conn.send({ type: 'SLAP_RESULT', winnerName: 'player' }); // Host won locally
+                conn.send({ type: 'SLAP_RESULT', winnerName: 'player' }); 
             }
 
             slapLocked = true; sequenceLocked = true;
@@ -1183,7 +1171,6 @@ function setupRound() {
                 p1Penalty.push(...wonCards); 
             }
             
-            // HOST SYNC STATS
             if(isOnline && isHost && conn) {
                 conn.send({
                     type: 'SYNC_STATS',
@@ -1202,7 +1189,6 @@ function setupRound() {
             }, 1500);
         }
 
-        // --- NEW AI-ONLY SLAP FUNCTION ---
         function triggerSlapAI(winner) {
             if (slapLocked || !targetRanks.secondary || targetRanks.secondary !== targetRanks.active) return;
 
@@ -1238,7 +1224,6 @@ function setupRound() {
         window.addEventListener('keydown', (e) => {
             if (e.code === 'Space' && gameActive && !slapLocked && !sequenceLocked) {
                 if (targetRanks.active !== null && targetRanks.secondary === targetRanks.active) {
-                    // ROUTER: Route to the correct function
                     if (isOnline) {
                         triggerSlapOnline('player');
                     } else {
@@ -1251,105 +1236,84 @@ function setupRound() {
         });
         
         // --- NEW ROUND END LOGIC (PERSISTENT OWNERSHIP) ---
-function gatherCardsForRoundEnd(winner) {
-    // 1. Identify what's on the board (Foundation Piles)
-    const p1Foundation = Array.from(document.querySelectorAll('#player-boundary .card')).map(domToCard);
-    const aiFoundation = Array.from(document.querySelectorAll('#ai-boundary .card')).map(domToCard);
+        function gatherCardsForRoundEnd(winner) {
+            const p1Foundation = Array.from(document.querySelectorAll('#player-boundary .card')).map(domToCard);
+            const aiFoundation = Array.from(document.querySelectorAll('#ai-boundary .card')).map(domToCard);
+            const p1Reserves = [...p1Draw];
+            const aiReserves = [...aiDraw];
+            const centerPot = [...centerStack];
 
-    // 2. Identify what's in the Reserve (Draw Decks)
-    const p1Reserves = [...p1Draw];
-    const aiReserves = [...aiDraw];
+            let newP1Inventory = [];
+            let newAiInventory = [];
 
-    // 3. Identify the "Mess" (Center Pot)
-    const centerPot = [...centerStack];
+            // Winner takes their Draw + Opponent's Draw + Their Slapped Cards
+            // Loser takes their Foundation + Center Pot + Their Slapped Cards
+            
+            if (winner === 'player') {
+                // WINNER (P1)
+                newP1Inventory.push(...p1Foundation); // Leftovers
+                newP1Inventory.push(...p1Reserves);   // Own Draw
+                newP1Inventory.push(...aiReserves);   // Opponent's Draw (THE PRIZE)
+                newP1Inventory.push(...p1Penalty);    // Slapped cards
 
-    let newP1Inventory = [];
-    let newAiInventory = [];
+                // LOSER (AI)
+                newAiInventory.push(...aiFoundation); // Leftovers
+                newAiInventory.push(...centerPot);    // The Mess (PENALTY)
+                newAiInventory.push(...aiPenalty);    // Slapped cards
+            } else {
+                // WINNER (AI)
+                newAiInventory.push(...aiFoundation); // Leftovers (should be 0)
+                newAiInventory.push(...aiReserves);   // Own Draw
+                newAiInventory.push(...p1Reserves);   // Opponent's Draw (THE PRIZE)
+                newAiInventory.push(...aiPenalty);    // Slapped cards
 
-    // 4. Apply "Winner Takes Draw Decks, Loser Takes Center" Rule
-    if (winner === 'player') {
-        // --- PLAYER WINS THE ROUND ---
-        
-        // Winner keeps their Foundation (cleaned up)
-        // (Actually, standard rules usually recycle these, let's keep them in the winner's inventory)
-        newP1Inventory.push(...p1Foundation); // Player's leftovers (if any, usually 0 if won)
-        
-        // Winner takes BOTH remaining Draw Decks (The "2 remaining draw deck piles")
-        newP1Inventory.push(...p1Reserves);
-        newP1Inventory.push(...aiReserves);
+                // LOSER (P1)
+                newP1Inventory.push(...p1Foundation); // Leftovers
+                newP1Inventory.push(...centerPot);    // The Mess (PENALTY)
+                newP1Inventory.push(...p1Penalty);    // Slapped cards
+            }
 
-        // Winner keeps cards they slapped/won during the round
-        newP1Inventory.push(...p1Penalty);
+            newP1Inventory.sort(() => Math.random() - 0.5);
+            newAiInventory.sort(() => Math.random() - 0.5);
 
-        // --- LOSER (AI) PENALTY ---
-        
-        // Loser takes their leftover Foundation
-        newAiInventory.push(...aiFoundation);
-        
-        // Loser takes the Center Pot (The mess)
-        newAiInventory.push(...centerPot);
-        
-        // Loser keeps cards they slapped/won during the round
-        newAiInventory.push(...aiPenalty);
+            return { p1: newP1Inventory, ai: newAiInventory };
+        }
 
-    } else {
-        // --- AI WINS THE ROUND ---
-        
-        // Winner (AI) takes BOTH Draw Decks
-        newAiInventory.push(...aiReserves);
-        newAiInventory.push(...p1Reserves);
-        newAiInventory.push(...aiPenalty); // Keep slapped cards
-        // AI cleared foundation, so no aiFoundation to add (it's empty)
-
-        // --- LOSER (PLAYER) PENALTY ---
-        
-        // Loser takes Leftover Foundation + Center Pot
-        newP1Inventory.push(...p1Foundation);
-        newP1Inventory.push(...centerPot);
-        newP1Inventory.push(...p1Penalty); // Keep slapped cards
-    }
-
-    // 5. Shuffle the new decks for the next round
-    newP1Inventory.sort(() => Math.random() - 0.5);
-    newAiInventory.sort(() => Math.random() - 0.5);
-
-    return { p1: newP1Inventory, ai: newAiInventory };
-}
         // --- FIXED END ROUND (Preserves Deck Ownership) ---
-function endRound(winner) {
-    if (isOnline && !isHost) return; 
+        function endRound(winner) {
+            if (isOnline && !isHost) return; 
 
-    if(isOnline && isHost) conn.send({ type: 'ROUND_WIN' });
+            if(isOnline && isHost) conn.send({ type: 'ROUND_WIN' });
 
-    if (winner === 'player') stats.p1Rounds++; else stats.aiRounds++;
-    updateStatsUI();
-    
-    // 1. Calculate the new snowball decks
-    const newDecks = gatherCardsForRoundEnd(winner);
-    
-    // 2. Clear table state (but do NOT reset stats or generate new deck)
-    centerStack = [];
-    p1Penalty = []; aiPenalty = [];
-    p1Draw = []; aiDraw = [];
-    
-    // 3. Assign the Snowballed Decks to Inventory
-    p1Inventory = newDecks.p1;
-    aiInventory = newDecks.ai;
+            if (winner === 'player') stats.p1Rounds++; else stats.aiRounds++;
+            updateStatsUI();
+            
+            // 1. Calculate the new snowball decks
+            const newDecks = gatherCardsForRoundEnd(winner);
+            
+            // 2. Clear table state (but do NOT reset stats or generate new deck)
+            centerStack = [];
+            p1Penalty = []; aiPenalty = [];
+            p1Draw = []; aiDraw = [];
+            
+            // 3. Assign the Snowballed Decks to Inventory
+            p1Inventory = newDecks.p1;
+            aiInventory = newDecks.ai;
 
-    alert(`${winner.toUpperCase()} WINS ROUND! \nCards Owned: You: ${p1Inventory.length} | Opp: ${aiInventory.length}`);
+            alert(`${winner.toUpperCase()} WINS ROUND! \nCards Owned: You: ${p1Inventory.length} | Opp: ${aiInventory.length}`);
 
-    // 4. Start the next round using the existing inventories
-    if(isOnline && isHost) {
-        conn.send({
-            type: 'SYNC_ROUND',
-            p1: newDecks.p1,
-            p2: newDecks.ai
-        });
-        setupRound(); // Call setup directly, don't call initGameOnline
-    } else {
-        setupRound(); // Call setup directly, don't call initGameAI
-    }
-}
+            // 4. Start the next round using the existing inventories
+            if(isOnline && isHost) {
+                conn.send({
+                    type: 'SYNC_ROUND',
+                    p1: newDecks.p1,
+                    p2: newDecks.ai
+                });
+                setupRound(); // Call setup directly, don't call initGameOnline
+            } else {
+                setupRound(); // Call setup directly, don't call initGameAI
+            }
+        }
         
         function domToCard(c) {
             return { v: c.dataset.val, s: c.dataset.suit, rank: parseInt(c.dataset.rank), color: c.classList.contains('red') ? 'red' : 'black', owner: c.dataset.owner };
