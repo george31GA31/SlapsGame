@@ -3,17 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ISF Card Engine V11.1 (Final Round Sync)</title>
+    <title>ISF Card Engine V12.0 (Economy Fix)</title>
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 </head>
 <body>
     <script>
     (function() {
-        /* ISF OFFICIAL ENGINE V11.1 (FINAL ROUND SYNC)
-           - Fix: Round End Math is now calculated ONLY by Host.
-           - Fix: Joiner receives pre-calculated decks from Host (100% Sync).
-           - Logic: Winner keeps inventory. Loser takes their inventory + Center Stack.
-           - Logic: "Blind Trust" moves and Host Authority reveals maintained.
+        /* ISF OFFICIAL ENGINE V12.0 (ECONOMY FIX)
+           - Fix: End Round Card Distribution (Loser takes center).
+           - Fix: Borrowing Logic (Return to owner before distribution).
+           - Fix: Card Duplication (Host Authority on round reset).
+           - Logic: Shortage check happens immediately on round start.
         */
 
         // 1. SETUP & CONSTANTS
@@ -82,7 +82,6 @@
 
         h1.logo { font-size: 80px; margin: 0; color: var(--title-color); letter-spacing: 5px; font-family: serif; }
 
-        /* MENU STYLES */
         .menu-btn { background: transparent; border: 2px solid white; color: white; padding: 15px 40px; font-size: 18px; margin: 10px; cursor: pointer;
             width: 250px; font-weight: bold; text-transform: uppercase; transition: 0.2s; }
         .menu-btn:hover { background: white; color: var(--bg-color); }
@@ -102,13 +101,11 @@
 
         #isf-stadium { display: flex; flex-direction: column; align-items: center; justify-content: space-between; height: 100vh; padding: 20px 0; }
 
-        /* NAV BUTTONS */
         #top-nav { position: absolute; top: 20px; right: 20px; z-index: 2000; display: flex; gap: 10px; }
         .nav-btn { background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.3); color: white; padding: 8px 15px; cursor: pointer; font-size: 12px; font-weight: bold;
             border-radius: 4px; }
         .nav-btn:hover { background: white; color: black; }
 
-        /* STATS PANEL */
         #stats-panel {
             position: absolute; top: 65px; right: 20px; z-index: 2000;
             display: flex; flex-direction: column; gap: 5px;
@@ -155,7 +152,6 @@
         .inventory-hud.ai-hud { bottom: auto; top: 30px; border-left-color: #e74c3c; }
         .inventory-hud small { display: block; font-size: 12px; font-weight: 400; opacity: 0.8; text-transform: uppercase; letter-spacing: 1px; }
 
-        /* REF CARDS */
         .ref-card { width: 30px; height: 45px; border-radius: 4px; border: 1px solid white; display: none; box-shadow: 0 2px 5px black;
             justify-content: center; align-items: center; font-size: 20px; font-weight: bold; color: white; text-shadow: 0 1px 2px black; }
         .ref-card.yellow { background: var(--card-yellow); }
@@ -321,11 +317,8 @@
             isHost = true;
             netId = generateId();
             document.getElementById('host-code-display').innerText = netId;
-            
             peer = new Peer(netId);
-            
             peer.on('open', (id) => { console.log('My peer ID is: ' + id); });
-
             peer.on('connection', (c) => {
                 conn = c;
                 setupConnection();
@@ -340,11 +333,9 @@
             isHost = false;
             let myTempId = 'P2-' + Math.floor(Math.random()*1000);
             peer = new Peer(myTempId);
-            
             peer.on('open', (id) => {
                 document.getElementById('join-status').innerText = "Connecting to " + hostId + "...";
                 conn = peer.connect(hostId);
-                
                 conn.on('open', () => {
                     document.getElementById('join-status').innerText = "CONNECTED! WAITING FOR HOST...";
                     document.getElementById('join-status').style.color = "#2ecc71";
@@ -352,12 +343,10 @@
                     document.getElementById('join-code-input').disabled = true;
                     document.getElementById('btn-connect').classList.add('disabled');
                 });
-
                 conn.on('error', (err) => {
                     document.getElementById('join-status').innerText = "CONNECTION FAILED";
                     document.getElementById('join-status').style.color = "red";
                 });
-                
                 setupConnection();
             });
         }
@@ -388,10 +377,9 @@
                     triggerSlap('ai', true);
                 }
                 if (data.type === 'ROUND_WIN') {
-                    endRound('ai'); // Triggered by loser
+                    endRound('ai');
                 }
                 if (data.type === 'SYNC_ROUND') {
-                    // NEW: SYNC ROUND HANDLER FOR JOINER
                     initGameOnline(data.p1, data.p2);
                 }
                 if (data.type === 'FLIP_CARD') {
@@ -502,12 +490,18 @@
             targetRanks = { secondary: null, active: null };
             slapLocked = false; sequenceLocked = false;
             p1Pass = false; aiPass = false;
-            const p1FCount = 10;
-            const p1FCards = p1Inventory.splice(0, p1FCount);
+            
+            // NEW LOGIC: Setup Piles Correctly
             p1Draw = [...p1Inventory];
-            const aiFCount = 10;
-            const aiFCards = aiInventory.splice(0, aiFCount);
             aiDraw = [...aiInventory];
+            
+            // 4-3-2-1 Dealing
+            const p1FCount = Math.min(p1Draw.length, 10);
+            const p1FCards = p1Draw.splice(0, p1FCount);
+            
+            const aiFCount = Math.min(aiDraw.length, 10);
+            const aiFCards = aiDraw.splice(0, aiFCount);
+            
             performShortageCheck();
             layout(p1FCards, document.getElementById('player-boundary'), 'player');
             layout(aiFCards, document.getElementById('ai-boundary'), 'ai');
@@ -780,12 +774,16 @@
         }
 
         function performShortageCheck() {
+            // UPDATED: Check for empty draw piles at start of round
             if (p1Draw.length === 0 && aiDraw.length === 0) return;
+            
+            // If P1 has no draw cards but AI does, borrow from AI
             if (p1Draw.length === 0 && aiDraw.length > 0) {
                 const loanSize = Math.floor(aiDraw.length / 2);
                 p1Draw = aiDraw.splice(0, loanSize);
                 p1IsBorrowing = true;
             }
+            // If AI has no draw cards but P1 does, borrow from P1
             if (aiDraw.length === 0 && p1Draw.length > 0) {
                 const loanSize = Math.floor(p1Draw.length / 2);
                 aiDraw = p1Draw.splice(0, loanSize);
@@ -1025,7 +1023,14 @@
             if (winner === 'player') stats.p1Slaps++; else stats.aiSlaps++;
             updateStatsUI();
             const wonCards = [...centerStack]; centerStack = [];
-            if (winner === 'player') aiPenalty.push(...wonCards); else p1Penalty.push(...wonCards);
+            
+            // SLAP LOGIC FIX: LOSER TAKES CARDS
+            if (winner === 'player') {
+                aiPenalty.push(...wonCards); // AI Loses
+            } else {
+                p1Penalty.push(...wonCards); // Player Loses
+            }
+            
             setTimeout(() => {
                 msg.style.display = 'none';
                 document.querySelectorAll('.slot').forEach(s => s.innerHTML = '');
@@ -1043,6 +1048,40 @@
             }
         });
         
+        function gatherCardsForRoundEnd(winner) {
+            let p1RemDraw = [...p1Draw];
+            let aiRemDraw = [...aiDraw];
+
+            // 1. Recover Borrowed Cards
+            if(p1IsBorrowing) {
+                aiRemDraw.push(...p1RemDraw);
+                p1RemDraw = [];
+            }
+            if(aiIsBorrowing) {
+                p1RemDraw.push(...aiRemDraw);
+                aiRemDraw = [];
+            }
+
+            // 2. Gather Foundations
+            const p1F = Array.from(document.querySelectorAll('#player-boundary .card')).map(domToCard);
+            const aiF = Array.from(document.querySelectorAll('#ai-boundary .card')).map(domToCard);
+
+            let p1Total = [...p1RemDraw, ...p1F, ...p1Penalty];
+            let aiTotal = [...aiRemDraw, ...aiF, ...aiPenalty];
+
+            // 3. Loser takes Center Stack
+            if (winner === 'player') {
+                aiTotal.push(...centerStack);
+            } else {
+                p1Total.push(...centerStack);
+            }
+
+            p1Total.sort(() => Math.random() - 0.5);
+            aiTotal.sort(() => Math.random() - 0.5);
+
+            return { p1: p1Total, ai: aiTotal };
+        }
+
         function endRound(winner) {
             if (winner === 'player') {
                 if(isOnline && conn) conn.send({ type: 'ROUND_WIN' });
@@ -1051,35 +1090,22 @@
             if (winner === 'player') stats.p1Rounds++; else stats.aiRounds++;
             updateStatsUI();
             
-            // LOGIC: LOSER TAKES CENTER STACK (V11.1 Logic)
-            if (p1IsBorrowing) { aiDraw.push(...p1Draw); p1Draw = []; }
-            if (aiIsBorrowing) { p1Draw.push(...aiDraw); aiDraw = []; }
-            const p1RemF = Array.from(document.querySelectorAll('#player-boundary .card')).map(domToCard);
-            const aiRemF = Array.from(document.querySelectorAll('#ai-boundary .card')).map(domToCard);
-            
-            if (winner === 'player') {
-                p1Inventory = [...p1Draw, ...p1Penalty, ...p1RemF]; 
-                aiInventory = [...aiDraw, ...aiPenalty, ...aiRemF, ...centerStack]; 
-            } else {
-                aiInventory = [...aiDraw, ...aiPenalty, ...aiRemF];
-                p1Inventory = [...p1Draw, ...p1Penalty, ...p1RemF, ...centerStack]; 
-            }
-            
+            // Clean up old state
             p1Draw = []; aiDraw = []; p1Penalty = []; aiPenalty = []; centerStack = [];
-
-            p1Inventory.sort(() => Math.random() - 0.5); aiInventory.sort(() => Math.random() - 0.5);
+            
             alert(`${winner.toUpperCase()} WINS ROUND!`);
             
-            // HOST AUTHORITY ROUND SYNC
             if(isOnline && isHost) {
+                const newDecks = gatherCardsForRoundEnd(winner);
                 conn.send({
                     type: 'SYNC_ROUND',
-                    p1: p1Inventory,
-                    p2: aiInventory
+                    p1: newDecks.p1,
+                    p2: newDecks.ai
                 });
-                setupRound();
+                initGameOnline(newDecks.p1, newDecks.ai);
             } else if (!isOnline) {
-                setupRound();
+                const newDecks = gatherCardsForRoundEnd(winner);
+                initGame(newDecks.p1, newDecks.ai);
             } else {
                 // Joiner waits for SYNC_ROUND
             }
