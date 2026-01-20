@@ -3,17 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ISF Card Engine V10.8 (Logic Fix)</title>
+    <title>ISF Card Engine V10.9 (Manual Flip & Force Sync)</title>
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 </head>
 <body>
     <script>
     (function() {
-        /* ISF OFFICIAL ENGINE V10.8 (LOGIC FIX)
-           - Fix: End Round Card Distribution flipped.
-           - Logic: LOSER now takes the Center Stack (Punishment).
-           - Logic: WINNER keeps only their Draw/Penalty piles.
-           - Result: Correct card counts (Player 41 / AI 11 scenario).
+        /* ISF OFFICIAL ENGINE V10.9 (MANUAL FLIP & FORCE SYNC)
+           - Fix: Removed Auto-Flip. Players must click face-down cards to reveal them.
+           - Fix: "Snap Back" bug. Network moves now bypass local rule checks (Force Mode).
+           - Logic: Loser takes the pile (V10.8 logic maintained).
+           - Logic: Host Authority for reveals maintained.
         */
 
         // 1. SETUP & CONSTANTS
@@ -408,9 +408,7 @@
 
         function forceRemoteMove(rank, suit, val, color, targetId) {
             const oppCards = Array.from(document.querySelectorAll('#ai-boundary .card'));
-            const columns = getColumns(oppCards);
             let targetCard = null;
-            let colFound = null;
             
             for(let c of oppCards) {
                 if (parseInt(c.dataset.rank) === rank && c.dataset.suit === suit) {
@@ -422,15 +420,6 @@
             if (!targetCard && oppCards.length > 0) targetCard = oppCards[oppCards.length - 1];
 
             if(targetCard) {
-                const cardLeft = parseInt(targetCard.style.left);
-                const colCenters = [80, 280, 480, 680];
-                let closestCol = 0;
-                let minDiff = 1000;
-                colCenters.forEach(cx => {
-                    const diff = Math.abs(cardLeft - cx);
-                    if(diff < minDiff) { minDiff = diff; closestCol = cx; }
-                });
-
                 centerStack.push({ rank: rank, s: suit, v: val, color: color });
                 if (targetId === 'target-active') targetRanks.active = rank; else targetRanks.secondary = rank;
 
@@ -441,7 +430,8 @@
                 <div class="card-corner bottom-right"><div>${val}</div><div>${suit}</div></div>
                 `;
                 
-                animateAiMove(targetCard, targetId, 'play');
+                // FORCE MODE: TRUE (Skips logic check)
+                animateAiMove(targetCard, targetId, 'play', true);
             }
         }
 
@@ -714,7 +704,7 @@
             checkSyncReveal();
         }
 
-        function animateAiMove(card, target, type) {
+        function animateAiMove(card, target, type, isForced = false) {
             card.classList.add('moving-ai');
             let startRect = card.getBoundingClientRect();
             let targetX, targetY, targetRot;
@@ -740,7 +730,9 @@
                     const currentTargetVal = target === 'target-active' ? targetRanks.active : targetRanks.secondary;
                     const cardRank = parseInt(clone.dataset.rank);
                     const diff = Math.abs(cardRank - currentTargetVal);
-                    if (diff === 1 || diff === 12) {
+                    
+                    // FORCE MODE UPDATE: Bypasses check if isForced is true
+                    if (isForced || diff === 1 || diff === 12) {
                         centerStack.push({ rank: cardRank, s: clone.dataset.suit, v: clone.dataset.val, color: clone.dataset.color });
                         const slot = document.getElementById(target);
                         if (target === 'target-active') targetRanks.active = cardRank; else targetRanks.secondary = cardRank;
@@ -762,6 +754,7 @@
                         updateDisplay();
                         if (document.querySelectorAll('#ai-boundary .card').length === 0) endRound("ai");
                     } else {
+                        // Snap Back
                         card.style.opacity = '1'; clone.remove();
                     }
                 }
@@ -912,25 +905,8 @@
                     centerStack.push({ rank: parseInt(card.dataset.rank), s: card.dataset.suit, v: card.dataset.val, color: card.dataset.color });
                     updateCenter(target, card);
                     
-                    const myCards = Array.from(document.querySelectorAll('#player-boundary .card'));
-                    let colCards = [];
-                    myCards.forEach(c => {
-                        if(Math.abs(parseInt(c.style.left) - closestCol) < 50) colCards.push(c);
-                    });
-                    if(colCards.length > 0) {
-                        colCards.sort((a,b) => parseInt(a.style.top) - parseInt(b.style.top));
-                        const top = colCards[colCards.length - 1];
-                        if(top.classList.contains('face-down')) {
-                            top.classList.replace('face-down', 'face-up');
-                            if(isOnline && conn) {
-                                conn.send({
-                                    type: 'FLIP_CARD',
-                                    cardRank: parseInt(top.dataset.rank),
-                                    cardSuit: top.dataset.suit
-                                });
-                            }
-                        }
-                    }
+                    // UPDATED: AUTO-FLIP REMOVED FOR PLAYER
+                    // Player must manually click facedown cards.
 
                     if (document.querySelectorAll('#player-boundary .card').length === 0) endRound("player");
                     return true;
@@ -1069,7 +1045,6 @@
             }
         });
         
-        // --- LOGIC FIX HERE: LOSER TAKES CENTER STACK ---
         function endRound(winner) {
             if (winner === 'player') {
                 if(isOnline && conn) conn.send({ type: 'ROUND_WIN' });
@@ -1084,19 +1059,13 @@
             const aiRemF = Array.from(document.querySelectorAll('#ai-boundary .card')).map(domToCard);
             
             if (winner === 'player') {
-                // Winner: Player (Keeps P1 Stuff + AI Foundation? No, AI Foundation stays with AI usually, or goes to pot?)
-                // Standard Speed: Foundation cards return to owner's deck.
-                // Center Stack goes to LOSER.
-                
                 p1Inventory = [...p1Draw, ...p1Penalty, ...p1RemF]; 
-                aiInventory = [...aiDraw, ...aiPenalty, ...aiRemF, ...centerStack]; // LOSER TAKES STACK
+                aiInventory = [...aiDraw, ...aiPenalty, ...aiRemF, ...centerStack]; 
             } else {
-                // Winner: AI
                 aiInventory = [...aiDraw, ...aiPenalty, ...aiRemF];
-                p1Inventory = [...p1Draw, ...p1Penalty, ...p1RemF, ...centerStack]; // LOSER TAKES STACK
+                p1Inventory = [...p1Draw, ...p1Penalty, ...p1RemF, ...centerStack]; 
             }
             
-            // Clear temporary piles
             p1Draw = []; aiDraw = []; p1Penalty = []; aiPenalty = []; centerStack = [];
 
             p1Inventory.sort(() => Math.random() - 0.5); aiInventory.sort(() => Math.random() - 0.5);
