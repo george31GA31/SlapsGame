@@ -3,17 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ISF Card Engine V10.2 (Full Online Play)</title>
+    <title>ISF Card Engine V10.3 (Stable)</title>
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 </head>
 <body>
     <script>
     (function() {
-        /* ISF OFFICIAL ENGINE V10.2 (FULL ONLINE PLAY)
-           - Fix: "Player 2" Label
-           - Feature: Networked "Pass" (Drawing works now)
-           - Feature: Networked Card Movement (Opponent moves are visible)
-           - Logic: AI completely disabled during Online Play
+        /* ISF OFFICIAL ENGINE V10.3 (STABLE)
+           - Fix: Separated AI and Online Logic completely
+           - Fix: "Frozen" Pass button fixed (Hard reset on state flags)
+           - Fix: Opponent foundation updates correctly (Targeted card removal)
+           - Layout: 4-3-2-1 Stacks maintained
         */
 
         // 1. SETUP & CONSTANTS
@@ -21,13 +21,7 @@
         const values = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
         const rankMap = { 'A': 1, '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, '10': 10, 'J': 11, 'Q': 12, 'K': 13 };
         
-        // NETWORKING VARIABLES
-        let peer = null;
-        let conn = null;
-        let isHost = false;
-        let netId = null;
-        let isOnline = false; 
-
+        // GAME STATE
         let p1Inventory = [], aiInventory = [];
         let p1Draw = [], aiDraw = [];
         let p1Penalty = [], aiPenalty = [];
@@ -40,8 +34,17 @@
         let p1Pass = false, aiPass = false;
         let slapLocked = false, sequenceLocked = false;
         let gameActive = false;
+        
+        // AI STATE
         let aiThinking = false;
         let aiThinkingStartTime = 0;
+        
+        // NETWORKING STATE
+        let peer = null;
+        let conn = null;
+        let isHost = false;
+        let netId = null;
+        let isOnline = false; 
         
         // STATS & REF STATE
         let p1Yellows = 0;
@@ -224,11 +227,11 @@
                 <button id="new-match-btn" style="padding: 15px 40px; font-size: 20px; margin-top: 40px; cursor: pointer; background: white; border: none; border-radius: 5px; font-weight: bold;">NEW MATCH</button>
             </div>
             <div id="slap-alert">PLAYER 1 SLAPS WON!</div>
-            <div class="inventory-hud ai-hud"><small>Player 2</small><span id="ai-t">26</span></div>
+            <div class="inventory-hud ai-hud"><small id="opp-name-label">Opponent</small><span id="ai-t">26</span></div>
             <div id="ai-boundary" class="foundation-area ai-side"></div>
 
             <div id="center-arena">
-                <div id="deck-ai" class="draw-stack">PLAYER 2<div class="sideways-card"></div></div>
+                <div id="deck-ai" class="draw-stack">OPPONENT<div class="sideways-card"></div></div>
                 <div id="target-secondary" class="slot"></div>
                 <div id="target-active" class="slot"></div>
                 <div id="deck-p1" class="draw-stack">START<div class="sideways-card"></div></div>
@@ -243,66 +246,54 @@
         `;
         
         // 3. MENU LOGIC
-        // Main -> Difficulty
         document.getElementById('btn-play-ai').onclick = () => { 
             isOnline = false;
             document.getElementById('screen-main').classList.add('hidden'); 
             document.getElementById('screen-difficulty').classList.remove('hidden'); 
         };
         
-        // Main -> Online Menu
         document.getElementById('btn-online-menu').onclick = () => {
             isOnline = true;
             document.getElementById('screen-main').classList.add('hidden');
             document.getElementById('screen-online').classList.remove('hidden');
         };
 
-        // Online -> Back
         document.getElementById('btn-back-online').onclick = () => {
             document.getElementById('screen-online').classList.add('hidden');
             document.getElementById('screen-main').classList.remove('hidden');
         };
 
-        // Online -> Host
         document.getElementById('btn-host-game').onclick = () => {
             document.getElementById('screen-online').classList.add('hidden');
             document.getElementById('screen-lobby-host').classList.remove('hidden');
             initHost();
         };
 
-        // Online -> Join
         document.getElementById('btn-join-game').onclick = () => {
             document.getElementById('screen-online').classList.add('hidden');
             document.getElementById('screen-lobby-join').classList.remove('hidden');
         };
 
-        // Join -> Connect
         document.getElementById('btn-connect').onclick = () => {
             const code = document.getElementById('join-code-input').value.toUpperCase();
             if(code.length > 0) initJoin(code);
         };
 
-        // FIX: The Host Start Button Logic
         document.getElementById('btn-start-online').onclick = () => {
             if(!conn) return;
-            // 1. Generate FULL deck
             let fullDeck = generateDeck();
-            
-            // 2. Split it (Host gets first half, Joiner gets second half)
             let hostCards = fullDeck.slice(0, 26);
             let joinerCards = fullDeck.slice(26, 52);
 
-            // 3. Send Joiner their cards
             conn.send({
                 type: 'START_GAME',
-                myCards: joinerCards, // Joiner will use these as P1
-                oppCards: hostCards   // Joiner will see these as AI
+                myCards: joinerCards, 
+                oppCards: hostCards   
             });
 
-            // 4. Start Host Game
             document.getElementById('screen-lobby-host').classList.add('hidden');
             document.getElementById('isf-stadium').classList.remove('hidden');
-            initGame(hostCards, joinerCards); // Host uses P1, Joiner is AI
+            initGameOnline(hostCards, joinerCards); 
         };
 
         document.getElementById('btn-back-menu').onclick = () => { document.getElementById('screen-difficulty').classList.add('hidden'); document.getElementById('screen-main').classList.remove('hidden'); };
@@ -313,11 +304,11 @@
         document.getElementById('btn-start-game').onclick = () => {
             document.getElementById('screen-difficulty').classList.add('hidden');
             document.getElementById('isf-stadium').classList.remove('hidden');
-            initGame();
+            initGameAI(); // DISTINCT AI START
         };
         document.getElementById('nav-restart').onclick = () => {
             if(isOnline) alert("Restart not supported in online beta yet.");
-            else initGame();
+            else initGameAI();
         };
         document.getElementById('nav-menu').onclick = () => { gameActive = false; document.getElementById('isf-stadium').classList.add('hidden'); document.getElementById('screen-main').classList.remove('hidden'); document.getElementById('victory-screen').style.display = 'none'; };
         
@@ -333,9 +324,7 @@
             
             peer = new Peer(netId);
             
-            peer.on('open', (id) => {
-                console.log('My peer ID is: ' + id);
-            });
+            peer.on('open', (id) => { console.log('My peer ID is: ' + id); });
 
             peer.on('connection', (c) => {
                 conn = c;
@@ -375,31 +364,21 @@
 
         function setupConnection() {
             conn.on('data', (data) => {
-                // 1. START GAME HANDSHAKE
                 if (data.type === 'START_GAME') {
                     document.getElementById('screen-lobby-join').classList.add('hidden');
                     document.getElementById('isf-stadium').classList.remove('hidden');
-                    initGame(data.myCards, data.oppCards);
+                    initGameOnline(data.myCards, data.oppCards);
                 }
-                
-                // 2. RECEIVE "PASS" SIGNAL
                 if (data.type === 'PASS') {
-                    // This means the opponent clicked their deck
                     if (!aiPass) {
                         aiPass = true;
+                        // VISUAL CUE FOR OPPONENT READY
                         document.getElementById('deck-ai').classList.add('ready');
+                        document.getElementById('deck-ai').innerText = "READY";
                         checkSyncReveal();
                     }
                 }
-
-                // 3. RECEIVE "MOVE" SIGNAL (Card Played)
                 if (data.type === 'MOVE') {
-                    // data.cardId = ID of card to move
-                    // data.targetId = 'target-active' or 'target-secondary'
-                    // BUT: We are mirrored!
-                    // If Opponent sends 'target-active' (Right for them), it is 'target-secondary' (Left for me)
-                    // IF they send 'target-secondary' (Left for them), it is 'target-active' (Right for me)
-                    
                     const mirroredTarget = (data.targetId === 'target-active') ? 'target-secondary' : 'target-active';
                     executeRemoteMove(data.cardRank, data.cardSuit, data.cardVal, data.cardColor, mirroredTarget);
                 }
@@ -407,25 +386,30 @@
         }
         
         function executeRemoteMove(rank, suit, val, color, targetId) {
-            // Find a dummy card in the opponent's boundary to animate
-            const oppCards = document.querySelectorAll('#ai-boundary .card');
-            if(oppCards.length > 0) {
-                const dummy = oppCards[oppCards.length - 1]; // Just grab the last one for visual logic
-                dummy.dataset.rank = rank;
-                dummy.dataset.suit = suit;
-                dummy.dataset.val = val;
-                dummy.dataset.color = color;
-                
-                // Visuals for the card
-                dummy.innerHTML = `
+            // BUG FIX 1: FIND THE SPECIFIC CARD
+            const oppCards = Array.from(document.querySelectorAll('#ai-boundary .card'));
+            let targetCard = null;
+            
+            // Search for card matching data
+            for(let c of oppCards) {
+                if (parseInt(c.dataset.rank) === rank && c.dataset.suit === suit) {
+                    targetCard = c;
+                    break;
+                }
+            }
+
+            // Fallback: If not found (lag?), use last card
+            if (!targetCard && oppCards.length > 0) targetCard = oppCards[oppCards.length - 1];
+
+            if(targetCard) {
+                // Ensure visual match
+                targetCard.className = `card ${color}`;
+                targetCard.innerHTML = `
                 <div class="card-corner top-left"><div>${val}</div><div>${suit}</div></div>
                 <div class="center-suit">${suit}</div>
                 <div class="card-corner bottom-right"><div>${val}</div><div>${suit}</div></div>
                 `;
-                dummy.className = `card ${color}`;
-                
-                // Animate it
-                animateAiMove(dummy, targetId, 'play');
+                animateAiMove(targetCard, targetId, 'play');
             }
         }
 
@@ -437,54 +421,78 @@
             return d.sort(() => Math.random() - 0.5);
         }
 
-        // MODIFIED INIT: Now accepts specific card arrays for Online Sync
-        function initGame(forcedP1, forcedAI) {
-            document.getElementById('victory-screen').style.display = 'none';
-            
-            if (forcedP1 && forcedAI) {
-                // ONLINE MODE: Use provided decks
-                p1Inventory = forcedP1;
-                aiInventory = forcedAI;
-            } else {
-                // OFFLINE MODE: Generate new
-                let d = generateDeck();
-                p1Inventory = d.splice(0, 26);
-                aiInventory = d.splice(0, 26);
-            }
-            
-            gameActive = true;
-
-            // Reset Ref & Stats
-            p1Yellows = 0; p1Reds = 0;
+        function resetCommonState() {
+            p1Penalty = []; aiPenalty = []; centerStack = [];
+            p1Draw = []; aiDraw = [];
+            targetRanks = { secondary: null, active: null };
+            slapLocked = false; sequenceLocked = false;
+            p1Pass = false; aiPass = false;
+            p1IsBorrowing = false; aiIsBorrowing = false;
+            aiThinking = false;
             stats = { p1Rounds: 0, p1Slaps: 0, aiRounds: 0, aiSlaps: 0 };
             updateStatsUI();
+            updateRefUI();
+            document.querySelectorAll('.foundation-area, .slot').forEach(el => el.innerHTML = '');
+        }
+
+        // --- MODE 1: OFFLINE AI ---
+        function initGameAI() {
+            document.getElementById('victory-screen').style.display = 'none';
+            isOnline = false; // CRITICAL
+            
+            resetCommonState();
+            
+            let d = generateDeck();
+            p1Inventory = d.splice(0, 26);
+            aiInventory = d.splice(0, 26);
+            gameActive = true;
+
+            document.getElementById('deck-ai').innerText = "AI DECK";
+            document.getElementById('opp-name-label').innerText = "CPU (LVL " + currentDifficulty + ")";
 
             setupRound();
         }
+
+        // --- MODE 2: ONLINE ---
+        function initGameOnline(myCards, oppCards) {
+            document.getElementById('victory-screen').style.display = 'none';
+            isOnline = true; // CRITICAL
+            
+            resetCommonState();
+
+            p1Inventory = myCards;
+            aiInventory = oppCards;
+            gameActive = true;
+
+            document.getElementById('deck-ai').innerText = "PLAYER 2";
+            document.getElementById('opp-name-label').innerText = "OPPONENT";
+
+            setupRound();
+        }
+
         function updateStatsUI() {
             document.getElementById('stat-p1-r').innerText = stats.p1Rounds;
             document.getElementById('stat-p1-s').innerText = stats.p1Slaps;
             document.getElementById('stat-ai-r').innerText = stats.aiRounds;
             document.getElementById('stat-ai-s').innerText = stats.aiSlaps;
         }
+
         function setupRound() {
             if (gameActive) {
                 if (p1Inventory.length === 0) return showVictory("YOU WIN THE MATCH!");
-                if (aiInventory.length === 0) return showVictory("AI WINS THE MATCH!");
+                if (aiInventory.length === 0) return showVictory("OPP WINS THE MATCH!");
             }
-            document.querySelectorAll('.foundation-area, .slot').forEach(el => el.innerHTML = '');
-            p1Penalty = []; aiPenalty = []; centerStack = [];
-            p1Draw = []; aiDraw = [];
-            targetRanks = { secondary: null, active: null };
-            slapLocked = false; sequenceLocked = false;
-
-            p1Pass = false; aiPass = false;
-            p1IsBorrowing = false; aiIsBorrowing = false;
-            aiThinking = false;
-
-            updateRefUI();
             
-            // 4-3-2-1 LAYOUT
+            // Clear board
+            document.querySelectorAll('.foundation-area, .slot').forEach(el => el.innerHTML = '');
+            centerStack = [];
+            targetRanks = { secondary: null, active: null };
+            
+            // Hard reset flags
+            slapLocked = false; sequenceLocked = false;
+            p1Pass = false; aiPass = false;
+            
+            // Layout Cards (4-3-2-1)
             const p1FCount = 10;
             const p1FCards = p1Inventory.splice(0, p1FCount);
             p1Draw = [...p1Inventory];
@@ -499,16 +507,15 @@
             updateDisplay();
             resetRevealButton();
 
-            // ONLY START AI IF OFFLINE
+            // AI START LOGIC
             if (!isOnline) {
                 setTimeout(() => { triggerAiPass(); }, 1500);
                 startAiBrain();
-            } else {
-                document.getElementById('deck-ai').innerText = "PLAYER 2";
             }
         }
 
-        // --- REFEREE SYSTEM ---
+        // --- GAMEPLAY FUNCTIONS ---
+
         function issueYellowCard() {
             p1Yellows++;
             const alertBox = document.getElementById('slap-alert');
@@ -516,37 +523,22 @@
             alertBox.style.display = 'block';
             alertBox.style.color = '#f1c40f';
             setTimeout(() => { alertBox.style.display = 'none'; }, 1000);
-            if (p1Yellows >= 2) {
-                issueRedCard();
-            } else {
-                updateRefUI();
-            }
+            if (p1Yellows >= 2) { issueRedCard(); } else { updateRefUI(); }
         }
         function issueRedCard() {
-            p1Reds++;
-            p1Yellows = 0;
-            updateRefUI();
+            p1Reds++; p1Yellows = 0; updateRefUI();
             const aiFoundationCount = document.querySelectorAll('#ai-boundary .card').length;
             const aiTotal = aiDraw.length + aiFoundationCount + aiPenalty.length;
-            if (aiTotal <= 2) {
-                showVictory("AI WINS! (You caused them to hit 0 cards via penalty)");
-                return;
-            }
+            if (aiTotal <= 2) { showVictory("OPP WINS! (Red Card)"); return; }
             let stolen = 0;
             for(let i=0; i<2; i++) {
-                if (aiDraw.length > 0) {
-                    p1Draw.push(aiDraw.pop());
-                    stolen++;
-                } else {
+                if (aiDraw.length > 0) { p1Draw.push(aiDraw.pop()); stolen++; }
+                else {
                     const aiCards = document.querySelectorAll('#ai-boundary .card');
                     if (aiCards.length > 0) {
-                        const cardToSteal = aiCards[aiCards.length - 1];
-                        p1Draw.push({
-                            v: cardToSteal.dataset.val, s: cardToSteal.dataset.suit,
-                            rank: parseInt(cardToSteal.dataset.rank), color: cardToSteal.dataset.color
-                        });
-                        cardToSteal.remove();
-                        stolen++;
+                        const c = aiCards[aiCards.length - 1];
+                        p1Draw.push({ v: c.dataset.val, s: c.dataset.suit, rank: parseInt(c.dataset.rank), color: c.dataset.color });
+                        c.remove(); stolen++;
                     }
                 }
             }
@@ -560,22 +552,14 @@
         function updateRefUI() {
             const redEl = document.getElementById('p1-red-card');
             const yelEl = document.getElementById('p1-yellow-card');
-            if (p1Reds > 0) {
-                redEl.style.display = 'flex';
-                redEl.innerText = p1Reds > 1 ? p1Reds : '';
-            } else {
-                redEl.style.display = 'none';
-            }
-            if (p1Yellows > 0) {
-                yelEl.style.display = 'flex';
-            } else {
-                yelEl.style.display = 'none';
-            }
+            redEl.style.display = p1Reds > 0 ? 'flex' : 'none';
+            redEl.innerText = p1Reds > 1 ? p1Reds : '';
+            yelEl.style.display = p1Yellows > 0 ? 'flex' : 'none';
         }
 
-        // --- SMART AI BRAIN (OFFLINE ONLY) ---
+        // --- AI BRAIN (OFFLINE ONLY) ---
         function startAiBrain() {
-            if (!gameActive || isOnline) return; // DISABLE AI IN ONLINE MODE
+            if (!gameActive || isOnline) return; 
 
             const loopId = setInterval(() => {
                 if (!gameActive || document.getElementById('victory-screen').style.display === 'flex') {
@@ -595,25 +579,16 @@
             }, 800);
             setInterval(() => {
                 if (!gameActive || sequenceLocked) return;
-                // Anti-Freeze
-                if (aiThinking && (Date.now() - aiThinkingStartTime > 4000)) {
-                    aiThinking = false;
-                }
+                if (aiThinking && (Date.now() - aiThinkingStartTime > 4000)) aiThinking = false;
                 if (!aiThinking && !aiPass) {
                     const canFlip = checkForForcedFlip();
-                    if (canFlip) {
-                        canFlip.classList.replace('face-down', 'face-up');
-                        return;
-                    }
-                    const canMove = checkAnyPossibleAiMove();
-                    if (!canMove) {
-                        triggerAiPass();
-                    }
+                    if (canFlip) { canFlip.classList.replace('face-down', 'face-up'); return; }
+                    if (!checkAnyPossibleAiMove()) triggerAiPass();
                 }
             }, 2000);
         }
         setInterval(() => {
-            if (isOnline) return; // DISABLE AI SLAPS ONLINE
+            if (isOnline) return; 
             if (!slapLocked && !sequenceLocked && targetRanks.secondary === targetRanks.active && targetRanks.secondary) {
                 const chance = currentDifficulty * 0.05;
                 if (Math.random() < chance) {
@@ -653,25 +628,17 @@
             cardArray.forEach(c => {
                 const x = parseInt(c.style.left);
                 for (let colX of [80, 280, 480, 680]) {
-                    if (Math.abs(x - colX) < tolerance) {
-                        columns[colX].push(c);
-                        break;
-                    }
+                    if (Math.abs(x - colX) < tolerance) { columns[colX].push(c); break; }
                 }
             });
-            for (let k in columns) {
-                columns[k].sort((a,b) => parseInt(a.style.top) - parseInt(b.style.top));
-            }
+            for (let k in columns) { columns[k].sort((a,b) => parseInt(a.style.top) - parseInt(b.style.top)); }
             return columns;
         }
 
-        /* --- UPDATED LOGIC: V9.4 --- */
         function attemptAiMove() {
             if (slapLocked || sequenceLocked) { aiThinking = false; return; }
             const allAiCards = Array.from(document.querySelectorAll('#ai-boundary .card'));
             const columns = getColumns(allAiCards);
-            
-            // ANALYZE GAME STATE
             const playerFoundationCount = document.querySelectorAll('#player-boundary .card').length;
             const aiFoundationCount = allAiCards.length;
             const aiTotal = aiDraw.length + aiFoundationCount;
@@ -684,20 +651,13 @@
             let rearrangeMove = null;
             let emptyColumnX = null;
 
-            for (let colX of [80, 280, 480, 680]) {
-                if (columns[colX].length === 0) emptyColumnX = colX;
-            }
+            for (let colX of [80, 280, 480, 680]) { if (columns[colX].length === 0) emptyColumnX = colX; }
 
             for (let k in columns) {
                 const pile = columns[k];
                 if (pile.length === 0) continue;
                 const topCard = pile[pile.length - 1];
-
-                if (topCard.classList.contains('face-down')) {
-                    flipMove = topCard;
-                    break;
-                }
-
+                if (topCard.classList.contains('face-down')) { flipMove = topCard; break; }
                 const rank = parseInt(topCard.dataset.rank);
                 const targets = [ { id: 'target-active', val: targetRanks.active }, { id: 'target-secondary', val: targetRanks.secondary } ];
                 for (let t of targets) {
@@ -709,52 +669,26 @@
                         }
                     }
                 }
-
                 if (emptyColumnX !== null && pile.length > 1 && !rearrangeMove) {
                     const cardUnder = pile[pile.length - 2];
-                    if (cardUnder.classList.contains('face-down')) {
-                        rearrangeMove = { card: topCard, targetX: emptyColumnX, targetY: 40 };
-                    }
+                    if (cardUnder.classList.contains('face-down')) { rearrangeMove = { card: topCard, targetX: emptyColumnX, targetY: 40 }; }
                 }
             }
 
-            if (flipMove) {
-                flipMove.classList.replace('face-down', 'face-up');
-                aiThinking = false;
-            } 
+            if (flipMove) { flipMove.classList.replace('face-down', 'face-up'); aiThinking = false; } 
             else if (possibleMoves.length > 0) {
                 const safeMoves = possibleMoves.filter(m => !m.isRisky);
                 const riskyMoves = possibleMoves.filter(m => m.isRisky);
-                
-                let finalMove = null;
-
-                if (safeMoves.length > 0) {
-                    finalMove = safeMoves[0]; 
-                } 
-                else {
+                let finalMove = (safeMoves.length > 0) ? safeMoves[0] : null;
+                if (!finalMove) {
                     const shouldRiskIt = (possibleMoves.length > 1) || isAiAggressive || !isDangerZone || killerInstinct;
-
-                    if (shouldRiskIt) {
-                        finalMove = riskyMoves[0];
-                    } else {
-                        console.log("AI Defense: Blocking risky move.");
-                    }
+                    if (shouldRiskIt) finalMove = riskyMoves[0];
                 }
-
-                if (finalMove) {
-                    animateAiMove(finalMove.card, finalMove.targetId, 'play');
-                } else {
-                    aiThinking = false;
-                    triggerAiPass();
-                }
+                if (finalMove) animateAiMove(finalMove.card, finalMove.targetId, 'play');
+                else { aiThinking = false; triggerAiPass(); }
             } 
-            else if (rearrangeMove) {
-                animateAiMove(rearrangeMove.card, rearrangeMove, 'rearrange');
-            } 
-            else {
-                aiThinking = false;
-                triggerAiPass();
-            }
+            else if (rearrangeMove) { animateAiMove(rearrangeMove.card, rearrangeMove, 'rearrange'); } 
+            else { aiThinking = false; triggerAiPass(); }
         }
 
         function checkIfMoveHelpsPlayer(futurePileRank) {
@@ -763,9 +697,7 @@
                 const pCard = playerFaceUpCards[i];
                 const pRank = parseInt(pCard.dataset.rank);
                 const diff = Math.abs(pRank - futurePileRank);
-                if (diff === 1 || diff === 12) {
-                    return true;
-                }
+                if (diff === 1 || diff === 12) return true;
             }
             return false;
         }
@@ -781,29 +713,20 @@
             let targetX, targetY, targetRot;
             if (type === 'play') {
                 const slotRect = document.getElementById(target).getBoundingClientRect();
-                targetX = slotRect.left;
-                targetY = slotRect.top;
-                targetRot = '0deg';
+                targetX = slotRect.left; targetY = slotRect.top; targetRot = '0deg';
             } else {
-                card.style.left = target.targetX + 'px';
-                card.style.top = target.targetY + 'px';
-                setTimeout(() => {
-                    card.classList.remove('moving-ai');
-                    aiThinking = false; 
-                }, 200);
+                card.style.left = target.targetX + 'px'; card.style.top = target.targetY + 'px';
+                setTimeout(() => { card.classList.remove('moving-ai'); aiThinking = false; }, 200);
                 return;
             }
             const clone = card.cloneNode(true);
             card.style.opacity = '0';
             document.body.appendChild(clone);
             clone.style.position = 'absolute';
-            clone.style.left = startRect.left + 'px';
-            clone.style.top = startRect.top + 'px';
+            clone.style.left = startRect.left + 'px'; clone.style.top = startRect.top + 'px';
             clone.style.transform = 'rotate(180deg)';
             void clone.offsetWidth;
-            clone.style.left = targetX + 'px';
-            clone.style.top = targetY + 'px';
-            clone.style.transform = targetRot;
+            clone.style.left = targetX + 'px'; clone.style.top = targetY + 'px'; clone.style.transform = targetRot;
 
             setTimeout(() => {
                 if (type === 'play') {
@@ -823,8 +746,10 @@
                         card.remove(); clone.remove();
 
                         if (targetRanks.active !== null && targetRanks.secondary !== null && targetRanks.active === targetRanks.secondary) {
-                            const slapReaction = Math.max(100, currentActionDelay * 0.1);
-                            setTimeout(() => { triggerSlap('ai'); }, slapReaction);
+                            if(!isOnline) {
+                                const slapReaction = Math.max(100, currentActionDelay * 0.1);
+                                setTimeout(() => { triggerSlap('ai'); }, slapReaction);
+                            }
                         }
                         resetPasses();
                         updateDisplay();
@@ -837,16 +762,30 @@
             }, 200);
         }
 
+        // BUG FIX 2: HARD RESET REVEAL BUTTON
         function resetPasses() {
-            p1Pass = false; aiPass = false;
+            // Uncheck passes
+            p1Pass = false; 
+            aiPass = false;
+            
+            // Reset UI P1
             const btn = document.getElementById('deck-p1');
             btn.classList.remove('ready', 'counting');
             btn.innerText = "PASS";
 
+            // Reset UI AI/OPP
             const aiBtn = document.getElementById('deck-ai');
             aiBtn.classList.remove('ready', 'counting');
-            aiBtn.innerText = isOnline ? "PLAYER 2" : "AI DECK"; // DYNAMIC LABEL
+            aiBtn.innerText = isOnline ? "PLAYER 2" : "AI DECK";
+            
+            // Hard unlock
+            sequenceLocked = false;
         }
+        
+        function resetRevealButton() {
+            resetPasses(); // Use shared reset logic
+        }
+
         function performShortageCheck() {
             if (p1Draw.length === 0 && aiDraw.length === 0) return;
             if (p1Draw.length === 0 && aiDraw.length > 0) {
@@ -865,21 +804,13 @@
             document.getElementById('deck-p1').classList.toggle('has-borrowed', p1IsBorrowing);
             document.getElementById('deck-ai').classList.toggle('has-borrowed', aiIsBorrowing);
         }
-        
-        // --- UPDATED LAYOUT LOGIC (4-3-2-1) ---
         function layout(cards, container, owner) {
             const piles = [[],[],[],[]];
-            // SOLITAIRE STYLE: 4, 3, 2, 1 distribution
+            // SOLITAIRE 4-3-2-1
             const counts = [4, 3, 2, 1];
-            
             counts.forEach((count, colIndex) => {
-                for(let i=0; i<count; i++) {
-                    if (cards.length > 0) {
-                        piles[colIndex].push(cards.pop());
-                    }
-                }
+                for(let i=0; i<count; i++) { if (cards.length > 0) piles[colIndex].push(cards.pop()); }
             });
-
             let xPos = 80;
             piles.forEach(pile => {
                 if (pile.length > 0) {
@@ -936,8 +867,7 @@
                             if (aiPass) { aiPass = false; }
                         } else {
                             const curX = parseInt(card.style.left); const curY = parseInt(card.style.top);
-                            if (!(curX >= -20 && curX <= 820 && curY >= -20 && curY <= 140)) { card.style.left = startLeft;
-                                card.style.top = startTop; }
+                            if (!(curX >= -20 && curX <= 820 && curY >= -20 && curY <= 140)) { card.style.left = startLeft; card.style.top = startTop; }
                         }
                     };
                     window.addEventListener('mousemove', move); window.addEventListener('mouseup', up);
@@ -948,14 +878,11 @@
         function handleDrop(card, x, y) {
             const rectL = document.getElementById('target-secondary').getBoundingClientRect();
             const rectR = document.getElementById('target-active').getBoundingClientRect();
-            let target = (x >= rectL.left && x <= rectL.right && y >= rectL.top && y <= rectL.bottom) ?
-                'secondary' :
-                (x >= rectR.left && x <= rectR.right && y >= rectR.top && y <= rectR.bottom) ? 'active' : null;
+            let target = (x >= rectL.left && x <= rectL.right && y >= rectL.top && y <= rectL.bottom) ? 'secondary' :
+                         (x >= rectR.left && x <= rectR.right && y >= rectR.top && y <= rectR.bottom) ? 'active' : null;
             if (target && targetRanks[target]) {
                 const diff = Math.abs(parseInt(card.dataset.rank) - targetRanks[target]);
                 if (diff === 1 || diff === 12) {
-                    
-                    // --- NETWORKING: SEND MOVE ---
                     if (isOnline && conn) {
                         conn.send({
                             type: 'MOVE',
@@ -963,10 +890,9 @@
                             cardSuit: card.dataset.suit,
                             cardVal: card.dataset.val,
                             cardColor: card.dataset.color,
-                            targetId: target // We send 'active' or 'secondary'. Opponent will flip it.
+                            targetId: target
                         });
                     }
-
                     centerStack.push({ rank: parseInt(card.dataset.rank), s: card.dataset.suit, v: card.dataset.val, color: card.dataset.color });
                     updateCenter(target, card);
                     if (document.querySelectorAll('#player-boundary .card').length === 0) endRound("player");
@@ -987,27 +913,19 @@
             updateDisplay();
         }
         
-        // --- MODIFIED CLICK HANDLER FOR NETWORKING ---
         document.getElementById('deck-p1').onclick = () => {
             if (sequenceLocked) return;
             if (!p1Pass) {
                 p1Pass = true;
                 document.getElementById('deck-p1').classList.add('ready');
                 document.getElementById('deck-p1').innerText = "READY";
-                
-                // NETWORKING: SEND PASS SIGNAL
-                if (isOnline && conn) {
-                    conn.send({ type: 'PASS' });
-                }
-
+                if (isOnline && conn) conn.send({ type: 'PASS' });
                 checkSyncReveal();
             }
         };
 
         function checkSyncReveal() {
-            if (p1Pass && aiPass) {
-                startCountdown();
-            }
+            if (p1Pass && aiPass) { startCountdown(); }
         }
         function startCountdown() {
             sequenceLocked = true;
@@ -1030,6 +948,8 @@
                 centerStack.push(cP1, cAI);
                 updateCenter('secondary', createRevealCard(cAI));
                 updateCenter('active', createRevealCard(cP1));
+                
+                // IMPORTANT: RESET EVERYTHING HERE
                 resetRevealButton();
                 updateDisplay();
             } else {
@@ -1059,10 +979,8 @@
             if (slapLocked || !targetRanks.secondary || targetRanks.secondary !== targetRanks.active) return;
             slapLocked = true; sequenceLocked = true;
             const msg = document.getElementById('slap-alert');
-            msg.innerText = winner === 'player' ? "PLAYER 1 SLAPS WON!" : "AI SLAPS WON!";
+            msg.innerText = winner === 'player' ? "PLAYER 1 SLAPS WON!" : "OPP SLAPS WON!";
             msg.style.display = 'block';
-
-            // STATS UPDATE
             if (winner === 'player') stats.p1Slaps++; else stats.aiSlaps++;
             updateStatsUI();
             const wonCards = [...centerStack]; centerStack = [];
@@ -1076,7 +994,6 @@
         }
         window.addEventListener('keydown', (e) => {
             if (e.code === 'Space' && gameActive && !slapLocked && !sequenceLocked) {
-                // STRICT REFEREE CHECK
                 if (targetRanks.active !== null && targetRanks.secondary === targetRanks.active) {
                     triggerSlap('player');
                 } else {
@@ -1085,7 +1002,6 @@
             }
         });
         function endRound(winner) {
-            // STATS UPDATE
             if (winner === 'player') stats.p1Rounds++; else stats.aiRounds++;
             updateStatsUI();
             if (p1IsBorrowing) { aiDraw.push(...p1Draw); p1Draw = []; }
@@ -1120,7 +1036,7 @@
             document.getElementById('p1-t').innerText = p1Real;
             document.getElementById('ai-t').innerText = aiReal;
         }
-        document.getElementById('new-match-btn').onclick = initGame;
+        document.getElementById('new-match-btn').onclick = isOnline ? () => location.reload() : initGameAI;
     })();
     </script>
 </body>
