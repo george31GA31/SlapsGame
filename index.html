@@ -3,21 +3,30 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ISF Card Engine V9.4 (Killer Instinct + 4-3-2-1)</title>
+    <title>ISF Card Engine V10.0 (Online Beta)</title>
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 </head>
 <body>
     <script>
     (function() {
-        /* ISF OFFICIAL ENGINE V9.4
-           - Logic Fix: "Killer Instinct" - AI ignores risk if the move wins the round.
-           - Layout Change: Cards deal in 4-3-2-1 stacks (Solitaire style).
-           - Polish: Retained smooth 0.2s animations and custom fonts.
+        /* ISF OFFICIAL ENGINE V10.0 (ONLINE BETA)
+           - Feature: PeerJS Networking Integration
+           - UI: Added Host/Join Menus
+           - Logic: Connection Handshake Established
+           - State: V9.4 Logic + Networking Layer
         */
 
         // 1. SETUP & CONSTANTS
         const suits = [' ♥ ', ' ♦ ', ' ♣ ', ' ♠ '];
         const values = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
         const rankMap = { 'A': 1, '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, '10': 10, 'J': 11, 'Q': 12, 'K': 13 };
+        
+        // NETWORKING VARIABLES
+        let peer = null;
+        let conn = null;
+        let isHost = false;
+        let netId = null;
+
         let p1Inventory = [], aiInventory = [];
         let p1Draw = [], aiDraw = [];
         let p1Penalty = [], aiPenalty = [];
@@ -69,23 +78,23 @@
 
         h1.logo { font-size: 80px; margin: 0; color: var(--title-color); letter-spacing: 5px; font-family: serif; }
 
-        /* CUSTOM FONT FOR DIFFICULTY SCREEN */
-        #screen-difficulty {
-            font-family: 'Courier New', Courier, monospace; 
-            background: #000; 
-        }
-        #screen-difficulty .logo {
-            font-family: 'Impact', sans-serif; 
-            letter-spacing: 2px;
-        }
-        #diff-label {
-            font-family: 'Impact', sans-serif; 
-        }
-
+        /* MENU STYLES */
         .menu-btn { background: transparent; border: 2px solid white; color: white; padding: 15px 40px; font-size: 18px; margin: 10px; cursor: pointer;
             width: 250px; font-weight: bold; text-transform: uppercase; transition: 0.2s; }
         .menu-btn:hover { background: white; color: var(--bg-color); }
         .menu-btn.disabled { opacity: 0.5; cursor: not-allowed; }
+
+        input.code-input {
+            background: rgba(0,0,0,0.5); border: 2px solid white; color: gold; font-size: 30px; text-align: center;
+            padding: 10px; margin: 20px; font-family: monospace; letter-spacing: 5px; width: 300px; text-transform: uppercase;
+        }
+
+        #screen-difficulty, #screen-online, #screen-lobby {
+            font-family: 'Courier New', Courier, monospace; 
+            background: #000; 
+        }
+        .lobby-status { font-size: 24px; color: gold; margin-bottom: 20px; text-align: center; }
+        .code-display { font-size: 60px; color: white; border: 4px dashed rgba(255,255,255,0.3); padding: 10px 40px; margin: 20px; font-weight: bold; }
 
         #isf-stadium { display: flex; flex-direction: column; align-items: center; justify-content: space-between; height: 100vh; padding: 20px 0; }
 
@@ -131,7 +140,6 @@
         .card.face-down { background: #2c3e50; color: transparent !important; background-image: repeating-linear-gradient(45deg, #34495e, #34495e 5px, #2c3e50 5px, #2c3e50 10px); }
         .card.in-center { position: relative !important; top: 0 !important; left: 0 !important; z-index: 10 !important; }
         
-        /* UPDATED: Faster transition for smoother AI (0.2s) */
         .card.moving-ai { transition: all 0.2s ease-out !important; z-index: 9999 !important; box-shadow: 0 10px 20px rgba(0,0,0,0.5); }
         
         .card-corner { position: absolute; display: flex; flex-direction: column; align-items: center; line-height: 1; font-size: 18px; }
@@ -153,62 +161,124 @@
         #victory-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 20000; display: flex; flex-direction: column;
             align-items: center; justify-content: center; color: white; display: none; }
         </style>
-        <div id="screen-main" class="screen">
-        <h1 class="logo">ISF</h1>
-        <button id="btn-play-ai" class="menu-btn">Play AI</button>
-        <button class="menu-btn disabled">Play Online</button>
-        </div>
-        <div id="screen-difficulty" class="screen hidden">
-        <h1 class="logo" style="font-size: 40px;">DIFFICULTY LEVEL</h1>
-        <div style="margin: 30px 0; text-align: center; width: 300px;">
-        <input type="range" id="diff-slider" min="1" max="10" value="5" style="width: 100%;">
-        <span id="diff-label" style="font-size: 48px; font-weight: 900; color: gold; display: block; margin-top: 10px;">5</span>
-        <span style="font-size: 14px; opacity: 0.7; display: block;">1 (EASY) - 10 (IMPOSSIBLE)</span>
-        </div>
-        <button id="btn-start-game" class="menu-btn" style="border-color: gold; color: gold;">GO</button>
-        <button id="btn-back-menu" class="menu-btn" style="font-size: 12px; width: 100px; border: none; margin-top: 20px;">Back</button>
-        </div>
-        <div id="isf-stadium" class="hidden">
-        <div id="top-nav">
-        <button id="nav-restart" class="nav-btn">RESTART</button>
-        <button id="nav-menu" class="nav-btn">MAIN MENU</button>
-        </div>
-        <div id="stats-panel">
-        <div class="stat-row stat-p1">
-        <span>YOU</span>
-        <span><span class="stat-label">R:</span><span id="stat-p1-r">0</span> <span class="stat-label">S:</span><span id="stat-p1-s">0</span></span>
-        </div>
-        <div class="stat-row stat-ai">
-        <span>AI</span>
-        <span><span class="stat-label">R:</span><span id="stat-ai-r">0</span> <span class="stat-label">S:</span><span id="stat-ai-s">0</span></span>
-        </div>
-        </div>
-        <div id="victory-screen">
-        <h1 id="vic-title" style="font-size: 60px; color: gold; margin-bottom: 10px;">MATCH COMPLETE</h1>
-        <h2 id="vic-sub" style="font-size: 30px;"></h2>
-        <button id="new-match-btn" style="padding: 15px 40px; font-size: 20px; margin-top: 40px; cursor: pointer; background: white; border: none; border-radius: 5px; font-weight: bold;">NEW MATCH</button>
-        </div>
-        <div id="slap-alert">PLAYER 1 SLAPS WON!</div>
-        <div class="inventory-hud ai-hud"><small>AI Cards</small><span id="ai-t">26</span></div>
-        <div id="ai-boundary" class="foundation-area ai-side"></div>
 
-        <div id="center-arena">
-        <div id="deck-ai" class="draw-stack">AI DECK<div class="sideways-card"></div></div>
-        <div id="target-secondary" class="slot"></div>
-        <div id="target-active" class="slot"></div>
-        <div id="deck-p1" class="draw-stack">START<div class="sideways-card"></div></div>
+        <div id="screen-main" class="screen">
+            <h1 class="logo">ISF</h1>
+            <button id="btn-play-ai" class="menu-btn">Play AI</button>
+            <button id="btn-online-menu" class="menu-btn" style="border-color: gold; color: gold;">Play Online</button>
         </div>
-        <div id="player-boundary" class="foundation-area"></div>
-        <div class="inventory-hud">
-        <div><small>Your Cards</small><span id="p1-t">26</span></div>
-        <div id="p1-red-card" class="ref-card red"></div>
-        <div id="p1-yellow-card" class="ref-card yellow"></div>
+
+        <div id="screen-online" class="screen hidden">
+            <h1 class="logo" style="font-size: 40px;">MULTIPLAYER</h1>
+            <button id="btn-host-game" class="menu-btn">HOST GAME</button>
+            <button id="btn-join-game" class="menu-btn">JOIN GAME</button>
+            <button id="btn-back-online" class="menu-btn" style="border:none; margin-top:30px; font-size: 14px;">Back</button>
         </div>
+
+        <div id="screen-lobby-host" class="screen hidden" style="background: #111;">
+            <div class="lobby-status">YOUR ROOM CODE</div>
+            <div id="host-code-display" class="code-display">...</div>
+            <div class="lobby-status" id="host-status-text">Waiting for opponent...</div>
+            <button id="btn-start-online" class="menu-btn disabled">START MATCH</button>
+            <button class="menu-btn" onclick="location.reload()" style="font-size:12px; border:none; margin-top: 20px;">CANCEL</button>
+        </div>
+
+        <div id="screen-lobby-join" class="screen hidden" style="background: #111;">
+            <div class="lobby-status">ENTER ROOM CODE</div>
+            <input type="text" id="join-code-input" class="code-input" maxlength="10" placeholder="CODE">
+            <button id="btn-connect" class="menu-btn">CONNECT</button>
+            <div id="join-status" class="lobby-status" style="font-size:16px; margin-top:10px;"></div>
+            <button class="menu-btn" onclick="location.reload()" style="font-size:12px; border:none; margin-top: 20px;">CANCEL</button>
+        </div>
+
+        <div id="screen-difficulty" class="screen hidden">
+            <h1 class="logo" style="font-size: 40px;">DIFFICULTY LEVEL</h1>
+            <div style="margin: 30px 0; text-align: center; width: 300px;">
+                <input type="range" id="diff-slider" min="1" max="10" value="5" style="width: 100%;">
+                <span id="diff-label" style="font-size: 48px; font-weight: 900; color: gold; display: block; margin-top: 10px;">5</span>
+                <span style="font-size: 14px; opacity: 0.7; display: block;">1 (EASY) - 10 (IMPOSSIBLE)</span>
+            </div>
+            <button id="btn-start-game" class="menu-btn" style="border-color: gold; color: gold;">GO</button>
+            <button id="btn-back-menu" class="menu-btn" style="font-size: 12px; width: 100px; border: none; margin-top: 20px;">Back</button>
+        </div>
+
+        <div id="isf-stadium" class="hidden">
+            <div id="top-nav">
+                <button id="nav-restart" class="nav-btn">RESTART</button>
+                <button id="nav-menu" class="nav-btn">MAIN MENU</button>
+            </div>
+            <div id="stats-panel">
+                <div class="stat-row stat-p1">
+                    <span>YOU</span>
+                    <span><span class="stat-label">R:</span><span id="stat-p1-r">0</span> <span class="stat-label">S:</span><span id="stat-p1-s">0</span></span>
+                </div>
+                <div class="stat-row stat-ai">
+                    <span>OPP</span>
+                    <span><span class="stat-label">R:</span><span id="stat-ai-r">0</span> <span class="stat-label">S:</span><span id="stat-ai-s">0</span></span>
+                </div>
+            </div>
+            <div id="victory-screen">
+                <h1 id="vic-title" style="font-size: 60px; color: gold; margin-bottom: 10px;">MATCH COMPLETE</h1>
+                <h2 id="vic-sub" style="font-size: 30px;"></h2>
+                <button id="new-match-btn" style="padding: 15px 40px; font-size: 20px; margin-top: 40px; cursor: pointer; background: white; border: none; border-radius: 5px; font-weight: bold;">NEW MATCH</button>
+            </div>
+            <div id="slap-alert">PLAYER 1 SLAPS WON!</div>
+            <div class="inventory-hud ai-hud"><small>Opponent</small><span id="ai-t">26</span></div>
+            <div id="ai-boundary" class="foundation-area ai-side"></div>
+
+            <div id="center-arena">
+                <div id="deck-ai" class="draw-stack">OPP DECK<div class="sideways-card"></div></div>
+                <div id="target-secondary" class="slot"></div>
+                <div id="target-active" class="slot"></div>
+                <div id="deck-p1" class="draw-stack">START<div class="sideways-card"></div></div>
+            </div>
+            <div id="player-boundary" class="foundation-area"></div>
+            <div class="inventory-hud">
+                <div><small>Your Cards</small><span id="p1-t">26</span></div>
+                <div id="p1-red-card" class="ref-card red"></div>
+                <div id="p1-yellow-card" class="ref-card yellow"></div>
+            </div>
         </div>
         `;
         
-        // 3. MENU & INIT
-        document.getElementById('btn-play-ai').onclick = () => { document.getElementById('screen-main').classList.add('hidden'); document.getElementById('screen-difficulty').classList.remove('hidden'); };
+        // 3. MENU LOGIC
+        // Main -> Difficulty
+        document.getElementById('btn-play-ai').onclick = () => { 
+            document.getElementById('screen-main').classList.add('hidden'); 
+            document.getElementById('screen-difficulty').classList.remove('hidden'); 
+        };
+        
+        // Main -> Online Menu
+        document.getElementById('btn-online-menu').onclick = () => {
+            document.getElementById('screen-main').classList.add('hidden');
+            document.getElementById('screen-online').classList.remove('hidden');
+        };
+
+        // Online -> Back
+        document.getElementById('btn-back-online').onclick = () => {
+            document.getElementById('screen-online').classList.add('hidden');
+            document.getElementById('screen-main').classList.remove('hidden');
+        };
+
+        // Online -> Host
+        document.getElementById('btn-host-game').onclick = () => {
+            document.getElementById('screen-online').classList.add('hidden');
+            document.getElementById('screen-lobby-host').classList.remove('hidden');
+            initHost();
+        };
+
+        // Online -> Join
+        document.getElementById('btn-join-game').onclick = () => {
+            document.getElementById('screen-online').classList.add('hidden');
+            document.getElementById('screen-lobby-join').classList.remove('hidden');
+        };
+
+        // Join -> Connect
+        document.getElementById('btn-connect').onclick = () => {
+            const code = document.getElementById('join-code-input').value.toUpperCase();
+            if(code.length > 0) initJoin(code);
+        };
+
         document.getElementById('btn-back-menu').onclick = () => { document.getElementById('screen-difficulty').classList.add('hidden'); document.getElementById('screen-main').classList.remove('hidden'); };
         document.getElementById('diff-slider').oninput = (e) => {
             currentDifficulty = parseInt(e.target.value);
@@ -222,6 +292,71 @@
         document.getElementById('nav-restart').onclick = initGame;
         document.getElementById('nav-menu').onclick = () => { gameActive = false; document.getElementById('isf-stadium').classList.add('hidden'); document.getElementById('screen-main').classList.remove('hidden'); document.getElementById('victory-screen').style.display = 'none'; };
         
+        // --- NETWORKING LOGIC ---
+        function generateId() {
+            return 'ISF-' + Math.floor(Math.random() * 900 + 100);
+        }
+
+        function initHost() {
+            isHost = true;
+            netId = generateId();
+            document.getElementById('host-code-display').innerText = netId;
+            
+            peer = new Peer(netId);
+            
+            peer.on('open', (id) => {
+                console.log('My peer ID is: ' + id);
+            });
+
+            peer.on('connection', (c) => {
+                conn = c;
+                setupConnection();
+                document.getElementById('host-status-text').innerText = "PLAYER CONNECTED!";
+                document.getElementById('host-status-text').style.color = "#2ecc71";
+                document.getElementById('screen-lobby-host').style.background = "#052205";
+                document.getElementById('btn-start-online').classList.remove('disabled');
+            });
+        }
+
+        function initJoin(hostId) {
+            isHost = false;
+            let myTempId = 'P2-' + Math.floor(Math.random()*1000);
+            peer = new Peer(myTempId);
+            
+            peer.on('open', (id) => {
+                document.getElementById('join-status').innerText = "Connecting to " + hostId + "...";
+                conn = peer.connect(hostId);
+                
+                conn.on('open', () => {
+                    document.getElementById('join-status').innerText = "CONNECTED! WAITING FOR HOST...";
+                    document.getElementById('join-status').style.color = "#2ecc71";
+                    document.getElementById('screen-lobby-join').style.background = "#052205";
+                    document.getElementById('join-code-input').disabled = true;
+                    document.getElementById('btn-connect').classList.add('disabled');
+                });
+
+                conn.on('error', (err) => {
+                    document.getElementById('join-status').innerText = "CONNECTION FAILED";
+                    document.getElementById('join-status').style.color = "red";
+                });
+                
+                setupConnection();
+            });
+        }
+
+        function setupConnection() {
+            conn.on('data', (data) => {
+                console.log('Received', data);
+                // GAME SYNC LOGIC WILL GO HERE IN NEXT UPDATE
+                if (data === 'START_GAME') {
+                    // Placeholder for now
+                    alert("Host started the game! (Card Sync coming next update)");
+                }
+            });
+        }
+
+        // --- GAME LOGIC (UNCHANGED) ---
+
         function generateDeck() {
             let d = [];
             suits.forEach(s => values.forEach(v => d.push({ s, v, rank: rankMap[v], color: (s===' ♥ '||s===' ♦ ') ? 'red' : 'black', id: Math.random().toString(36) })));
@@ -264,7 +399,7 @@
 
             updateRefUI();
             
-            // LOGIC CHANGE: 4-3-2-1 LAYOUT
+            // 4-3-2-1 LAYOUT
             const p1FCount = 10;
             const p1FCards = p1Inventory.splice(0, p1FCount);
             p1Draw = [...p1Inventory];
@@ -449,11 +584,8 @@
             const playerFoundationCount = document.querySelectorAll('#player-boundary .card').length;
             const aiFoundationCount = allAiCards.length;
             const aiTotal = aiDraw.length + aiFoundationCount;
-            // "Danger Zone": Player is running low
             const isDangerZone = playerFoundationCount <= 4;
-            // "Aggressive Mode": AI is also running low, so it should rush
             const isAiAggressive = aiTotal <= 6;
-            // "Killer Instinct": AI has 1 card left on board. Ignore everything and execute.
             const killerInstinct = aiFoundationCount <= 1;
 
             let possibleMoves = [];
@@ -461,39 +593,32 @@
             let rearrangeMove = null;
             let emptyColumnX = null;
 
-            // IDENTIFY EMPTY COLUMNS
             for (let colX of [80, 280, 480, 680]) {
                 if (columns[colX].length === 0) emptyColumnX = colX;
             }
 
-            // SCAN ALL PILES
             for (let k in columns) {
                 const pile = columns[k];
                 if (pile.length === 0) continue;
                 const topCard = pile[pile.length - 1];
 
-                // 1. FLIP (Immediate Priority)
                 if (topCard.classList.contains('face-down')) {
                     flipMove = topCard;
                     break;
                 }
 
-                // 2. FIND PLAYABLE MOVES
                 const rank = parseInt(topCard.dataset.rank);
                 const targets = [ { id: 'target-active', val: targetRanks.active }, { id: 'target-secondary', val: targetRanks.secondary } ];
                 for (let t of targets) {
                     if (t.val !== null) {
                         const diff = Math.abs(rank - t.val);
                         if (diff === 1 || diff === 12) {
-                            // Check if this specific move helps the player
-                            // BUG FIX: If 'killerInstinct' is true, risky is ALWAYS false.
                             const risky = killerInstinct ? false : checkIfMoveHelpsPlayer(rank);
                             possibleMoves.push({ card: topCard, targetId: t.id, isRisky: risky });
                         }
                     }
                 }
 
-                // 3. CHECK REARRANGE
                 if (emptyColumnX !== null && pile.length > 1 && !rearrangeMove) {
                     const cardUnder = pile[pile.length - 2];
                     if (cardUnder.classList.contains('face-down')) {
@@ -502,30 +627,25 @@
                 }
             }
 
-            // EXECUTE DECISION
             if (flipMove) {
                 flipMove.classList.replace('face-down', 'face-up');
                 aiThinking = false;
             } 
             else if (possibleMoves.length > 0) {
-                // FILTER MOVES
                 const safeMoves = possibleMoves.filter(m => !m.isRisky);
                 const riskyMoves = possibleMoves.filter(m => m.isRisky);
                 
                 let finalMove = null;
 
                 if (safeMoves.length > 0) {
-                    finalMove = safeMoves[0]; // Priority: Always take safe moves
+                    finalMove = safeMoves[0]; 
                 } 
                 else {
-                    // Only risky moves are available.
-                    // OVERWHELM LOGIC + KILLER INSTINCT
                     const shouldRiskIt = (possibleMoves.length > 1) || isAiAggressive || !isDangerZone || killerInstinct;
 
                     if (shouldRiskIt) {
                         finalMove = riskyMoves[0];
                     } else {
-                        // Defensive Block: AI chooses to stall
                         console.log("AI Defense: Blocking risky move.");
                     }
                 }
@@ -564,7 +684,6 @@
             checkSyncReveal();
         }
 
-        /* --- SMOOTHER AI ANIMATION --- */
         function animateAiMove(card, target, type) {
             card.classList.add('moving-ai');
             let startRect = card.getBoundingClientRect();
