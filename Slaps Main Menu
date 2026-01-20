@@ -1,0 +1,784 @@
+(function() {
+    /* ISF OFFICIAL ENGINE V9.1 (LAYOUT POLISH)
+       - UI Change: Nav buttons moved back to Top-Right
+       - UI Change: Stats Panel moved underneath buttons
+       - Logic: Unchanged (Ref Mode, Predator AI, Watchdog, Stats)
+       - Status: GOLD MASTER
+    */
+    // 1. SETUP & CONSTANTS
+    const suits = [' ♥ ', ' ♦ ', ' ♣ ', ' ♠ '];
+    const values = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
+    const rankMap = { 'A': 1, '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, '10': 10, 'J': 11, 'Q': 12, 'K': 13 };
+    let p1Inventory = [], aiInventory = [];
+    let p1Draw = [], aiDraw = [];
+    let p1Penalty = [], aiPenalty = [];
+    let centerStack = [];
+
+    let p1IsBorrowing = false, aiIsBorrowing = false;
+    let targetRanks = { secondary: null, active: null };
+    let topZ = 10000;
+
+    let p1Pass = false, aiPass = false;
+    let slapLocked = false, sequenceLocked = false;
+    let gameActive = false;
+    let aiThinking = false;
+    let aiThinkingStartTime = 0;
+    // STATS & REF STATE
+    let p1Yellows = 0;
+    let p1Reds = 0;
+
+    let stats = {
+        p1Rounds: 0, p1Slaps: 0,
+        aiRounds: 0, aiSlaps: 0
+    };
+    // DIFFICULTY STATE
+    let currentDifficulty = 5;
+    let currentActionDelay = 2000;
+    const difficultySettings = {
+        1: { min: 2000, max: 3000 },
+        2: { min: 1500, max: 2500 },
+        3: { min: 1000, max: 2000 },
+        4: { min: 250,  max: 1500 }
+    };
+    // 2. UI CONSTRUCTION
+    document.body.innerHTML = `
+    <style>
+        :root {
+            --bg-color: #1a4731;
+            --accent-gold: #f1c40f;
+            --card-yellow: #f1c40f;
+            --card-red: #e74c3c;
+            --title-color: #ff7575;
+        }
+        body { background: var(--bg-color); color: white; font-family: 'Segoe UI', sans-serif; margin: 0; overflow: hidden; height: 100vh; user-select: none; }
+        .screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center;
+        z-index: 1000; background: var(--bg-color); }
+        .hidden { display: none !important; }
+
+        h1.logo { font-size: 80px; margin: 0; color: var(--title-color); letter-spacing: 5px; font-family: serif; }
+
+        .menu-btn { background: transparent; border: 2px solid white; color: white; padding: 15px 40px; font-size: 18px; margin: 10px; cursor: pointer;
+        width: 250px; font-weight: bold; text-transform: uppercase; transition: 0.2s; }
+        .menu-btn:hover { background: white; color: var(--bg-color); }
+        .menu-btn.disabled { opacity: 0.5; cursor: not-allowed; }
+
+        #isf-stadium { display: flex; flex-direction: column; align-items: center; justify-content: space-between; height: 100vh; padding: 20px 0; }
+
+        /* NAV BUTTONS (TOP RIGHT) */
+        #top-nav { position: absolute; top: 20px; right: 20px; z-index: 2000; display: flex; gap: 10px; }
+        .nav-btn { background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.3); color: white; padding: 8px 15px; cursor: pointer; font-size: 12px; font-weight: bold;
+        border-radius: 4px; }
+        .nav-btn:hover { background: white; color: black; }
+        /* STATS PANEL (UNDERNEATH BUTTONS) */
+        #stats-panel {
+            position: absolute; top: 65px; right: 20px; z-index: 2000;
+            display: flex; flex-direction: column; gap: 5px;
+            background: rgba(0,0,0,0.6); padding: 10px 15px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2);
+            font-family: monospace; font-size: 16px; font-weight: bold; text-shadow: 0 1px 2px black;
+            width: 180px;
+        }
+        .stat-row { display: flex; justify-content: space-between; align-items: center; }
+        .stat-p1 { color: var(--accent-gold); border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 5px; margin-bottom: 5px; }
+        .stat-ai { color: var(--title-color); }
+        .stat-label { font-size: 12px; opacity: 0.8; margin-right: 5px; }
+
+        .foundation-area { position: relative; width: 900px; height: 240px; border: 4px solid white; background: rgba(0,0,0,0.1); box-sizing: border-box; }
+        .ai-side { transform: rotate(180deg); opacity: 0.9; }
+        #center-arena { display: flex; align-items: center; gap: 40px; z-index: 500; }
+
+        .draw-stack { width: 100px; height: 140px; border: 3px solid #fff; border-radius: 10px; background: #1e3a5f; cursor: pointer; display: flex; align-items: center;
+        justify-content: center; font-size: 14px; text-align: center; font-weight: bold; transition: all 0.2s; position: relative; z-index: 2; box-shadow: 0 5px 0 #0d1b2a;
+        }
+        .draw-stack.ready { background: #27ae60 !important; box-shadow: 0 0 20px #2ecc71; border-color: #2ecc71; transform: scale(1.05); }
+        .draw-stack.counting { background: #e67e22; cursor: wait; transform: scale(1.05); border-color: #f39c12; }
+
+        .sideways-card { position: absolute; bottom: 0; left: 0; width: 100px; height: 140px; background: #34495e; border: 1px solid #fff; border-radius: 10px;
+        transform: rotate(90deg); z-index: -1; display: none; box-shadow: 0 0 5px rgba(0,0,0,0.5); }
+        .has-borrowed .sideways-card { display: block; }
+        .has-borrowed::after { content: 'BORROWED'; position: absolute; bottom: -25px; font-size: 10px; color: #f1c40f; width: 100%; text-align: center; font-weight: bold;
+        text-shadow: 0 1px 2px black; }
+        .slot { width: 110px; height: 155px; border: 2px solid rgba(255,255,255,0.2); border-radius: 12px; position: relative; background: rgba(0,0,0,0.2); }
+
+        .card { width: 100px; height: 140px; border-radius: 8px; border: 1px solid #777; background: white; color: black; display: flex; flex-direction: column;
+        justify-content: center; align-items: center; font-size: 24px; font-weight: bold; position: absolute; box-shadow: 0 4px 6px rgba(0,0,0,0.3); transition: transform 0.1s; }
+        .card.red { color: #e74c3c; }
+        .card.face-down { background: #2c3e50; color: transparent !important; background-image: repeating-linear-gradient(45deg, #34495e, #34495e 5px, #2c3e50 5px, #2c3e50 10px); }
+        .card.in-center { position: relative !important; top: 0 !important; left: 0 !important; z-index: 10 !important; }
+        .card.moving-ai { transition: all 0.5s ease-out !important; z-index: 9999 !important; box-shadow: 0 10px 20px rgba(0,0,0,0.5); }
+        .card-corner { position: absolute; display: flex; flex-direction: column; align-items: center; line-height: 1; font-size: 18px; }
+        .top-left { top: 5px; left: 5px; }
+        .bottom-right { bottom: 5px; right: 5px; transform: rotate(180deg); }
+        .center-suit { font-size: 48px; line-height: 1; }
+        .inventory-hud { position: absolute; left: 30px; bottom: 30px; font-size: 32px; font-weight: 800; background: rgba(0,0,0,0.6); padding: 15px 25px; border-radius: 12px;
+        border-left: 8px solid gold; box-shadow: 0 4px 10px black; display: flex; gap: 15px; align-items: center; }
+        .inventory-hud.ai-hud { bottom: auto; top: 30px; border-left-color: #e74c3c; }
+        .inventory-hud small { display: block; font-size: 12px; font-weight: 400; opacity: 0.8; text-transform: uppercase; letter-spacing: 1px; }
+
+        /* REF CARDS */
+        .ref-card { width: 30px; height: 45px; border-radius: 4px; border: 1px solid white; display: none; box-shadow: 0 2px 5px black;
+        justify-content: center; align-items: center; font-size: 20px; font-weight: bold; color: white; text-shadow: 0 1px 2px black; }
+        .ref-card.yellow { background: var(--card-yellow); }
+        .ref-card.red { background: var(--card-red); }
+        #slap-alert { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 60px; font-weight: 900; color: gold;
+        text-shadow: 0 0 20px black; pointer-events: none; display: none; z-index: 10000; text-align: center; width: 100%; white-space: nowrap; }
+        #victory-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 20000; display: flex; flex-direction: column;
+        align-items: center; justify-content: center; color: white; display: none; }
+    </style>
+    <div id="screen-main" class="screen">
+    <h1 class="logo">ISF</h1>
+    <button id="btn-play-ai" class="menu-btn">Play AI</button>
+    <button class="menu-btn disabled">Play Online</button>
+    </div>
+    <div id="screen-difficulty" class="screen hidden">
+    <h1 class="logo" style="font-size: 40px;">DIFFICULTY LEVEL</h1>
+    <div style="margin: 30px 0; text-align: center; width: 300px;">
+    <input type="range" id="diff-slider" min="1" max="10" value="5" style="width: 100%;">
+    <span id="diff-label" style="font-size: 48px; font-weight: 900; color: gold; display: block; margin-top: 10px;">5</span>
+    <span style="font-size: 14px; opacity: 0.7; display: block;">1 (EASY) - 10 (IMPOSSIBLE)</span>
+    </div>
+    <button id="btn-start-game" class="menu-btn" style="border-color: gold; color: gold;">GO</button>
+    <button id="btn-back-menu" class="menu-btn" style="font-size: 12px; width: 100px; border: none; margin-top: 20px;">Back</button>
+    </div>
+    <div id="isf-stadium" class="hidden">
+    <div id="top-nav">
+    <button id="nav-restart" class="nav-btn">RESTART</button>
+    <button id="nav-menu" class="nav-btn">MAIN MENU</button>
+    </div>
+    <div id="stats-panel">
+    <div class="stat-row stat-p1">
+    <span>YOU</span>
+    <span><span class="stat-label">R:</span><span id="stat-p1-r">0</span> <span class="stat-label">S:</span><span id="stat-p1-s">0</span></span>
+    </div>
+    <div class="stat-row stat-ai">
+    <span>AI</span>
+    <span><span class="stat-label">R:</span><span id="stat-ai-r">0</span> <span class="stat-label">S:</span><span id="stat-ai-s">0</span></span>
+    </div>
+    </div>
+    <div id="victory-screen">
+    <h1 id="vic-title" style="font-size: 60px; color: gold; margin-bottom: 10px;">MATCH COMPLETE</h1>
+    <h2 id="vic-sub" style="font-size: 30px;"></h2>
+    <button id="new-match-btn" style="padding: 15px 40px; font-size: 20px; margin-top: 40px; cursor: pointer; background: white; border: none; border-radius: 5px; font-weight: bold;">NEW MATCH</button>
+    </div>
+    <div id="slap-alert">PLAYER 1 SLAPS WON!</div>
+    <div class="inventory-hud ai-hud"><small>AI Cards</small><span id="ai-t">26</span></div>
+    <div id="ai-boundary" class="foundation-area ai-side"></div>
+
+    <div id="center-arena">
+    <div id="deck-ai" class="draw-stack">AI DECK<div class="sideways-card"></div></div>
+    <div id="target-secondary" class="slot"></div>
+    <div id="target-active" class="slot"></div>
+    <div id="deck-p1" class="draw-stack">START<div class="sideways-card"></div></div>
+    </div>
+    <div id="player-boundary" class="foundation-area"></div>
+    <div class="inventory-hud">
+    <div><small>Your Cards</small><span id="p1-t">26</span></div>
+    <div id="p1-red-card" class="ref-card red"></div>
+    <div id="p1-yellow-card" class="ref-card yellow"></div>
+    </div>
+    </div>
+    `;
+    // 3. MENU & INIT
+    document.getElementById('btn-play-ai').onclick = () => { document.getElementById('screen-main').classList.add('hidden'); document.getElementById('screen-difficulty').classList.remove('hidden'); };
+    document.getElementById('btn-back-menu').onclick = () => { document.getElementById('screen-difficulty').classList.add('hidden'); document.getElementById('screen-main').classList.remove('hidden'); };
+    document.getElementById('diff-slider').oninput = (e) => {
+    currentDifficulty = parseInt(e.target.value);
+    document.getElementById('diff-label').innerText = currentDifficulty;
+    };
+    document.getElementById('btn-start-game').onclick = () => {
+    document.getElementById('screen-difficulty').classList.add('hidden');
+    document.getElementById('isf-stadium').classList.remove('hidden');
+    initGame();
+    };
+    document.getElementById('nav-restart').onclick = initGame;
+    document.getElementById('nav-menu').onclick = () => { gameActive = false; document.getElementById('isf-stadium').classList.add('hidden'); document.getElementById('screen-main').classList.remove('hidden'); document.getElementById('victory-screen').style.display = 'none'; };
+    function generateDeck() {
+    let d = [];
+    suits.forEach(s => values.forEach(v => d.push({ s, v, rank: rankMap[v], color: (s===' ♥ '||s===' ♦ ') ? 'red' : 'black', id: Math.random().toString(36) })));
+    return d.sort(() => Math.random() - 0.5);
+    }
+    function initGame() {
+    document.getElementById('victory-screen').style.display = 'none';
+    let d = generateDeck();
+    p1Inventory = d.splice(0, 26);
+    aiInventory = d.splice(0, 26);
+    gameActive = true;
+
+    // Reset Ref & Stats
+    p1Yellows = 0; p1Reds = 0;
+    stats = { p1Rounds: 0, p1Slaps: 0, aiRounds: 0, aiSlaps: 0 };
+    updateStatsUI();
+
+    setupRound();
+    }
+    function updateStatsUI() {
+    document.getElementById('stat-p1-r').innerText = stats.p1Rounds;
+    document.getElementById('stat-p1-s').innerText = stats.p1Slaps;
+    document.getElementById('stat-ai-r').innerText = stats.aiRounds;
+    document.getElementById('stat-ai-s').innerText = stats.aiSlaps;
+    }
+    function setupRound() {
+    if (gameActive) {
+    if (p1Inventory.length === 0) return showVictory("YOU WIN THE MATCH!");
+    if (aiInventory.length === 0) return showVictory("AI WINS THE MATCH!");
+    }
+    document.querySelectorAll('.foundation-area, .slot').forEach(el => el.innerHTML = '');
+    p1Penalty = []; aiPenalty = []; centerStack = [];
+    p1Draw = []; aiDraw = [];
+    targetRanks = { secondary: null, active: null };
+    slapLocked = false; sequenceLocked = false;
+
+    p1Pass = false; aiPass = false;
+    p1IsBorrowing = false; aiIsBorrowing = false;
+    aiThinking = false;
+
+    updateRefUI();
+    const p1FCount = Math.min(p1Inventory.length, 10);
+    const p1FCards = p1Inventory.splice(0, p1FCount);
+    p1Draw = [...p1Inventory];
+    const aiFCount = Math.min(aiInventory.length, 10);
+    const aiFCards = aiInventory.splice(0, aiFCount);
+    aiDraw = [...aiInventory];
+    performShortageCheck();
+    layout(p1FCards, document.getElementById('player-boundary'), 'player');
+    layout(aiFCards, document.getElementById('ai-boundary'), 'ai');
+    updateDisplay();
+    resetRevealButton();
+
+    setTimeout(() => { triggerAiPass(); }, 1500);
+    startAiBrain();
+    }
+    // --- REFEREE SYSTEM ---
+    function issueYellowCard() {
+    p1Yellows++;
+
+    const alertBox = document.getElementById('slap-alert');
+    alertBox.innerText = `YELLOW CARD!`;
+    alertBox.style.display = 'block';
+    alertBox.style.color = '#f1c40f';
+    setTimeout(() => { alertBox.style.display = 'none'; }, 1000);
+    if (p1Yellows >= 2) {
+    issueRedCard();
+    } else {
+    updateRefUI();
+    }
+    }
+    function issueRedCard() {
+    p1Reds++;
+    p1Yellows = 0;
+    updateRefUI();
+
+    const aiFoundationCount = document.querySelectorAll('#ai-boundary .card').length;
+    const aiTotal = aiDraw.length + aiFoundationCount + aiPenalty.length;
+    if (aiTotal <= 2) {
+    showVictory("AI WINS! (You caused them to hit 0 cards via penalty)");
+    return;
+    }
+    let stolen = 0;
+    for(let i=0; i<2; i++) {
+    if (aiDraw.length > 0) {
+    p1Draw.push(aiDraw.pop());
+    stolen++;
+    } else {
+    const aiCards = document.querySelectorAll('#ai-boundary .card');
+    if (aiCards.length > 0) {
+    const cardToSteal = aiCards[aiCards.length - 1];
+    p1Draw.push({
+    v: cardToSteal.dataset.val, s: cardToSteal.dataset.suit,
+    rank: parseInt(cardToSteal.dataset.rank), color: cardToSteal.dataset.color
+    });
+    cardToSteal.remove();
+    stolen++;
+    }
+    }
+    }
+
+    const alertBox = document.getElementById('slap-alert');
+    alertBox.innerText = `RED CARD! +${stolen} CARDS`;
+    alertBox.style.display = 'block';
+    alertBox.style.color = '#e74c3c';
+    setTimeout(() => { alertBox.style.display = 'none'; }, 1500);
+
+    updateDisplay();
+    }
+    function updateRefUI() {
+    const redEl = document.getElementById('p1-red-card');
+    const yelEl = document.getElementById('p1-yellow-card');
+    if (p1Reds > 0) {
+    redEl.style.display = 'flex';
+    redEl.innerText = p1Reds > 1 ? p1Reds : '';
+    } else {
+    redEl.style.display = 'none';
+    }
+    if (p1Yellows > 0) {
+    yelEl.style.display = 'flex';
+    } else {
+    yelEl.style.display = 'none';
+    }
+    }
+    // --- SMART AI BRAIN ---
+    function startAiBrain() {
+    if (!gameActive) return;
+
+    const loopId = setInterval(() => {
+    if (!gameActive || document.getElementById('victory-screen').style.display === 'flex') {
+    clearInterval(loopId); return;
+    }
+    if (!aiThinking && !aiPass && !slapLocked && !sequenceLocked && targetRanks.active !== null) {
+    const settings = difficultySettings[Math.ceil(currentDifficulty / 2.5)] || difficultySettings[2];
+    const minDelay = Math.max(200, 3500 - (currentDifficulty * 350));
+    const maxDelay = Math.max(400, 4500 - (currentDifficulty * 400));
+    const delay = minDelay + Math.random() * (maxDelay - minDelay);
+    currentActionDelay = delay;
+
+    aiThinking = true;
+    aiThinkingStartTime = Date.now();
+    setTimeout(() => { attemptAiMove(); }, delay);
+    }
+    }, 800);
+    setInterval(() => {
+    if (!gameActive || sequenceLocked) return;
+
+    // Anti-Freeze
+    if (aiThinking && (Date.now() - aiThinkingStartTime > 4000)) {
+    aiThinking = false;
+    }
+    if (!aiThinking && !aiPass) {
+    const canFlip = checkForForcedFlip();
+    if (canFlip) {
+    canFlip.classList.replace('face-down', 'face-up');
+    return;
+    }
+    const canMove = checkAnyPossibleAiMove();
+    if (!canMove) {
+    triggerAiPass();
+    }
+    }
+    }, 2000);
+    }
+    setInterval(() => {
+    if (!slapLocked && !sequenceLocked && targetRanks.secondary === targetRanks.active && targetRanks.secondary) {
+    const chance = currentDifficulty * 0.05;
+    if (Math.random() < chance) {
+    const reactionBase = 2000 - (currentDifficulty * 180);
+    setTimeout(() => { triggerSlap('ai'); }, Math.max(100, reactionBase + Math.random()*200));
+    }
+    }
+    }, 500);
+    function checkForForcedFlip() {
+    const allAiCards = Array.from(document.querySelectorAll('#ai-boundary .card'));
+    const columns = getColumns(allAiCards);
+    for (let k in columns) {
+    const pile = columns[k];
+    if (pile.length === 0) continue;
+    const topCard = pile[pile.length - 1];
+    if (topCard.classList.contains('face-down')) return topCard;
+    }
+    return null;
+    }
+    function checkAnyPossibleAiMove() {
+    const allAiCards = Array.from(document.querySelectorAll('#ai-boundary .card'));
+    const columns = getColumns(allAiCards);
+    for (let k in columns) {
+    const pile = columns[k];
+    if (pile.length === 0) continue;
+    const topCard = pile[pile.length - 1];
+    if (topCard.classList.contains('face-down')) return true;
+    const rank = parseInt(topCard.dataset.rank);
+    if (targetRanks.active !== null) { if (Math.abs(rank - targetRanks.active) === 1 || Math.abs(rank - targetRanks.active) === 12) return true; }
+    if (targetRanks.secondary !== null) { if (Math.abs(rank - targetRanks.secondary) === 1 || Math.abs(rank - targetRanks.secondary) === 12) return true; }
+    }
+    return false;
+    }
+    function getColumns(cardArray) {
+    const columns = { 80: [], 280: [], 480: [], 680: [] };
+    const tolerance = 50;
+    cardArray.forEach(c => {
+    const x = parseInt(c.style.left);
+    for (let colX of [80, 280, 480, 680]) {
+    if (Math.abs(x - colX) < tolerance) {
+    columns[colX].push(c);
+    break;
+    }
+    }
+    });
+    for (let k in columns) {
+    columns[k].sort((a,b) => parseInt(a.style.top) - parseInt(b.style.top));
+    }
+    return columns;
+    }
+    function attemptAiMove() {
+    if (slapLocked || sequenceLocked) { aiThinking = false; return; }
+    const allAiCards = Array.from(document.querySelectorAll('#ai-boundary .card'));
+    const columns = getColumns(allAiCards);
+    let playMove = null;
+    let rearrangeMove = null;
+    let flipMove = null;
+    let emptyColumnX = null;
+    for (let colX of [80, 280, 480, 680]) {
+    if (columns[colX].length === 0) emptyColumnX = colX;
+    }
+    for (let k in columns) {
+    const pile = columns[k];
+    if (pile.length === 0) continue;
+    const topCard = pile[pile.length - 1];
+
+    if (topCard.classList.contains('face-down')) {
+    flipMove = topCard;
+    break;
+    }
+
+    const rank = parseInt(topCard.dataset.rank);
+    const targets = [ { id: 'target-active', val: targetRanks.active }, { id: 'target-secondary', val: targetRanks.secondary } ];
+    for (let t of targets) {
+    if (t.val !== null) {
+    const diff = Math.abs(rank - t.val);
+    if (diff === 1 || diff === 12) {
+    playMove = { card: topCard, targetId: t.id };
+    break;
+    }
+    }
+    }
+    if (emptyColumnX !== null && pile.length > 1 && !playMove) {
+    const cardUnder = pile[pile.length - 2];
+    if (cardUnder.classList.contains('face-down')) {
+    rearrangeMove = { card: topCard, targetX: emptyColumnX, targetY: 40 };
+    }
+    }
+    }
+    if (flipMove) {
+    flipMove.classList.replace('face-down', 'face-up');
+    aiThinking = false;
+    } else if (playMove) {
+    animateAiMove(playMove.card, playMove.targetId, 'play');
+    } else if (rearrangeMove) {
+    animateAiMove(rearrangeMove.card, rearrangeMove, 'rearrange');
+    } else {
+    aiThinking = false;
+    triggerAiPass();
+    }
+    }
+    function triggerAiPass() {
+    if (aiPass) return;
+    aiPass = true;
+    checkSyncReveal();
+    }
+    function animateAiMove(card, target, type) {
+    card.classList.add('moving-ai');
+    let startRect = card.getBoundingClientRect();
+    let targetX, targetY, targetRot;
+    if (type === 'play') {
+    const slotRect = document.getElementById(target).getBoundingClientRect();
+    targetX = slotRect.left;
+    targetY = slotRect.top;
+    targetRot = '0deg';
+    } else {
+    card.style.left = target.targetX + 'px';
+    card.style.top = target.targetY + 'px';
+    card.classList.remove('moving-ai');
+    aiThinking = false;
+    return;
+    }
+    const clone = card.cloneNode(true);
+    card.style.opacity = '0';
+    document.body.appendChild(clone);
+    clone.style.position = 'absolute';
+    clone.style.left = startRect.left + 'px';
+    clone.style.top = startRect.top + 'px';
+    clone.style.transform = 'rotate(180deg)';
+    void clone.offsetWidth;
+    clone.style.left = targetX + 'px';
+    clone.style.top = targetY + 'px';
+    clone.style.transform = targetRot;
+
+    setTimeout(() => {
+    if (type === 'play') {
+    const currentTargetVal = target === 'target-active' ? targetRanks.active : targetRanks.secondary;
+    const cardRank = parseInt(clone.dataset.rank);
+    const diff = Math.abs(cardRank - currentTargetVal);
+    if (diff === 1 || diff === 12) {
+    centerStack.push({ rank: cardRank, s: clone.dataset.suit, v: clone.dataset.val, color: clone.dataset.color });
+    const slot = document.getElementById(target);
+    if (target === 'target-active') targetRanks.active = cardRank; else targetRanks.secondary = cardRank;
+    slot.innerHTML = '';
+    const finalCard = clone.cloneNode(true);
+    finalCard.classList.remove('moving-ai');
+    finalCard.className = `card in-center ${clone.dataset.color === 'red' ? 'red' : 'black'}`;
+    finalCard.style.left = '0'; finalCard.style.top = '0'; finalCard.style.position = 'relative';
+    slot.appendChild(finalCard);
+    card.remove(); clone.remove();
+
+    if (targetRanks.active !== null && targetRanks.secondary !== null && targetRanks.active === targetRanks.secondary) {
+    const slapReaction = Math.max(100, currentActionDelay * 0.1);
+    setTimeout(() => { triggerSlap('ai'); }, slapReaction);
+    }
+    resetPasses();
+    updateDisplay();
+    if (document.querySelectorAll('#ai-boundary .card').length === 0) endRound("ai");
+    } else {
+    card.style.opacity = '1'; clone.remove();
+    }
+    }
+    aiThinking = false;
+    }, 500);
+    }
+    function resetPasses() {
+    p1Pass = false; aiPass = false;
+    const btn = document.getElementById('deck-p1');
+    btn.classList.remove('ready', 'counting');
+    btn.innerText = "PASS";
+
+    const aiBtn = document.getElementById('deck-ai');
+    aiBtn.classList.remove('ready', 'counting');
+    aiBtn.innerText = "AI DECK";
+    }
+    function performShortageCheck() {
+    if (p1Draw.length === 0 && aiDraw.length === 0) return;
+    if (p1Draw.length === 0 && aiDraw.length > 0) {
+    const loanSize = Math.floor(aiDraw.length / 2);
+    p1Draw = aiDraw.splice(0, loanSize);
+    p1IsBorrowing = true;
+    }
+    if (aiDraw.length === 0 && p1Draw.length > 0) {
+    const loanSize = Math.floor(p1Draw.length / 2);
+    aiDraw = p1Draw.splice(0, loanSize);
+    aiIsBorrowing = true;
+    }
+    updateBorrowVisuals();
+    }
+    function updateBorrowVisuals() {
+    document.getElementById('deck-p1').classList.toggle('has-borrowed', p1IsBorrowing);
+    document.getElementById('deck-ai').classList.toggle('has-borrowed', aiIsBorrowing);
+    }
+    function layout(cards, container, owner) {
+    const piles = [[],[],[],[]];
+    let i = 0;
+    while(cards.length > 0) { piles[i % 4].push(cards.pop()); i++; }
+    let xPos = 80;
+    piles.forEach(pile => {
+    if (pile.length > 0) {
+    pile.forEach((data, idx) => {
+    const isFaceUp = idx === pile.length - 1;
+    createCard(data, xPos, 30+(idx*35), !isFaceUp, container, owner);
+    });
+    }
+    xPos += 200;
+    });
+    }
+    function createCard(data, x, y, isFaceDown, container, owner) {
+    if (!data) return;
+    const card = document.createElement('div');
+    card.className = `card ${data.color} ${isFaceDown ? 'face-down' : 'face-up'}`;
+    card.style.left = `${x}px`; card.style.top = `${y}px`;
+    card.innerHTML = `
+    <div class="card-corner top-left"><div>${data.v}</div><div>${data.s}</div></div>
+    <div class="center-suit">${data.s}</div>
+    <div class="card-corner bottom-right"><div>${data.v}</div><div>${data.s}</div></div>
+    `;
+    card.dataset.rank = data.rank; card.dataset.suit = data.s; card.dataset.val = data.v; card.dataset.color = data.color;
+
+    if (owner === 'player') {
+    card.onmousedown = (e) => {
+    if (card.classList.contains('face-down')) {
+    if (document.querySelectorAll('#player-boundary .face-up').length < 4) {
+    card.classList.replace('face-down', 'face-up');
+    resetPasses();
+    }
+    return;
+    }
+    const rank = parseInt(card.dataset.rank);
+    let isPlayable = false;
+    if (targetRanks.active) { if (Math.abs(rank - targetRanks.active) === 1 || Math.abs(rank - targetRanks.active) === 12) isPlayable = true; }
+    if (targetRanks.secondary) { if (Math.abs(rank - targetRanks.secondary) === 1 || Math.abs(rank - targetRanks.secondary) === 12) isPlayable = true; }
+    if (targetRanks.active === null) isPlayable = false;
+    topZ++; card.style.zIndex = topZ;
+    let offset = { x: e.clientX - card.offsetLeft, y: e.clientY - card.offsetTop };
+    const startLeft = card.style.left; const startTop = card.style.top;
+
+    const move = (mE) => {
+    let newX = mE.clientX - offset.x; let newY = mE.clientY - offset.y;
+    if (!isPlayable) { newX = Math.max(0, Math.min(newX, 800)); newY = Math.max(0, Math.min(newY, 100)); }
+    card.style.left = `${newX}px`; card.style.top = `${newY}px`;
+    };
+
+    const up = (uE) => {
+    window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up);
+    const success = handleDrop(card, uE.clientX, uE.clientY);
+    if (success) {
+    resetPasses();
+    if (aiPass) { aiPass = false; }
+    } else {
+    const curX = parseInt(card.style.left); const curY = parseInt(card.style.top);
+    if (!(curX >= -20 && curX <= 820 && curY >= -20 && curY <= 140)) { card.style.left = startLeft;
+    card.style.top = startTop; }
+    }
+    };
+    window.addEventListener('mousemove', move); window.addEventListener('mouseup', up);
+    };
+    }
+    container.appendChild(card);
+    }
+    function handleDrop(card, x, y) {
+    const rectL = document.getElementById('target-secondary').getBoundingClientRect();
+    const rectR = document.getElementById('target-active').getBoundingClientRect();
+    let target = (x >= rectL.left && x <= rectL.right && y >= rectL.top && y <= rectL.bottom) ?
+    'secondary' :
+    (x >= rectR.left && x <= rectR.right && y >= rectR.top && y <= rectR.bottom) ? 'active' : null;
+    if (target && targetRanks[target]) {
+    const diff = Math.abs(parseInt(card.dataset.rank) - targetRanks[target]);
+    if (diff === 1 || diff === 12) {
+    centerStack.push({ rank: parseInt(card.dataset.rank), s: card.dataset.suit, v: card.dataset.val, color: card.dataset.color });
+    updateCenter(target, card);
+    if (document.querySelectorAll('#player-boundary .card').length === 0) endRound("player");
+    return true;
+    }
+    }
+    return false;
+    }
+    function updateCenter(type, card) {
+    const slot = document.getElementById(type === 'secondary' ? 'target-secondary' : 'target-active');
+    targetRanks[type] = parseInt(card.dataset.rank);
+    slot.innerHTML = '';
+    const clone = card.cloneNode(true);
+    clone.className = `card in-center ${card.classList.contains('red') ? 'red' : 'black'}`;
+    clone.style.left = '0'; clone.style.top = '0'; clone.style.position = 'relative';
+    slot.appendChild(clone);
+    card.remove();
+    updateDisplay();
+    }
+    function resetRevealButton() {
+    sequenceLocked = false; p1Pass = false; aiPass = false;
+    const btn = document.getElementById('deck-p1');
+    btn.innerText = gameActive ? "PASS / READY" : "START";
+    btn.classList.remove('ready', 'counting');
+
+    const aiBtn = document.getElementById('deck-ai');
+    aiBtn.classList.remove('ready', 'counting');
+    aiBtn.innerText = "AI DECK";
+    }
+    document.getElementById('deck-p1').onclick = () => {
+    if (sequenceLocked) return;
+    if (!p1Pass) {
+    p1Pass = true;
+    document.getElementById('deck-p1').classList.add('ready');
+    document.getElementById('deck-p1').innerText = "READY";
+    checkSyncReveal();
+    }
+    };
+    function checkSyncReveal() {
+    if (p1Pass && aiPass) {
+    startCountdown();
+    }
+    }
+    function startCountdown() {
+    sequenceLocked = true;
+    let count = 3;
+    const p1Btn = document.getElementById('deck-p1');
+    const aiBtn = document.getElementById('deck-ai');
+    p1Btn.classList.replace('ready', 'counting');
+    aiBtn.classList.replace('ready', 'counting');
+    const timer = setInterval(() => {
+    p1Btn.innerText = count; aiBtn.innerText = count;
+    count--;
+    if (count < 0) { clearInterval(timer); executeReveal(); }
+    }, 800);
+    }
+    function executeReveal() {
+    if (p1Draw.length === 0 || aiDraw.length === 0) performShortageCheck();
+    if (p1Draw.length > 0 && aiDraw.length > 0) {
+    document.querySelectorAll('.slot').forEach(s => s.innerHTML = '');
+    let cP1 = p1Draw.pop(); let cAI = aiDraw.pop();
+    centerStack.push(cP1, cAI);
+    updateCenter('secondary', createRevealCard(cAI));
+    updateCenter('active', createRevealCard(cP1));
+    resetRevealButton();
+    updateDisplay();
+    } else {
+    if (centerStack.length > 0) {
+    alert("STALEMATE - Reshuffling");
+    const recycled = centerStack.sort(() => Math.random() - 0.5);
+    const half = Math.floor(recycled.length / 2);
+    p1Draw = recycled.slice(0, half); aiDraw = recycled.slice(half);
+    centerStack = [];
+    document.querySelectorAll('.slot').forEach(s => s.innerHTML = '');
+    updateDisplay(); resetRevealButton();
+    } else { location.reload(); }
+    }
+    }
+    function createRevealCard(data) {
+    const c = document.createElement('div');
+    c.className = `card ${data.color}`;
+    c.innerHTML = `
+    <div class="card-corner top-left"><div>${data.v}</div><div>${data.s}</div></div>
+    <div class="center-suit">${data.s}</div>
+    <div class="card-corner bottom-right"><div>${data.v}</div><div>${data.s}</div></div>
+    `;
+    c.dataset.rank = data.rank; c.dataset.suit = data.s; c.dataset.val = data.v; c.dataset.color = data.color;
+    return c;
+    }
+    function triggerSlap(winner) {
+    if (slapLocked || !targetRanks.secondary || targetRanks.secondary !== targetRanks.active) return;
+    slapLocked = true; sequenceLocked = true;
+    const msg = document.getElementById('slap-alert');
+    msg.innerText = winner === 'player' ? "PLAYER 1 SLAPS WON!" : "AI SLAPS WON!";
+    msg.style.display = 'block';
+
+    // STATS UPDATE
+    if (winner === 'player') stats.p1Slaps++; else stats.aiSlaps++;
+    updateStatsUI();
+    const wonCards = [...centerStack]; centerStack = [];
+    if (winner === 'player') aiPenalty.push(...wonCards); else p1Penalty.push(...wonCards);
+    setTimeout(() => {
+    msg.style.display = 'none';
+    document.querySelectorAll('.slot').forEach(s => s.innerHTML = '');
+    targetRanks = { secondary: null, active: null };
+    resetRevealButton(); updateDisplay(); slapLocked = false;
+    }, 1500);
+    }
+    window.addEventListener('keydown', (e) => {
+    if (e.code === 'Space' && gameActive && !slapLocked && !sequenceLocked) {
+    // STRICT REFEREE CHECK
+    if (targetRanks.active !== null && targetRanks.secondary === targetRanks.active) {
+    triggerSlap('player');
+    } else {
+    issueYellowCard();
+    }
+    }
+    });
+    function endRound(winner) {
+    // STATS UPDATE
+    if (winner === 'player') stats.p1Rounds++; else stats.aiRounds++;
+    updateStatsUI();
+    if (p1IsBorrowing) { aiDraw.push(...p1Draw); p1Draw = []; }
+    if (aiIsBorrowing) { p1Draw.push(...aiDraw); aiDraw = []; }
+    const p1RemF = Array.from(document.querySelectorAll('#player-boundary .card')).map(domToCard);
+    const aiRemF = Array.from(document.querySelectorAll('#ai-boundary .card')).map(domToCard);
+    if (winner === 'player') {
+    p1Inventory = [...p1Draw, ...p1Penalty];
+    aiInventory = [...aiDraw, ...aiRemF, ...aiPenalty, ...centerStack];
+    } else {
+    aiInventory = [...aiDraw, ...aiPenalty];
+    p1Inventory = [...p1Draw, ...p1RemF, ...p1Penalty, ...centerStack];
+    }
+    p1Inventory.sort(() => Math.random() - 0.5); aiInventory.sort(() => Math.random() - 0.5);
+    alert(`${winner.toUpperCase()} WINS ROUND!`);
+    setupRound();
+    }
+    function domToCard(c) {
+    return { v: c.dataset.val, s: c.dataset.suit, rank: parseInt(c.dataset.rank), color: c.classList.contains('red') ? 'red' : 'black' };
+    }
+    function showVictory(text) {
+    gameActive = false;
+    document.getElementById('victory-screen').style.display = 'flex';
+    document.getElementById('vic-sub').innerText = text;
+    }
+    function updateDisplay() {
+    let p1Real = document.querySelectorAll('#player-boundary .card').length + p1Penalty.length;
+    let aiReal = document.querySelectorAll('#ai-boundary .card').length + aiPenalty.length;
+    if (p1IsBorrowing) { aiReal += (p1Draw.length + aiDraw.length); }
+    else if (aiIsBorrowing) { p1Real += (aiDraw.length + p1Draw.length); }
+    else { p1Real += p1Draw.length; aiReal += aiDraw.length; }
+    document.getElementById('p1-t').innerText = p1Real;
+    document.getElementById('ai-t').innerText = aiReal;
+    }
+    document.getElementById('new-match-btn').onclick = initGame;
+})();
