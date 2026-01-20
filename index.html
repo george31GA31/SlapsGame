@@ -3,17 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ISF Card Engine V10.5 (Total Sync)</title>
+    <title>ISF Card Engine V10.6 (Precise Sync)</title>
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 </head>
 <body>
     <script>
     (function() {
-        /* ISF OFFICIAL ENGINE V10.5 (TOTAL SYNC)
-           - Fix: "Blind Trust" Network Move (Receiver ignores legality checks)
-           - Feature: Networked Slaps (Slapping updates opponent immediately)
-           - Feature: Networked Round Ends (Winner forces round reset)
-           - Logic: Host Authority for Reveals maintained
+        /* ISF OFFICIAL ENGINE V10.6 (PRECISE SYNC)
+           - Fix: Solved "Wrong Card Moving" bug
+           - Logic: Network receiver now scans DOM for specific Rank/Suit matching the sender
+           - Logic: Animates the ACTUAL card element instead of a dummy
+           - Result: 1:1 Visual Parity between screens
         */
 
         // 1. SETUP & CONSTANTS
@@ -379,54 +379,51 @@
                 }
                 if (data.type === 'MOVE') {
                     const mirroredTarget = (data.targetId === 'target-active') ? 'target-secondary' : 'target-active';
-                    // "BLIND TRUST" - Execute move without validity checks to ensure sync
                     forceRemoteMove(data.cardRank, data.cardSuit, data.cardVal, data.cardColor, mirroredTarget);
                 }
                 if (data.type === 'FORCE_REVEAL') {
                     forceRevealFromHost(data.card1, data.card2);
                 }
                 if (data.type === 'SLAP') {
-                    triggerSlap('ai', true); // 'true' means it came from network
+                    triggerSlap('ai', true);
                 }
                 if (data.type === 'ROUND_WIN') {
-                    // Opponent won round
                     endRound('ai');
                 }
             });
         }
         
-        // "BLIND TRUST" MOVE EXECUTION
+        // BUG FIX: PRECISE CARD FINDING
         function forceRemoteMove(rank, suit, val, color, targetId) {
-            // 1. Update State immediately
-            centerStack.push({ rank: rank, s: suit, v: val, color: color });
-            if (targetId === 'target-active') targetRanks.active = rank; else targetRanks.secondary = rank;
-
-            // 2. Visuals
-            const slot = document.getElementById(targetId);
-            slot.innerHTML = ''; // Clear slot
+            // 1. SCAN for exact card
+            const oppCards = Array.from(document.querySelectorAll('#ai-boundary .card'));
+            let targetCard = null;
             
-            // Create the card div manually
-            const card = document.createElement('div');
-            card.className = `card in-center ${color}`;
-            card.innerHTML = `
-            <div class="card-corner top-left"><div>${val}</div><div>${suit}</div></div>
-            <div class="center-suit">${suit}</div>
-            <div class="card-corner bottom-right"><div>${val}</div><div>${suit}</div></div>
-            `;
-            // Add to slot
-            slot.appendChild(card);
+            for(let c of oppCards) {
+                if (parseInt(c.dataset.rank) === rank && c.dataset.suit === suit) {
+                    targetCard = c;
+                    break;
+                }
+            }
 
-            // 3. Remove a card from AI pile to keep count
-            const aiCards = document.querySelectorAll('#ai-boundary .card');
-            if (aiCards.length > 0) aiCards[aiCards.length - 1].remove();
+            // Fallback if visual sync lost (prevent crash)
+            if (!targetCard && oppCards.length > 0) targetCard = oppCards[oppCards.length - 1];
 
-            // 4. Update UI numbers
-            resetPasses();
-            updateDisplay();
-            
-            // 5. Check if they won
-            if (document.querySelectorAll('#ai-boundary .card').length === 0) {
-               // Wait for their 'ROUND_WIN' signal usually, but we can double check here
+            if(targetCard) {
+                // Update State
+                centerStack.push({ rank: rank, s: suit, v: val, color: color });
+                if (targetId === 'target-active') targetRanks.active = rank; else targetRanks.secondary = rank;
+
+                // Hijack the element and animate it
+                targetCard.className = `card ${color}`;
+                // Ensure inner HTML matches what was played (fix for face-down cards)
+                targetCard.innerHTML = `
+                <div class="card-corner top-left"><div>${val}</div><div>${suit}</div></div>
+                <div class="center-suit">${suit}</div>
+                <div class="card-corner bottom-right"><div>${val}</div><div>${suit}</div></div>
+                `;
+                
+                animateAiMove(targetCard, targetId, 'play');
             }
         }
 
@@ -911,7 +908,6 @@
             if (p1Pass && aiPass) { startCountdown(); }
         }
         function startCountdown() {
-            // IF ONLINE JOINER: DO NOT START TIMER. WAIT FOR HOST SIGNAL.
             if(isOnline && !isHost) {
                 sequenceLocked = true;
                 document.getElementById('deck-p1').innerText = "WAIT";
@@ -938,12 +934,11 @@
                 let cP1 = p1Draw.pop(); let cAI = aiDraw.pop();
                 centerStack.push(cP1, cAI);
                 
-                // HOST AUTHORITY SYNC
                 if(isOnline && isHost && conn) {
                     conn.send({
                         type: 'FORCE_REVEAL',
-                        card1: cP1, // Host Card
-                        card2: cAI  // Joiner Card
+                        card1: cP1, 
+                        card2: cAI  
                     });
                 }
 
@@ -988,7 +983,6 @@
         function triggerSlap(winner, isNetworkCommand = false) {
             if (slapLocked || !targetRanks.secondary || targetRanks.secondary !== targetRanks.active) return;
             
-            // SEND SLAP COMMAND
             if (isOnline && !isNetworkCommand && conn) {
                 conn.send({ type: 'SLAP', winner: 'opponent' });
             }
@@ -1039,12 +1033,10 @@
             alert(`${winner.toUpperCase()} WINS ROUND!`);
             
             if(isOnline && isHost) {
-                // Host resets board for both after alert
                 setupRound();
             } else if (!isOnline) {
                 setupRound();
             } else {
-                // Joiner waits for Host to send 'FORCE_REVEAL' or 'START_GAME' or simply re-syncs
                 setupRound();
             }
         }
