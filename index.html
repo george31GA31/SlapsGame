@@ -3,17 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ISF Card Engine V10.7 (Mirror Sync)</title>
+    <title>ISF Card Engine V10.8 (Logic Fix)</title>
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 </head>
 <body>
     <script>
     (function() {
-        /* ISF OFFICIAL ENGINE V10.7 (MIRROR SYNC & FLIP FIX)
-           - Fix: Network moves now correctly mirror target slots (Left <-> Right).
-           - Fix: Playing a card remotely now triggers the reveal of the card beneath it.
-           - Fix: Card counting logic tightened to prevent duplication.
-           - Logic: "Blind Trust" enabled for smooth visual sync.
+        /* ISF OFFICIAL ENGINE V10.8 (LOGIC FIX)
+           - Fix: End Round Card Distribution flipped.
+           - Logic: LOSER now takes the Center Stack (Punishment).
+           - Logic: WINNER keeps only their Draw/Penalty piles.
+           - Result: Correct card counts (Player 41 / AI 11 scenario).
         */
 
         // 1. SETUP & CONSTANTS
@@ -378,7 +378,6 @@
                     }
                 }
                 if (data.type === 'MOVE') {
-                    // FIX: Mirror Logic - If sending 'target-active' (Right), I receive 'target-secondary' (Left)
                     const mirroredTarget = (data.targetId === 'target-active') ? 'target-secondary' : 'target-active';
                     forceRemoteMove(data.cardRank, data.cardSuit, data.cardVal, data.cardColor, mirroredTarget);
                 }
@@ -392,18 +391,14 @@
                     endRound('ai');
                 }
                 if (data.type === 'FLIP_CARD') {
-                    // Opponent flipped a card face up (manual or auto)
                     executeFlip(data.cardRank, data.cardSuit);
                 }
             });
         }
         
         function executeFlip(rank, suit) {
-            // Find card in AI boundary
             const oppCards = Array.from(document.querySelectorAll('#ai-boundary .card'));
             for(let c of oppCards) {
-                // If it matches rank/suit (we might need to check DOM order if face down logic is strict)
-                // For now, face down cards have no rank/suit in DOM? Actually they do in data attributes.
                 if (parseInt(c.dataset.rank) === rank && c.dataset.suit === suit) {
                     c.classList.replace('face-down', 'face-up');
                     break;
@@ -412,7 +407,6 @@
         }
 
         function forceRemoteMove(rank, suit, val, color, targetId) {
-            // 1. SCAN for exact card
             const oppCards = Array.from(document.querySelectorAll('#ai-boundary .card'));
             const columns = getColumns(oppCards);
             let targetCard = null;
@@ -425,13 +419,10 @@
                 }
             }
 
-            // Fallback
             if (!targetCard && oppCards.length > 0) targetCard = oppCards[oppCards.length - 1];
 
             if(targetCard) {
-                // Determine which column this card came from
                 const cardLeft = parseInt(targetCard.style.left);
-                // Simple proximity check for columns 80, 280, 480, 680
                 const colCenters = [80, 280, 480, 680];
                 let closestCol = 0;
                 let minDiff = 1000;
@@ -440,11 +431,9 @@
                     if(diff < minDiff) { minDiff = diff; closestCol = cx; }
                 });
 
-                // Update State
                 centerStack.push({ rank: rank, s: suit, v: val, color: color });
                 if (targetId === 'target-active') targetRanks.active = rank; else targetRanks.secondary = rank;
 
-                // Hijack
                 targetCard.className = `card ${color}`;
                 targetCard.innerHTML = `
                 <div class="card-corner top-left"><div>${val}</div><div>${suit}</div></div>
@@ -452,17 +441,7 @@
                 <div class="card-corner bottom-right"><div>${val}</div><div>${suit}</div></div>
                 `;
                 
-                // Animate
                 animateAiMove(targetCard, targetId, 'play');
-
-                // NEW: FORCE REVEAL UNDERLYING CARD
-                // We need to find the card *under* the one we just moved in that column
-                // Wait for animation to clear card from DOM? No, finding it now.
-                // The columns are stacked by Z-index or order.
-                // Actually, the simplest way: In standard play, the card under the top card needs to flip.
-                // BUT we don't know which card is under it purely by ID.
-                // So the SENDER must tell us "I flipped card X".
-                // See handleDrop() modification.
             }
         }
 
@@ -859,7 +838,6 @@
                     if (card.classList.contains('face-down')) {
                         if (document.querySelectorAll('#player-boundary .face-up').length < 4) {
                             card.classList.replace('face-down', 'face-up');
-                            // Network Flip
                             if(isOnline && conn) {
                                 conn.send({
                                     type: 'FLIP_CARD',
@@ -911,10 +889,7 @@
                 const diff = Math.abs(parseInt(card.dataset.rank) - targetRanks[target]);
                 if (diff === 1 || diff === 12) {
                     
-                    // FLIP LOGIC: CHECK IF CARD UNDERNEATH NEEDS FLIPPING
-                    // This is complex. We grab the pile this card came from.
                     const cardLeft = parseInt(card.style.left);
-                    // Approximate columns
                     const colCenters = [80, 280, 480, 680];
                     let closestCol = 0;
                     let minDiff = 1000;
@@ -923,7 +898,6 @@
                         if(diff < minDiff) { minDiff = diff; closestCol = cx; }
                     });
                     
-                    // Send move
                     if (isOnline && conn) {
                         conn.send({
                             type: 'MOVE',
@@ -932,22 +906,18 @@
                             cardVal: card.dataset.val,
                             cardColor: card.dataset.color,
                             targetId: target,
-                            originCol: closestCol // Tell opponent where we took it from
+                            originCol: closestCol
                         });
                     }
                     centerStack.push({ rank: parseInt(card.dataset.rank), s: card.dataset.suit, v: card.dataset.val, color: card.dataset.color });
                     updateCenter(target, card);
                     
-                    // LOCAL FLIP CHECK
-                    // We need to check if the new top card in that column is face down
-                    // Find cards in that column
                     const myCards = Array.from(document.querySelectorAll('#player-boundary .card'));
                     let colCards = [];
                     myCards.forEach(c => {
                         if(Math.abs(parseInt(c.style.left) - closestCol) < 50) colCards.push(c);
                     });
                     if(colCards.length > 0) {
-                        // Sort by top
                         colCards.sort((a,b) => parseInt(a.style.top) - parseInt(b.style.top));
                         const top = colCards[colCards.length - 1];
                         if(top.classList.contains('face-down')) {
@@ -1098,6 +1068,8 @@
                 }
             }
         });
+        
+        // --- LOGIC FIX HERE: LOSER TAKES CENTER STACK ---
         function endRound(winner) {
             if (winner === 'player') {
                 if(isOnline && conn) conn.send({ type: 'ROUND_WIN' });
@@ -1106,30 +1078,25 @@
             if (winner === 'player') stats.p1Rounds++; else stats.aiRounds++;
             updateStatsUI();
             
-            // CARD DUPLICATION FIX:
-            // Ensure we don't accidentally duplicate draw piles if borrowing logic triggered mid-round
-            
-            // Re-consolidate logic
-            // 1. Gather remaining cards from foundation
+            if (p1IsBorrowing) { aiDraw.push(...p1Draw); p1Draw = []; }
+            if (aiIsBorrowing) { p1Draw.push(...aiDraw); aiDraw = []; }
             const p1RemF = Array.from(document.querySelectorAll('#player-boundary .card')).map(domToCard);
             const aiRemF = Array.from(document.querySelectorAll('#ai-boundary .card')).map(domToCard);
             
-            // 2. Combine into single inventory
             if (winner === 'player') {
-                p1Inventory = [...p1Draw, ...p1Penalty, ...centerStack];
-                aiInventory = [...aiDraw, ...aiRemF, ...aiPenalty];
-                // P1 keeps their remaining foundation cards for next deal? 
-                // No, standard Speed/Spit usually reshuffles foundation into deck for next round.
-                // Or you keep playing? The current engine RESETS the round (redeals).
-                // So we must collect EVERYTHING.
-                p1Inventory.push(...p1RemF);
+                // Winner: Player (Keeps P1 Stuff + AI Foundation? No, AI Foundation stays with AI usually, or goes to pot?)
+                // Standard Speed: Foundation cards return to owner's deck.
+                // Center Stack goes to LOSER.
+                
+                p1Inventory = [...p1Draw, ...p1Penalty, ...p1RemF]; 
+                aiInventory = [...aiDraw, ...aiPenalty, ...aiRemF, ...centerStack]; // LOSER TAKES STACK
             } else {
-                aiInventory = [...aiDraw, ...aiPenalty, ...centerStack];
-                p1Inventory = [...p1Draw, ...p1RemF, ...p1Penalty];
-                aiInventory.push(...aiRemF);
+                // Winner: AI
+                aiInventory = [...aiDraw, ...aiPenalty, ...aiRemF];
+                p1Inventory = [...p1Draw, ...p1Penalty, ...p1RemF, ...centerStack]; // LOSER TAKES STACK
             }
             
-            // 3. Clear temporary piles
+            // Clear temporary piles
             p1Draw = []; aiDraw = []; p1Penalty = []; aiPenalty = []; centerStack = [];
 
             p1Inventory.sort(() => Math.random() - 0.5); aiInventory.sort(() => Math.random() - 0.5);
@@ -1143,6 +1110,7 @@
                 setupRound();
             }
         }
+        
         function domToCard(c) {
             return { v: c.dataset.val, s: c.dataset.suit, rank: parseInt(c.dataset.rank), color: c.classList.contains('red') ? 'red' : 'black' };
         }
