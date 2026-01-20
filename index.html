@@ -3,15 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ISF Card Engine V9.3 (Overwhelm Strategy)</title>
+    <title>ISF Card Engine V9.4 (Killer Instinct + 4-3-2-1)</title>
 </head>
 <body>
     <script>
     (function() {
-        /* ISF OFFICIAL ENGINE V9.3
-           - Feature: "Overwhelm Strategy" (AI takes risks if it has multiple moves)
-           - Polish: Smoother card animations (0.2s)
-           - UI: Custom Fonts
+        /* ISF OFFICIAL ENGINE V9.4
+           - Logic Fix: "Killer Instinct" - AI ignores risk if the move wins the round.
+           - Layout Change: Cards deal in 4-3-2-1 stacks (Solitaire style).
+           - Polish: Retained smooth 0.2s animations and custom fonts.
         */
 
         // 1. SETUP & CONSTANTS
@@ -263,12 +263,16 @@
             aiThinking = false;
 
             updateRefUI();
-            const p1FCount = Math.min(p1Inventory.length, 10);
+            
+            // LOGIC CHANGE: 4-3-2-1 LAYOUT
+            const p1FCount = 10;
             const p1FCards = p1Inventory.splice(0, p1FCount);
             p1Draw = [...p1Inventory];
-            const aiFCount = Math.min(aiInventory.length, 10);
+            
+            const aiFCount = 10;
             const aiFCards = aiInventory.splice(0, aiFCount);
             aiDraw = [...aiInventory];
+            
             performShortageCheck();
             layout(p1FCards, document.getElementById('player-boundary'), 'player');
             layout(aiFCards, document.getElementById('ai-boundary'), 'ai');
@@ -344,7 +348,7 @@
             }
         }
 
-        // --- SMART AI BRAIN (V9.3) ---
+        // --- SMART AI BRAIN (V9.4) ---
         function startAiBrain() {
             if (!gameActive) return;
 
@@ -435,7 +439,7 @@
             return columns;
         }
 
-        /* --- UPDATED LOGIC: OVERWHELM STRATEGY --- */
+        /* --- UPDATED LOGIC: V9.4 --- */
         function attemptAiMove() {
             if (slapLocked || sequenceLocked) { aiThinking = false; return; }
             const allAiCards = Array.from(document.querySelectorAll('#ai-boundary .card'));
@@ -449,6 +453,8 @@
             const isDangerZone = playerFoundationCount <= 4;
             // "Aggressive Mode": AI is also running low, so it should rush
             const isAiAggressive = aiTotal <= 6;
+            // "Killer Instinct": AI has 1 card left on board. Ignore everything and execute.
+            const killerInstinct = aiFoundationCount <= 1;
 
             let possibleMoves = [];
             let flipMove = null;
@@ -480,7 +486,8 @@
                         const diff = Math.abs(rank - t.val);
                         if (diff === 1 || diff === 12) {
                             // Check if this specific move helps the player
-                            const risky = checkIfMoveHelpsPlayer(rank);
+                            // BUG FIX: If 'killerInstinct' is true, risky is ALWAYS false.
+                            const risky = killerInstinct ? false : checkIfMoveHelpsPlayer(rank);
                             possibleMoves.push({ card: topCard, targetId: t.id, isRisky: risky });
                         }
                     }
@@ -512,11 +519,8 @@
                 } 
                 else {
                     // Only risky moves are available.
-                    // OVERWHELM LOGIC: If I have multiple options, I should play them to overwhelm the player.
-                    // Or if I'm aggressive, I play. 
-                    // Or if I'm NOT in danger, I play.
-                    // I ONLY block if I'm in Danger, I'm NOT Aggressive, and I only have ONE move.
-                    const shouldRiskIt = (possibleMoves.length > 1) || isAiAggressive || !isDangerZone;
+                    // OVERWHELM LOGIC + KILLER INSTINCT
+                    const shouldRiskIt = (possibleMoves.length > 1) || isAiAggressive || !isDangerZone || killerInstinct;
 
                     if (shouldRiskIt) {
                         finalMove = riskyMoves[0];
@@ -651,10 +655,21 @@
             document.getElementById('deck-p1').classList.toggle('has-borrowed', p1IsBorrowing);
             document.getElementById('deck-ai').classList.toggle('has-borrowed', aiIsBorrowing);
         }
+        
+        // --- UPDATED LAYOUT LOGIC (4-3-2-1) ---
         function layout(cards, container, owner) {
             const piles = [[],[],[],[]];
-            let i = 0;
-            while(cards.length > 0) { piles[i % 4].push(cards.pop()); i++; }
+            // SOLITAIRE STYLE: 4, 3, 2, 1 distribution
+            const counts = [4, 3, 2, 1];
+            
+            counts.forEach((count, colIndex) => {
+                for(let i=0; i<count; i++) {
+                    if (cards.length > 0) {
+                        piles[colIndex].push(cards.pop());
+                    }
+                }
+            });
+
             let xPos = 80;
             piles.forEach(pile => {
                 if (pile.length > 0) {
@@ -666,6 +681,7 @@
                 xPos += 200;
             });
         }
+
         function createCard(data, x, y, isFaceDown, container, owner) {
             if (!data) return;
             const card = document.createElement('div');
