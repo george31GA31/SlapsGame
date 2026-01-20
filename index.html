@@ -3,17 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ISF Card Engine V14.1 (Perspective Fixed)</title>
+    <title>ISF Card Engine V15.0 (Simplified Slaps)</title>
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 </head>
 <body>
     <script>
     (function() {
-        /* ISF OFFICIAL ENGINE V14.1 (PERSPECTIVE FIXED)
-           - Fix: Inventory counts are now mapped based on Role (Host vs Joiner).
-           - Logic: Joiner correctly sees Host's data as "Opponent" and their own data as "Player".
-           - Fix: Center Widget updates immediately on remote moves to prevent laggy numbers.
-           - Logic: Shortage/Borrowing visuals update automatically based on corrected inventory counts.
+        /* ISF OFFICIAL ENGINE V15.0 (SIMPLIFIED SLAPS)
+           - Removed: Center Count Widget.
+           - Logic: Slap Trigger is now purely based on matching Rank Numbers (e.g. 5 vs 5).
+           - Logic: Host arbitrates "First to Press". Loser receives the Center Stack immediately.
+           - Logic: "Blind Trust" and "Repatriation Economy" maintained.
         */
 
         // 1. SETUP & CONSTANTS
@@ -123,15 +123,6 @@
         .ai-side { transform: rotate(180deg); opacity: 0.9; }
         #center-arena { display: flex; align-items: center; gap: 40px; z-index: 500; position: relative;}
 
-        /* CENTER PILE WIDGET */
-        #center-counter {
-            position: absolute; left: -140px; top: 50%; transform: translateY(-50%);
-            background: rgba(0,0,0,0.7); border: 2px solid white; border-radius: 8px;
-            padding: 10px; text-align: center; color: white; font-family: monospace; font-weight: bold;
-            width: 100px;
-        }
-        #center-counter span { display: block; font-size: 24px; color: var(--accent-gold); }
-
         .draw-stack { width: 100px; height: 140px; border: 3px solid #fff; border-radius: 10px; background: #1e3a5f; cursor: pointer; display: flex; align-items: center;
             justify-content: center; font-size: 14px; text-align: center; font-weight: bold; transition: all 0.2s; position: relative; z-index: 2; box-shadow: 0 5px 0 #0d1b2a;
         }
@@ -237,11 +228,6 @@
             <div id="ai-boundary" class="foundation-area ai-side"></div>
 
             <div id="center-arena">
-                <div id="center-counter">
-                    <small>CENTER</small>
-                    <span id="center-count-val">0</span>
-                </div>
-
                 <div id="deck-ai" class="draw-stack">OPPONENT<div class="sideways-card"></div></div>
                 <div id="target-secondary" class="slot"></div>
                 <div id="target-active" class="slot"></div>
@@ -298,8 +284,8 @@
 
             conn.send({
                 type: 'START_GAME',
-                hostCards: hostCards, // EXPLICIT NAMING
-                joinerCards: joinerCards 
+                myCards: joinerCards, 
+                oppCards: hostCards   
             });
 
             document.getElementById('screen-lobby-host').classList.add('hidden');
@@ -371,8 +357,7 @@
                 if (data.type === 'START_GAME') {
                     document.getElementById('screen-lobby-join').classList.add('hidden');
                     document.getElementById('isf-stadium').classList.remove('hidden');
-                    // JOINER PERSPECTIVE SWAP
-                    initGameOnline(data.joinerCards, data.hostCards);
+                    initGameOnline(data.myCards, data.oppCards);
                 }
                 if (data.type === 'PASS') {
                     if (!aiPass) {
@@ -393,17 +378,10 @@
                     if (isHost) evaluateSlapRequest('opponent'); 
                 }
                 if (data.type === 'SLAP_RESULT') {
-                    // MAPPING SLAP RESULT
-                    // If winner is 'player' (Host), Joiner sees 'ai' (Opponent).
-                    // If winner is 'ai' (Joiner), Joiner sees 'player' (Me).
-                    
-                    let localWinner = data.winnerName; // This is from Host Perspective
+                    // MAPPING SLAP RESULT for JOINER
+                    let localWinner = data.winnerName; 
                     if (!isHost) {
                         localWinner = (data.winnerName === 'player') ? 'ai' : 'player';
-                        
-                        // Map Inventories Correctly
-                        // Host sent p1 (Host) and p2 (Joiner)
-                        // Joiner needs p1 = Joiner, p2 = Host
                         applySlapResult(localWinner, data.newP2, data.newP1, data.newPenP2, data.newPenP1);
                     } else {
                         applySlapResult(localWinner, data.newP1, data.newP2, data.newPenP1, data.newPenP2);
@@ -414,22 +392,8 @@
                 }
                 if (data.type === 'SYNC_ROUND') {
                     if (!isHost) {
-                        // SWAP
                         initGameOnline(data.p2, data.p1);
                     }
-                }
-                if (data.type === 'SYNC_STATS') {
-                    if (!isHost) {
-                        // SWAP
-                        p1Inventory = data.p2Inv;
-                        aiInventory = data.p1Inv;
-                        p1Penalty = data.p2Pen;
-                        aiPenalty = data.p1Pen;
-                        updateDisplay();
-                    }
-                }
-                if (data.type === 'SYNC_CENTER_COUNT') {
-                    document.getElementById('center-count-val').innerText = data.count;
                 }
                 if (data.type === 'FLIP_CARD') {
                     executeFlip(data.cardRank, data.cardSuit);
@@ -441,11 +405,8 @@
             if (slapLocked || slapInProgress) return;
             slapInProgress = true;
 
-            if (centerStack.length < 2) { slapInProgress = false; return; }
-            const top1 = centerStack[centerStack.length - 1];
-            const top2 = centerStack[centerStack.length - 2];
-            
-            if (top1.rank !== top2.rank) {
+            // SIMPLIFIED SLAP CHECK: MATCHING RANKS
+            if (targetRanks.active === null || targetRanks.secondary === null || targetRanks.active !== targetRanks.secondary) {
                 slapInProgress = false; 
                 return; 
             }
@@ -454,6 +415,7 @@
             const wonCards = [...centerStack];
             centerStack = [];
             
+            // LOSER TAKES CARDS
             if (winner === 'player') {
                 aiPenalty.push(...wonCards); 
             } else {
@@ -537,11 +499,8 @@
             let d = [];
             suits.forEach(s => values.forEach(v => d.push({ s, v, rank: rankMap[v], color: (s===' ♥ '||s===' ♦ ') ? 'red' : 'black', id: Math.random().toString(36), owner: 'p1' })));
             d.sort(() => Math.random() - 0.5);
-            // DO NOT OVERWRITE OWNER HERE. Initial shuffle -> Split determines ownership via index?
-            // Actually, keep ownership tag abstract.
-            // Split: 0-26 Host, 26-52 Joiner.
-            for(let i=0; i<26; i++) d[i].owner = 'p1'; // Host
-            for(let i=26; i<52; i++) d[i].owner = 'ai'; // Joiner (AI var name)
+            for(let i=0; i<26; i++) d[i].owner = 'p1';
+            for(let i=26; i<52; i++) d[i].owner = 'ai';
             return d;
         }
 
@@ -851,17 +810,11 @@
                                 const slapReaction = Math.max(100, currentActionDelay * 0.1);
                                 setTimeout(() => { triggerSlap('ai'); }, slapReaction);
                             } else if(isHost) {
-                                evaluateSlapRequest('player', true); 
+                                evaluateSlapRequest('player'); 
                             }
                         }
                         resetPasses();
                         updateDisplay();
-                        
-                        // HOST BROADCAST CENTER STATE ON REMOTE MOVE
-                        if (isOnline && isHost && conn) {
-                            conn.send({ type: 'SYNC_CENTER_COUNT', count: centerStack.length });
-                        }
-
                         if (document.querySelectorAll('#ai-boundary .card').length === 0) endRound("ai");
                     } else {
                         card.style.opacity = '1'; clone.remove();
@@ -1016,11 +969,6 @@
                     centerStack.push({ rank: parseInt(card.dataset.rank), s: card.dataset.suit, v: card.dataset.val, color: card.dataset.color, owner: card.dataset.owner });
                     updateCenter(target, card);
                     
-                    // FORCE UPDATE CENTER WIDGET LOCALLY
-                    if (isOnline && !isHost) {
-                        document.getElementById('center-count-val').innerText = centerStack.length;
-                    }
-
                     if (document.querySelectorAll('#player-boundary .card').length === 0) endRound("player");
                     return true;
                 }
@@ -1037,11 +985,6 @@
             slot.appendChild(clone);
             card.remove();
             updateDisplay();
-            
-            // HOST BROADCAST CENTER STATE
-            if (isOnline && isHost && conn) {
-                conn.send({ type: 'SYNC_CENTER_COUNT', count: centerStack.length });
-            }
         }
         
         document.getElementById('deck-p1').onclick = () => {
