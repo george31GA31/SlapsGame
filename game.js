@@ -12,7 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
         player: { deck: [], cards: [], borrowing: false },
         bot: { deck: [], cards: [], borrowing: false },
         centerLeft: null, centerRight: null,
-        centerStack: [], // Tracks all cards played in center
+        centerStack: [], 
         gameOver: false,
         playerPass: false, botPass: false,
         isCountDown: false
@@ -70,45 +70,45 @@ document.addEventListener('DOMContentLoaded', () => {
         setTimeout(() => { clone.remove(); callback(); }, 600);
     }
 
-    // === START & ROUND LOGIC ===
     function init() {
         let deck = createDeck();
         startGameWithDecks(deck.slice(0, 26), deck.slice(26, 52));
     }
 
     function startGameWithDecks(pDeck, bDeck) {
-        // Reset State
+        // RESET STATE
         gameState.player.cards = []; gameState.bot.cards = [];
         gameState.centerStack = []; gameState.centerLeft = null; gameState.centerRight = null;
         gameState.gameOver = false; gameState.playerPass = false; gameState.botPass = false;
         gameState.player.borrowing = false; gameState.bot.borrowing = false;
         
-        // Reset Visuals
+        // RESET VISUALS
         els.overlay.classList.add('hidden');
         resetStalemateVisuals();
-        
-        // Deal Foundations (10 each)
-        // If deck < 10, handle shortage logic PRE-ROUND
+        els.pBorrow.classList.remove('borrow-active');
+        els.bBorrow.classList.remove('borrow-active');
+        document.querySelectorAll('.slot').forEach(s => s.innerHTML = '');
+
+        // BORROWING CHECK (Start of Round)
         if(pDeck.length < 10) {
             let loan = Math.floor(bDeck.length / 2);
             pDeck.push(...bDeck.splice(0, loan));
             gameState.player.borrowing = true;
+            els.pBorrow.classList.add('borrow-active');
         }
         if(bDeck.length < 10) {
             let loan = Math.floor(pDeck.length / 2);
             bDeck.push(...pDeck.splice(0, loan));
             gameState.bot.borrowing = true;
+            els.bBorrow.classList.add('borrow-active');
         }
 
+        // DEAL FOUNDATIONS
         spawnFoundation(pDeck.splice(0, 10), 'player');
         spawnFoundation(bDeck.splice(0, 10), 'bot');
         
         gameState.player.deck = pDeck;
         gameState.bot.deck = bDeck;
-
-        // Visual Borrow Labels
-        els.pBorrow.classList.toggle('borrow-active', gameState.player.borrowing);
-        els.bBorrow.classList.toggle('borrow-active', gameState.bot.borrowing);
 
         renderAll();
         runBotCycle();
@@ -176,7 +176,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // === PHYSICS ===
     function setupInteraction(el, card) {
         el.addEventListener('mousedown', (e) => { if(e.button !== 0) return; el.style.zIndex = ++globalZ; startDrag(e, el, card); });
     }
@@ -186,7 +185,6 @@ document.addEventListener('DOMContentLoaded', () => {
         let startX = e.clientX, startY = e.clientY;
         let origX = card.x, origY = card.y;
         let dragged = false;
-        
         const canLeft = isValid(card, gameState.centerLeft);
         const canRight = isValid(card, gameState.centerRight);
         const isUnlocked = (canLeft || canRight) && card.isFaceUp;
@@ -230,17 +228,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function playCard(card, side) {
         gameState.player.cards = gameState.player.cards.filter(c => c.id !== card.id);
-        
-        // Track stack
         if(side === 'left' && gameState.centerLeft) gameState.centerStack.push(gameState.centerLeft);
         if(side === 'right' && gameState.centerRight) gameState.centerStack.push(gameState.centerRight);
-
         if(side === 'left') gameState.centerLeft = card; else gameState.centerRight = card;
         resetStalemate(); 
         renderAll(); checkWin();
     }
 
-    // === STALEMATE & BORROWING ===
     els.pDeck.addEventListener('click', () => {
         if(gameState.isCountDown || gameState.gameOver) return;
         if(!gameState.playerPass) {
@@ -281,29 +275,23 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function executeReveal() {
-        // PUSH OLD CENTER TO STACK
         if(gameState.centerLeft) gameState.centerStack.push(gameState.centerLeft);
         if(gameState.centerRight) gameState.centerStack.push(gameState.centerRight);
 
-        // FLIP LOGIC
         if(gameState.player.borrowing) {
-            // Player has no cards to give (technically). Bot gives both.
             if(gameState.bot.deck.length > 1) {
                 gameState.centerLeft = gameState.bot.deck.pop();
                 gameState.centerRight = gameState.bot.deck.pop();
             }
         } else if(gameState.bot.borrowing) {
-            // Bot has no cards. Player gives both.
             if(gameState.player.deck.length > 1) {
                 gameState.centerLeft = gameState.player.deck.pop();
                 gameState.centerRight = gameState.player.deck.pop();
             }
         } else {
-            // Normal
             if(gameState.player.deck.length > 0) gameState.centerRight = gameState.player.deck.pop();
             if(gameState.bot.deck.length > 0) gameState.centerLeft = gameState.bot.deck.pop();
         }
-        
         resetStalemateVisuals(); renderAll();
     }
 
@@ -314,7 +302,6 @@ document.addEventListener('DOMContentLoaded', () => {
         gameState.isCountDown = false; gameState.playerPass = false; gameState.botPass = false;
     }
 
-    // === BOT BRAIN ===
     function runBotCycle() {
         if(gameState.gameOver) return;
         setTimeout(() => {
@@ -337,7 +324,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (!isValid(move.card, currentCenter)) { renderZone('bot'); return; }
 
                     gameState.bot.cards = gameState.bot.cards.filter(c => c.id !== move.card.id);
-                    // Push to stack
                     if(move.side === 'left' && gameState.centerLeft) gameState.centerStack.push(gameState.centerLeft);
                     if(move.side === 'right' && gameState.centerRight) gameState.centerStack.push(gameState.centerRight);
 
@@ -362,12 +348,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updateStats() {
-        let pTotal = gameState.player.deck.length + gameState.player.cards.length;
-        let bTotal = gameState.bot.deck.length + gameState.bot.cards.length;
-        els.pCount.innerText = pTotal; els.bCount.innerText = bTotal;
+        els.pCount.innerText = gameState.player.deck.length + gameState.player.cards.length;
+        els.bCount.innerText = gameState.bot.deck.length + gameState.bot.cards.length;
     }
 
     function checkWin() {
+        // ROUND WIN = Foundation Empty
         if(gameState.player.cards.length === 0) endRound('player');
         if(gameState.bot.cards.length === 0) endRound('bot');
     }
@@ -376,54 +362,38 @@ document.addEventListener('DOMContentLoaded', () => {
         if(gameState.gameOver) return;
         gameState.gameOver = true;
         
-        let pDeckNext = [], bDeckNext = [];
-        
-        // --- BORROWING VICTORY CHECK ---
-        if(winner === 'player' && gameState.player.borrowing) {
-            endMatch("YOU WIN THE MATCH!"); return;
-        }
-        if(winner === 'bot' && gameState.bot.borrowing) {
-            endMatch("BOT WINS THE MATCH!"); return;
+        let winnerDeck = winner === 'player' ? gameState.player.deck : gameState.bot.deck;
+
+        // MATCH VICTORY CHECK: Foundation Cleared AND No Cards in Draw Deck
+        if(winnerDeck.length === 0) {
+            endMatch(winner === 'player' ? "YOU CLEARED ALL CARDS! MATCH WIN!" : "BOT CLEARED ALL CARDS! MATCH LOST!");
+            return;
         }
 
-        // --- NORMAL ROUND RECALCULATION ---
-        // Collect everything on board
+        // ROUND VICTORY: Winner keeps only their Draw Deck
         let centerCards = [...gameState.centerStack];
         if(gameState.centerLeft) centerCards.push(gameState.centerLeft);
         if(gameState.centerRight) centerCards.push(gameState.centerRight);
-        // Collect loser's foundation
-        let loserFoundation = winner === 'player' ? gameState.bot.cards : gameState.player.cards;
         
-        // LOGIC: Winner keeps their draw deck. Loser gets EVERYTHING else.
+        let loserFound = winner === 'player' ? gameState.bot.cards : gameState.player.cards;
+        let loserDraw = winner === 'player' ? gameState.bot.deck : gameState.player.deck;
+
+        let pDeckNext, bDeckNext;
+
         if(winner === 'player') {
-            // Player won. 
-            if(gameState.bot.borrowing) {
-                // Special case: Player won, but Bot was borrowing from Player.
-                // Player gets BOTH draw decks back (as they owned them).
-                // Bot gets foundation + center.
-                pDeckNext = [...gameState.player.deck, ...gameState.bot.deck]; 
-                bDeckNext = [...loserFoundation, ...centerCards];
-            } else {
-                // Normal
-                pDeckNext = [...gameState.player.deck];
-                bDeckNext = [...gameState.bot.deck, ...loserFoundation, ...centerCards];
-            }
+            pDeckNext = [...gameState.player.deck]; 
+            bDeckNext = [...loserFound, ...loserDraw, ...centerCards]; 
             els.overlayTitle.innerText = "ROUND WON!";
-            els.overlayDesc.innerText = "You keep your deck. Bot takes the pile.";
+            els.overlayDesc.innerText = `You keep ${pDeckNext.length} cards. Bot takes the rest.`;
         } else {
-            // Bot won.
-            if(gameState.player.borrowing) {
-                bDeckNext = [...gameState.bot.deck, ...gameState.player.deck];
-                pDeckNext = [...loserFoundation, ...centerCards];
-            } else {
-                bDeckNext = [...gameState.bot.deck];
-                pDeckNext = [...gameState.player.deck, ...loserFoundation, ...centerCards];
-            }
+            bDeckNext = [...gameState.bot.deck];
+            pDeckNext = [...loserFound, ...loserDraw, ...centerCards];
             els.overlayTitle.innerText = "ROUND LOST";
-            els.overlayDesc.innerText = "Bot keeps its deck. You take the pile.";
+            els.overlayDesc.innerText = `Bot keeps ${bDeckNext.length} cards. You take the pile.`;
         }
 
         els.overlay.classList.remove('hidden');
+        els.btnAction.innerText = "NEXT ROUND";
         els.btnAction.onclick = () => {
             startGameWithDecks(pDeckNext, bDeckNext);
         };
