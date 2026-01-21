@@ -3,70 +3,113 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Game Setup - Slaps.GG</title>
+    <title>Match Setup - Slaps.GG</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body class="setup-body">
 
-    <div class="setup-container">
-        <a href="index.html" class="back-link"><i class="fa-solid fa-arrow-left"></i> Back to Menu</a>
+    <div class="bg-gradient"></div>
 
-        <h1>Configure Bot Match</h1>
-        
-        <div class="bot-preview">
-            <i class="fa-solid fa-robot" id="bot-icon"></i>
-            <h2 id="difficulty-text">Difficulty: 5</h2>
+    <div class="setup-card">
+        <div class="setup-header">
+            <a href="index.html" class="back-btn"><i class="fa-solid fa-chevron-left"></i></a>
+            <h2>MATCH CONFIGURATION</h2>
         </div>
 
-        <div class="slider-container">
-            <span>Easy (1)</span>
-            <input type="range" min="1" max="10" value="5" class="slider" id="difficulty-slider">
-            <span>Master (10)</span>
+        <div class="bot-profile-container">
+            <div class="avatar-ring" id="avatar-ring">
+                <i class="fa-solid fa-robot" id="bot-icon"></i>
+            </div>
+            <h1 id="difficulty-title">ROOKIE</h1>
+            <p class="bot-desc" id="difficulty-desc">Slow reaction time. Perfect for learning the ropes.</p>
         </div>
 
-        <p class="description" id="difficulty-desc">Balanced speed and strategy.</p>
+        <div class="controls-area">
+            <div class="slider-header">
+                <span>DIFFICULTY LEVEL</span>
+                <span id="level-display" class="level-badge">LVL 1</span>
+            </div>
+            
+            <div class="custom-slider-wrapper">
+                <input type="range" min="1" max="10" value="1" class="pro-slider" id="difficulty-slider">
+                <div class="slider-track-fill" id="track-fill"></div>
+            </div>
 
-        <a href="game.html" class="btn-start" id="start-btn">START MATCH</a>
+            <div class="slider-labels">
+                <span>Easy</span>
+                <span>Master</span>
+            </div>
+        </div>
+
+        <a href="game.html" class="btn-launch" id="start-btn">
+            INITIALIZE MATCH <i class="fa-solid fa-play"></i>
+        </a>
     </div>
 
     <script>
-        // Simple script to update the text when slider moves
         const slider = document.getElementById('difficulty-slider');
-        const text = document.getElementById('difficulty-text');
+        const levelDisplay = document.getElementById('level-display');
+        const title = document.getElementById('difficulty-title');
         const desc = document.getElementById('difficulty-desc');
         const botIcon = document.getElementById('bot-icon');
-        const startBtn = document.getElementById('start-btn');
+        const avatarRing = document.getElementById('avatar-ring');
+        const trackFill = document.getElementById('track-fill');
 
-        // Descriptions for levels
-        const descriptions = {
-            low: "Slow reactions. Good for learning.",
-            mid: "Balanced speed and strategy.",
-            high: "Superhuman reflexes. Good luck."
+        const titles = {
+            low: ["ROOKIE", "NOVICE", "AMATEUR"],
+            mid: ["INTERMEDIATE", "GOOD", "ADVANCED"],
+            high: ["PROVEN", "MASTER", "UNBEATABLE"]
         };
 
-        slider.oninput = function() {
-            let val = this.value;
-            text.innerText = "Difficulty: " + val;
-            
-            // Save difficulty to browser memory so the game knows later
+        const descriptions = {
+            low: "Slow reaction time. Perfect for learning the ropes.",
+            mid: "Balanced gameplay. Expect a fair fight.",
+            high: "Inhuman reflexes. Mistakes will be punished."
+        };
+
+        // Function to update the UI
+        function updateUI(val) {
+            // Update Number
+            levelDisplay.innerText = "LVL " + val;
+
+            // Update Track Fill (Visual Progress Bar)
+            let percentage = ((val - 1) / 9) * 100;
+            trackFill.style.width = percentage + "%";
+
+            // Save to memory
             localStorage.setItem('slapsDifficulty', val);
 
-            // Update text and color based on value
+            // Logic for Colors and Text
             if (val <= 3) {
+                // EASY (Green Theme)
+                title.innerText = titles.low[val-1];
                 desc.innerText = descriptions.low;
-                botIcon.style.color = "#81b64c"; // Green
+                setColorTheme("#81b64c", "0 0 20px rgba(129, 182, 76, 0.4)");
             } else if (val <= 7) {
+                // MID (Orange Theme)
+                title.innerText = titles.mid[val-4];
                 desc.innerText = descriptions.mid;
-                botIcon.style.color = "#e6912c"; // Orange
+                setColorTheme("#e6912c", "0 0 25px rgba(230, 145, 44, 0.5)");
             } else {
+                // HARD (Red Theme)
+                title.innerText = titles.high[val-8];
                 desc.innerText = descriptions.high;
-                botIcon.style.color = "#cc3333"; // Red
+                setColorTheme("#ff4d4d", "0 0 35px rgba(255, 77, 77, 0.7)");
             }
         }
-        
-        // Initialize the save
-        localStorage.setItem('slapsDifficulty', 5);
+
+        function setColorTheme(color, shadow) {
+            botIcon.style.color = color;
+            avatarRing.style.borderColor = color;
+            avatarRing.style.boxShadow = shadow;
+            levelDisplay.style.backgroundColor = color;
+            trackFill.style.backgroundColor = color;
+        }
+
+        // Initialize
+        slider.oninput = function() { updateUI(this.value); };
+        updateUI(1); // Start at 1
     </script>
 </body>
 </html>
