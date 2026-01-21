@@ -26,7 +26,7 @@
         <div class="overlay-content">
             <h1 id="overlay-title">VICTORY!</h1>
             <p id="overlay-desc">Board Cleared.</p>
-            <button onclick="location.reload()" class="btn-restart">REMATCH</button>
+            <button id="btn-action" class="btn-restart">NEXT ROUND</button>
             <a href="index.html" class="btn-quit">MENU</a>
         </div>
     </div>
@@ -45,6 +45,7 @@
                     <span class="deck-text" id="bot-deck-text">WAIT</span>
                 </div>
                 <div class="label-text rotated">Bot Deck</div>
+                <div class="borrow-label" id="bot-borrow-label">BORROWED</div>
             </div>
 
             <div class="pile-group"><div class="card-slot center-slot" id="center-left"></div></div>
@@ -56,6 +57,7 @@
                     <span class="deck-text" id="player-deck-text">Start</span>
                 </div>
                 <div class="label-text">Your Deck</div>
+                <div class="borrow-label" id="player-borrow-label">BORROWED</div>
             </div>
 
         </div>
