@@ -11,35 +11,23 @@
 
     <div class="scoreboard">
         <div class="score-row">
-            <span class="score-label">ROUNDS WON</span>
-            <div class="score-values">
-                <span class="p-score">YOU: <b id="p-rounds">0</b></span>
-                <span class="b-score">AI: <b id="b-rounds">0</b></span>
-            </div>
+            <span class="score-label">ROUNDS</span>
+            <div class="score-values"><span class="p-score">YOU: <b id="p-rounds">0</b></span><span class="b-score">AI: <b id="b-rounds">0</b></span></div>
         </div>
         <div class="score-row">
-            <span class="score-label">SLAPS WON</span>
-            <div class="score-values">
-                <span class="p-score">YOU: <b id="p-slaps">0</b></span>
-                <span class="b-score">AI: <b id="b-slaps">0</b></span>
-            </div>
+            <span class="score-label">SLAPS</span>
+            <div class="score-values"><span class="p-score">YOU: <b id="p-slaps">0</b></span><span class="b-score">AI: <b id="b-slaps">0</b></span></div>
         </div>
     </div>
 
     <div class="stats-widget">
-        <div class="stat-box">
-            <span>AI</span>
-            <h2 id="bot-count">26</h2>
-        </div>
-        <div class="stat-box">
-            <span>YOU</span>
-            <h2 id="player-count">26</h2>
-        </div>
+        <div class="stat-box"><span>AI</span><h2 id="bot-count">26</h2></div>
+        <div class="stat-box"><span>YOU</span><h2 id="player-count">26</h2></div>
         <div class="divider"></div>
         <a href="index.html" class="btn-quit-small">QUIT</a>
     </div>
 
-    <div id="slap-message" class="slap-msg hidden">PLAYER SLAPS WON!</div>
+    <div id="slap-alert">PLAYER SLAPS WON!</div>
 
     <div id="game-overlay" class="overlay hidden">
         <div class="overlay-content">
@@ -51,36 +39,22 @@
     </div>
 
     <div class="table-surface">
-        <div class="zone top-zone">
-            <div class="foundation-box" id="bot-boundary"></div>
-        </div>
-
+        <div class="zone top-zone"><div class="foundation-box" id="bot-boundary"></div></div>
         <div class="zone middle-zone">
             <div class="pile-group">
-                <div class="card-slot deck-slot" id="bot-draw-deck">
-                    <div class="card-back"></div>
-                    <span class="deck-text" id="bot-deck-text"></span>
-                </div>
+                <div class="card-slot deck-slot" id="bot-draw-deck"><div class="card-back"></div><span class="deck-text" id="bot-deck-text"></span></div>
                 <div class="label-text">AI Deck</div>
                 <div class="borrow-label" id="bot-borrow-label">BORROWED</div>
             </div>
-
             <div class="pile-group"><div class="card-slot center-slot" id="center-left"></div></div>
             <div class="pile-group"><div class="card-slot center-slot" id="center-right"></div></div>
-
             <div class="pile-group">
-                <div class="card-slot deck-slot clickable-deck" id="player-draw-deck">
-                    <div class="card-back"></div>
-                    <span class="deck-text" id="player-deck-text">Start</span>
-                </div>
+                <div class="card-slot deck-slot clickable-deck" id="player-draw-deck"><div class="card-back"></div><span class="deck-text" id="player-deck-text">Start</span></div>
                 <div class="label-text">Your Deck</div>
                 <div class="borrow-label" id="player-borrow-label">BORROWED</div>
             </div>
         </div>
-
-        <div class="zone bottom-zone">
-            <div class="foundation-box" id="player-boundary"></div>
-        </div>
+        <div class="zone bottom-zone"><div class="foundation-box" id="player-boundary"></div></div>
     </div>
     <script src="game.js"></script>
 </body>
