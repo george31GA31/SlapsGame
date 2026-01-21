@@ -1,16 +1,13 @@
 document.addEventListener('DOMContentLoaded', () => {
     
-    // === CONFIGURATION ===
+    // CONFIG
     const SUITS = ["♠", "♥", "♣", "♦"];
     const VALUES = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
     let difficulty = parseInt(localStorage.getItem('slapsDifficulty')) || 5;
-
-    // AI SPEED: Level 1 (~6s) -> Level 10 (~0.5s)
     let botSpeedBase = 6500 - (difficulty * 600); 
     const getBotDelay = () => Math.max(500, botSpeedBase + (Math.random() * 500));
     let globalZ = 100;
 
-    // GAME STATE
     let gameState = {
         player: { deck: [], cards: [], borrowing: false },
         bot: { deck: [], cards: [], borrowing: false },
@@ -21,7 +18,6 @@ document.addEventListener('DOMContentLoaded', () => {
         isCountDown: false
     };
 
-    // DOM ELEMENTS
     const els = {
         pBoundary: document.getElementById('player-boundary'),
         bBoundary: document.getElementById('bot-boundary'),
@@ -58,7 +54,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // === ANIMATION ENGINE ===
     function flyCard(cardEl, targetEl, callback) {
         if(!cardEl || !targetEl) { callback(); return; }
         const startRect = cardEl.getBoundingClientRect();
@@ -75,19 +70,18 @@ document.addEventListener('DOMContentLoaded', () => {
         setTimeout(() => { clone.remove(); callback(); }, 600);
     }
 
-    // === GAME START LOGIC ===
+    // === GAME START ===
     function init() {
-        // First game: 26 vs 26
         startRoundWithCounts(26, 26);
     }
 
     function startRoundWithCounts(pCount, bCount) {
-        // 1. GENERATE FRESH DECK & SPLIT
-        let fullDeck = createDeck(); // 52 cards sorted randomly
+        // GENERATE & SPLIT
+        let fullDeck = createDeck();
         let pDeck = fullDeck.slice(0, pCount);
-        let bDeck = fullDeck.slice(pCount, 52); // Ensure exactly 52 total
+        let bDeck = fullDeck.slice(pCount, 52);
 
-        // 2. RESET STATE
+        // RESET
         gameState.player.cards = []; gameState.bot.cards = [];
         gameState.centerStack = []; gameState.centerLeft = null; gameState.centerRight = null;
         gameState.gameOver = false; gameState.playerPass = false; gameState.botPass = false;
@@ -99,8 +93,7 @@ document.addEventListener('DOMContentLoaded', () => {
         els.bBorrow.classList.remove('borrow-active');
         document.querySelectorAll('.slot').forEach(s => s.innerHTML = '');
 
-        // 3. SHORTAGE CHECK (Borrowing)
-        // If < 10 cards, steal half from opponent
+        // BORROWING CHECK (Pre-Round)
         if(pDeck.length < 10) {
             let loan = Math.floor(bDeck.length / 2);
             pDeck.push(...bDeck.splice(0, loan));
@@ -114,8 +107,7 @@ document.addEventListener('DOMContentLoaded', () => {
             els.bBorrow.classList.add('borrow-active');
         }
 
-        // 4. DEAL FOUNDATIONS (10 Cards)
-        // Note: If they had < 10 even after borrowing (extremely rare/impossible with 52 cards), we deal what's left.
+        // DEAL FOUNDATIONS
         let pFoundSize = Math.min(10, pDeck.length);
         let bFoundSize = Math.min(10, bDeck.length);
 
@@ -125,13 +117,12 @@ document.addEventListener('DOMContentLoaded', () => {
         gameState.player.deck = pDeck;
         gameState.bot.deck = bDeck;
 
-        // 5. START LOOP
         renderAll();
         runBotCycle();
         setInterval(updateStats, 200);
         setInterval(checkBotStalemate, 800);
         
-        // 6. MID-ROUND SHORTAGE MONITOR
+        // MID-ROUND SHORTAGE
         setInterval(() => {
             if(gameState.gameOver) return;
             if(gameState.player.deck.length === 0 && !gameState.player.borrowing && gameState.bot.deck.length > 1) {
@@ -152,20 +143,34 @@ document.addEventListener('DOMContentLoaded', () => {
     function createDeck() { return SUITS.flatMap(s => VALUES.map(v => new Card(s, v))).sort(() => Math.random() - 0.5); }
 
     function spawnFoundation(cards, owner) {
-        let xOffsets = [50, 250, 450, 650]; 
-        // Logic to distribute uneven amounts if < 10
+        // 1. Group into columns first to ensure we know the top card
+        let columns = [[], [], [], []];
         let pileSizes = [4, 3, 2, 1];
         let cardIdx = 0;
 
         for(let col=0; col<4; col++) {
             for(let row=0; row<pileSizes[col]; row++) {
-                if(cardIdx >= cards.length) break;
-                let c = cards[cardIdx++];
-                c.owner = owner; c.col = col; c.x = xOffsets[col]; c.y = 20 + (row * 30);
-                if(row === pileSizes[col]-1) c.isFaceUp = true;
-                if(owner === 'player') gameState.player.cards.push(c); else gameState.bot.cards.push(c);
+                if(cardIdx < cards.length) {
+                    columns[col].push(cards[cardIdx++]);
+                }
             }
         }
+
+        // 2. Set Face Up logic (Top of each column is face up)
+        let xOffsets = [50, 250, 450, 650];
+        columns.forEach((colCards, colIndex) => {
+            colCards.forEach((c, index) => {
+                c.owner = owner;
+                c.col = colIndex;
+                c.x = xOffsets[colIndex];
+                c.y = 20 + (index * 30);
+                // Last card in this column is Face Up
+                c.isFaceUp = (index === colCards.length - 1);
+                
+                if(owner === 'player') gameState.player.cards.push(c); 
+                else gameState.bot.cards.push(c);
+            });
+        });
     }
 
     function renderAll() {
@@ -250,6 +255,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function playCard(card, side) {
         gameState.player.cards = gameState.player.cards.filter(c => c.id !== card.id);
+        if(side === 'left' && gameState.centerLeft) gameState.centerStack.push(gameState.centerLeft);
+        if(side === 'right' && gameState.centerRight) gameState.centerStack.push(gameState.centerRight);
         if(side === 'left') gameState.centerLeft = card; else gameState.centerRight = card;
         resetStalemate(); 
         renderAll(); checkWin();
@@ -296,7 +303,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function executeReveal() {
-        // Logic for borrowing reveal (one person reveals both if borrowing)
+        if(gameState.centerLeft) gameState.centerStack.push(gameState.centerLeft);
+        if(gameState.centerRight) gameState.centerStack.push(gameState.centerRight);
+
         if(gameState.player.borrowing) {
             if(gameState.bot.deck.length > 1) {
                 gameState.centerLeft = gameState.bot.deck.pop();
@@ -321,7 +330,7 @@ document.addEventListener('DOMContentLoaded', () => {
         gameState.isCountDown = false; gameState.playerPass = false; gameState.botPass = false;
     }
 
-    // === BOT LOGIC ===
+    // === BOT BRAIN ===
     function runBotCycle() {
         if(gameState.gameOver) return;
         setTimeout(() => {
@@ -369,58 +378,43 @@ document.addEventListener('DOMContentLoaded', () => {
         els.bCount.innerText = gameState.bot.deck.length + gameState.bot.cards.length;
     }
 
-    // === WIN CONDITION LOGIC ===
     function checkWin() {
-        // A player wins the ROUND if they have 0 cards on the table
         if(gameState.player.cards.length === 0) endRound('player');
         if(gameState.bot.cards.length === 0) endRound('bot');
     }
 
     function endRound(winner) {
         if(gameState.gameOver) return;
+        gameState.gameOver = true;
         
-        let pDeckNextCount, bDeckNextCount;
+        // 1. CALCULATE NEXT COUNTS
         let winnerRemaining = (winner === 'player') ? gameState.player.deck.length : gameState.bot.deck.length;
 
-        // 1. MATCH VICTORY CHECK (0 cards total)
+        // 2. CHECK MATCH WIN (0 CARDS TOTAL)
         if (winnerRemaining === 0) {
-            gameState.gameOver = true;
             endMatch(winner === 'player' ? "YOU WIN THE MATCH!" : "BOT WINS THE MATCH!");
             return;
         }
 
-        // 2. BORROWING VICTORY (Instant Match Win)
-        if (winner === 'player' && gameState.player.borrowing) {
-            gameState.gameOver = true; endMatch("YOU WIN THE MATCH!"); return;
-        }
-        if (winner === 'bot' && gameState.bot.borrowing) {
-            gameState.gameOver = true; endMatch("BOT WINS THE MATCH!"); return;
+        // 3. CHECK BORROW WIN
+        if ((winner === 'player' && gameState.player.borrowing) || (winner === 'bot' && gameState.bot.borrowing)) {
+            endMatch(winner === 'player' ? "YOU WIN THE MATCH!" : "BOT WINS THE MATCH!");
+            return;
         }
 
-        // 3. ROUND VICTORY (Recalculate Decks)
-        gameState.gameOver = true; // Pause game logic
-        
-        // Winner starts with exactly what they have left in Draw Deck
-        let winnerNextCount = winnerRemaining;
-        let loserNextCount = 52 - winnerNextCount;
+        // 4. ROUND WIN -> NEXT ROUND
+        let nextWinnerCount = winnerRemaining;
+        let nextLoserCount = 52 - winnerRemaining;
 
-        if (winner === 'player') {
-            pDeckNextCount = winnerNextCount;
-            bDeckNextCount = loserNextCount;
-            els.overlayTitle.innerText = "ROUND WON!";
-            els.overlayDesc.innerText = `You keep ${pDeckNextCount} cards. Bot takes the rest.`;
-        } else {
-            bDeckNextCount = winnerNextCount;
-            pDeckNextCount = loserNextCount;
-            els.overlayTitle.innerText = "ROUND LOST";
-            els.overlayDesc.innerText = `Bot keeps ${bDeckNextCount} cards. You take the pile.`;
-        }
+        let pNext = (winner === 'player') ? nextWinnerCount : nextLoserCount;
+        let bNext = (winner === 'bot') ? nextWinnerCount : nextLoserCount;
 
+        els.overlayTitle.innerText = winner === 'player' ? "ROUND WON!" : "ROUND LOST";
+        els.overlayDesc.innerText = `Next Round: You ${pNext} - Bot ${bNext}`;
         els.overlay.classList.remove('hidden');
         els.btnAction.innerText = "NEXT ROUND";
         els.btnAction.onclick = () => {
-            // RESTART WITH CALCULATED COUNTS
-            startRoundWithCounts(pDeckNextCount, bDeckNextCount);
+            startRoundWithCounts(pNext, bNext);
         };
     }
 
