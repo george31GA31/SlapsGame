@@ -12,87 +12,85 @@
     <div class="bg-gradient"></div>
 
     <div class="setup-card">
-        
-        <div class="top-navigation">
-            <a href="index.html" class="back-link"><i class="fa-solid fa-arrow-left"></i> BACK</a>
+        <div class="setup-header">
+            <a href="index.html" class="back-btn"><i class="fa-solid fa-chevron-left"></i></a>
+            <h2>MATCH CONFIGURATION</h2>
         </div>
 
-        <div class="central-avatar">
-            <div class="avatar-glow" id="avatar-glow">
+        <div class="bot-profile-container">
+            <div class="avatar-ring" id="avatar-ring">
                 <i class="fa-solid fa-robot" id="bot-icon"></i>
             </div>
-        </div>
-
-        <div class="info-display">
             <h1 id="difficulty-title">ROOKIE</h1>
-            <div class="difficulty-level-box" id="level-box">LEVEL 1</div>
-            <p id="difficulty-desc">Slow reaction time. Good for learning.</p>
+            <p class="bot-desc" id="difficulty-desc">Slow reaction time. Perfect for learning.</p>
         </div>
 
-        <div class="slider-section">
-            <input type="range" min="1" max="10" value="5" class="big-slider" id="difficulty-slider">
+        <div class="controls-area">
+            <div class="slider-header">
+                <span>DIFFICULTY LEVEL</span>
+                <span id="level-display" class="level-badge">LVL 1</span>
+            </div>
             
+            <div class="custom-slider-wrapper">
+                <input type="range" min="1" max="10" value="5" class="pro-slider" id="difficulty-slider">
+                <div class="slider-track-fill" id="track-fill"></div>
+            </div>
+
             <div class="slider-labels">
-                <span>EASY</span>
-                <span>MASTER</span>
+                <span>Easy</span>
+                <span>Master</span>
             </div>
         </div>
 
-        <a href="game.html" class="btn-mega-start" id="start-btn">
-            START MATCH
+        <a href="game.html" class="btn-launch" id="start-btn">
+            INITIALIZE MATCH <i class="fa-solid fa-play"></i>
         </a>
-
     </div>
 
     <script>
         const slider = document.getElementById('difficulty-slider');
+        const levelDisplay = document.getElementById('level-display');
         const title = document.getElementById('difficulty-title');
         const desc = document.getElementById('difficulty-desc');
-        const levelBox = document.getElementById('level-box');
         const botIcon = document.getElementById('bot-icon');
-        const avatarGlow = document.getElementById('avatar-glow');
-        const startBtn = document.getElementById('start-btn');
+        const avatarRing = document.getElementById('avatar-ring');
+        const trackFill = document.getElementById('track-fill');
 
-        // DIRECT MAPPING: 10 Levels = 10 Names. No math errors possible.
-        // Array index 0 matches Slider Value 1.
         const difficultyData = [
-            { name: "ROOKIE",       color: "#81b64c", desc: "Very slow. Good for learning mechanics." }, // Level 1
-            { name: "NOVICE",       color: "#81b64c", desc: "Still learning. Reacts slowly." },          // Level 2
-            { name: "AMATEUR",      color: "#81b64c", desc: "Knows the rules, but hesitates." },         // Level 3
-            { name: "INTERMEDIATE", color: "#e6912c", desc: "A standard opponent. Pays attention." },    // Level 4
-            { name: "SKILLED",      color: "#e6912c", desc: "Reacts quickly to obvious moves." },        // Level 5
-            { name: "GOOD",         color: "#e6912c", desc: "Makes very few mistakes." },                // Level 6
-            { name: "ADVANCED",     color: "#e6912c", desc: "Competitive reaction times." },             // Level 7
-            { name: "PROVEN",       color: "#cc3333", desc: "Fast. Very fast." },                        // Level 8
-            { name: "MASTER",       color: "#cc3333", desc: "Near instant reactions." },                 // Level 9
-            { name: "UNBEATABLE",   color: "#cc3333", desc: "Good luck. You will need it." }             // Level 10
+            { name: "ROOKIE",       color: "#81b64c", desc: "Very slow. Good for learning mechanics." }, 
+            { name: "NOVICE",       color: "#81b64c", desc: "Still learning. Reacts slowly." },          
+            { name: "AMATEUR",      color: "#81b64c", desc: "Knows the rules, but hesitates." },         
+            { name: "INTERMEDIATE", color: "#e6912c", desc: "A standard opponent. Pays attention." },    
+            { name: "SKILLED",      color: "#e6912c", desc: "Reacts quickly to obvious moves." },        
+            { name: "GOOD",         color: "#e6912c", desc: "Makes very few mistakes." },                
+            { name: "ADVANCED",     color: "#e6912c", desc: "Competitive reaction times." },             
+            { name: "PROVEN",       color: "#cc3333", desc: "Fast. Very fast." },                        
+            { name: "MASTER",       color: "#cc3333", desc: "Near instant reactions." },                 
+            { name: "UNBEATABLE",   color: "#cc3333", desc: "Good luck. You will need it." }             
         ];
 
         function updateUI(val) {
-            // Get data for this level (subtract 1 because arrays start at 0)
             const data = difficultyData[val - 1];
-
-            // Update Text
+            
+            // Text Updates
             title.innerText = data.name;
             desc.innerText = data.desc;
-            levelBox.innerText = "LEVEL " + val;
+            levelDisplay.innerText = "LVL " + val;
             
-            // Update Colors
-            title.style.color = data.color;
-            levelBox.style.backgroundColor = data.color;
+            // Visual Updates
+            let percentage = ((val - 1) / 9) * 100;
+            trackFill.style.width = percentage + "%";
+            
             botIcon.style.color = data.color;
-            
-            // Update Glow Intensity based on level
-            avatarGlow.style.boxShadow = `0 0 ${val * 5}px ${data.color}`;
-            avatarGlow.style.borderColor = data.color;
+            avatarRing.style.borderColor = data.color;
+            avatarRing.style.boxShadow = `0 0 15px ${data.color}40`; // 40 is hex for transparency
+            levelDisplay.style.backgroundColor = data.color;
+            trackFill.style.backgroundColor = data.color;
 
-            // Save for next page
             localStorage.setItem('slapsDifficulty', val);
         }
 
         slider.oninput = function() { updateUI(this.value); };
-        
-        // Initialize at Level 5
         updateUI(5);
     </script>
 </body>
