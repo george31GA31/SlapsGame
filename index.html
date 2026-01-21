@@ -571,48 +571,58 @@
             document.getElementById('stat-ai-s').innerText = stats.aiSlaps;
         }
 
-        // --- NEW SETUP ROUND LOGIC (DYNAMIC DEALING) ---
-        function setupRound() {
-            const p1Total = p1Inventory.length;
-            const aiTotal = aiInventory.length;
+        // --- FIXED SETUP ROUND (Correct 0 Cards = Win Logic) ---
+function setupRound() {
+    // 1. Calculate Totals (Inventory holds ALL cards at this specific moment)
+    const p1Total = p1Inventory.length;
+    const aiTotal = aiInventory.length;
 
-            if (p1Total === 0 && gameActive) return showVictory("OPPONENT WINS THE MATCH!");
-            if (aiTotal === 0 && gameActive) return showVictory("YOU WIN THE MATCH!");
+    // 2. CHECK VICTORY CONDITIONS
+    // If you have 0 cards left to deal, you have shed everything. You Win.
+    if (p1Total === 0 && gameActive) return showVictory("You Win");
+    
+    // If AI has 0 cards left, AI Wins.
+    if (aiTotal === 0 && gameActive) return showVictory("AI Wins");
 
-            // Show Round Toast
-            const t = document.getElementById('round-toast');
-            t.innerText = `YOU: ${p1Total} | OPP: ${aiTotal}`;
-            t.style.display = 'block';
-            setTimeout(() => { t.style.display = 'none'; }, 3000);
+    // 3. UI Toast to show progress
+    const t = document.getElementById('round-toast');
+    t.innerText = `YOU: ${p1Total} | OPP: ${aiTotal}`;
+    t.style.display = 'block';
+    setTimeout(() => { t.style.display = 'none'; }, 3000);
 
-            document.querySelectorAll('.foundation-area, .slot').forEach(el => el.innerHTML = '');
-            centerStack = [];
-            targetRanks = { secondary: null, active: null };
-            slapLocked = false; sequenceLocked = false;
-            p1Pass = false; aiPass = false;
+    // 4. Clean Board
+    document.querySelectorAll('.foundation-area, .slot').forEach(el => el.innerHTML = '');
+    centerStack = [];
+    targetRanks = { secondary: null, active: null };
+    slapLocked = false; sequenceLocked = false;
+    p1Pass = false; aiPass = false;
 
-            const p1DealCount = Math.min(10, p1Inventory.length);
-            const p1FCards = p1Inventory.splice(0, p1DealCount);
-            p1Draw = [...p1Inventory]; 
-            p1Inventory = []; 
+    // 5. Deal Player 1
+    // Deal up to 10 to the board.
+    const p1DealCount = Math.min(10, p1Inventory.length);
+    const p1FCards = p1Inventory.splice(0, p1DealCount);
+    p1Draw = [...p1Inventory]; // Remainder goes to Draw Deck
+    p1Inventory = []; // Clear inventory for play phase
 
-            const aiDealCount = Math.min(10, aiInventory.length);
-            const aiFCards = aiInventory.splice(0, aiDealCount);
-            aiDraw = [...aiInventory]; 
-            aiInventory = [];
+    // 6. Deal AI
+    const aiDealCount = Math.min(10, aiInventory.length);
+    const aiFCards = aiInventory.splice(0, aiDealCount);
+    aiDraw = [...aiInventory]; 
+    aiInventory = [];
 
-            performShortageCheck();
-            layout(p1FCards, document.getElementById('player-boundary'), 'player');
-            layout(aiFCards, document.getElementById('ai-boundary'), 'ai');
-            updateDisplay();
-            resetRevealButton();
+    // 7. Shortage Check & Render
+    performShortageCheck();
+    layout(p1FCards, document.getElementById('player-boundary'), 'player');
+    layout(aiFCards, document.getElementById('ai-boundary'), 'ai');
+    updateDisplay();
+    resetRevealButton();
 
-            if (!isOnline) {
-                setTimeout(() => { triggerAiPass(); }, 1500);
-                startAiBrain();
-            }
-        }
-
+    // 8. Start AI
+    if (!isOnline) {
+        setTimeout(() => { triggerAiPass(); }, 1500);
+        startAiBrain();
+    }
+}
         function issueYellowCard() {
             p1Yellows++;
             const alertBox = document.getElementById('slap-alert');
