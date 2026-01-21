@@ -83,15 +83,16 @@
             
             botIcon.style.color = data.color;
             avatarRing.style.borderColor = data.color;
-            avatarRing.style.boxShadow = `0 0 15px ${data.color}40`; // 40 is hex for transparency
+            avatarRing.style.boxShadow = `0 0 15px ${data.color}40`; 
             levelDisplay.style.backgroundColor = data.color;
             trackFill.style.backgroundColor = data.color;
 
+            // Save for the Game Page
             localStorage.setItem('slapsDifficulty', val);
         }
 
         slider.oninput = function() { updateUI(this.value); };
-        updateUI(5);
+        updateUI(5); // Default start
     </script>
 </body>
 </html>
