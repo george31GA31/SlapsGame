@@ -71,28 +71,20 @@
 
         function updateUI(val) {
             const data = difficultyData[val - 1];
-            
-            // Text Updates
             title.innerText = data.name;
             desc.innerText = data.desc;
             levelDisplay.innerText = "LVL " + val;
-            
-            // Visual Updates
             let percentage = ((val - 1) / 9) * 100;
             trackFill.style.width = percentage + "%";
-            
             botIcon.style.color = data.color;
             avatarRing.style.borderColor = data.color;
             avatarRing.style.boxShadow = `0 0 15px ${data.color}40`; 
             levelDisplay.style.backgroundColor = data.color;
             trackFill.style.backgroundColor = data.color;
-
-            // Save for the Game Page
             localStorage.setItem('slapsDifficulty', val);
         }
-
         slider.oninput = function() { updateUI(this.value); };
-        updateUI(5); // Default start
+        updateUI(5);
     </script>
 </body>
 </html>
