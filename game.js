@@ -5,12 +5,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const VALUES = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
     let difficulty = parseInt(localStorage.getItem('slapsDifficulty')) || 5;
 
-    // AI SPEED: Level 1 (~8s) -> Level 10 (~0.8s)
+    // AI SPEED: Low levels much slower now
+    // Lvl 1: 8000ms base. Lvl 10: 800ms base.
     let botSpeedBase = 8000 - (difficulty * 720); 
     const getBotDelay = () => Math.max(800, botSpeedBase + (Math.random() * 500));
     let globalZ = 100;
 
-    // GAME STATE (Now tracking borrowedAmount for stats)
     let gameState = {
         player: { deck: [], cards: [], borrowing: false, borrowedAmount: 0 },
         bot: { deck: [], cards: [], borrowing: false, borrowedAmount: 0 },
@@ -82,12 +82,11 @@ document.addEventListener('DOMContentLoaded', () => {
         let pDeck = fullDeck.slice(0, pCount);
         let bDeck = fullDeck.slice(pCount, 52);
 
-        // RESET
         gameState.player.cards = []; gameState.bot.cards = [];
         gameState.centerStack = []; gameState.centerLeft = null; gameState.centerRight = null;
         gameState.gameOver = false; gameState.playerPass = false; gameState.botPass = false;
         gameState.player.borrowing = false; gameState.bot.borrowing = false;
-        gameState.player.borrowedAmount = 0; gameState.bot.borrowedAmount = 0; // Reset counters
+        gameState.player.borrowedAmount = 0; gameState.bot.borrowedAmount = 0;
         
         els.overlay.classList.add('hidden');
         resetStalemateVisuals();
@@ -95,13 +94,13 @@ document.addEventListener('DOMContentLoaded', () => {
         els.bBorrow.classList.remove('borrow-active');
         document.querySelectorAll('.slot').forEach(s => s.innerHTML = '');
 
-        // BORROWING CHECK
+        // BORROW LOGIC
         if(pDeck.length < 10) {
             let loan = Math.floor(bDeck.length / 2);
             let borrowed = bDeck.splice(0, loan);
             pDeck.push(...borrowed);
             gameState.player.borrowing = true;
-            gameState.player.borrowedAmount = loan; // Track borrowed amount
+            gameState.player.borrowedAmount = loan;
             els.pBorrow.classList.add('borrow-active');
         }
         if(bDeck.length < 10) {
@@ -113,7 +112,6 @@ document.addEventListener('DOMContentLoaded', () => {
             els.bBorrow.classList.add('borrow-active');
         }
 
-        // DEAL FOUNDATIONS
         let pFoundSize = Math.min(10, pDeck.length);
         let bFoundSize = Math.min(10, bDeck.length);
 
@@ -127,8 +125,8 @@ document.addEventListener('DOMContentLoaded', () => {
         runBotCycle();
         setInterval(updateStats, 200);
         setInterval(checkBotStalemate, 800);
+        setInterval(checkBotSort, 600); // Dedicated sorting loop
         
-        // MID-ROUND SHORTAGE MONITOR
         setInterval(() => {
             if(gameState.gameOver) return;
             if(gameState.player.deck.length === 0 && !gameState.player.borrowing && gameState.bot.deck.length > 1) {
@@ -156,19 +154,17 @@ document.addEventListener('DOMContentLoaded', () => {
         let columns = [[], [], [], []];
         let pileSizes = [4, 3, 2, 1];
         let cardIdx = 0;
-
         for(let col=0; col<4; col++) {
             for(let row=0; row<pileSizes[col]; row++) {
                 if(cardIdx < cards.length) columns[col].push(cards[cardIdx++]);
             }
         }
-
         let xOffsets = [50, 250, 450, 650];
         columns.forEach((colCards, colIndex) => {
             colCards.forEach((c, index) => {
                 c.owner = owner; c.col = colIndex;
                 c.x = xOffsets[colIndex]; c.y = 20 + (index * 30);
-                c.isFaceUp = (index === colCards.length - 1); // Only top is face up
+                c.isFaceUp = (index === colCards.length - 1); 
                 if(owner === 'player') gameState.player.cards.push(c); else gameState.bot.cards.push(c);
             });
         });
@@ -258,11 +254,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if(side === 'left' && gameState.centerLeft) gameState.centerStack.push(gameState.centerLeft);
         if(side === 'right' && gameState.centerRight) gameState.centerStack.push(gameState.centerRight);
         if(side === 'left') gameState.centerLeft = card; else gameState.centerRight = card;
-        resetStalemate(); 
-        renderAll(); checkWin();
+        resetStalemate(); renderAll(); checkWin();
     }
 
-    // === STALEMATE ===
     els.pDeck.addEventListener('click', () => {
         if(gameState.isCountDown || gameState.gameOver) return;
         if(!gameState.playerPass) {
@@ -283,7 +277,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if(!bMoves || isStart) {
             if(!gameState.botPass) {
                 gameState.botPass = true; 
-                // AI "Poker Face": Don't add .waiting class
+                // NO CSS CLASS ADDED FOR BOT (Poker Face)
                 if(gameState.playerPass) startCountdown();
             }
         } else {
@@ -307,11 +301,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if(gameState.centerLeft) gameState.centerStack.push(gameState.centerLeft);
         if(gameState.centerRight) gameState.centerStack.push(gameState.centerRight);
 
-        // BORROWING CONSUMPTION LOGIC
-        // If playing from deck, does it reduce 'borrowed' count?
-        // Simplification: We just decrement the deck size visually.
-        // But for stats, we need to know if we used a borrowed card.
-        
         let pDeckPop = gameState.player.deck.pop();
         let bDeckPop = gameState.bot.deck.pop();
 
@@ -331,14 +320,53 @@ document.addEventListener('DOMContentLoaded', () => {
         gameState.isCountDown = false; gameState.playerPass = false; gameState.botPass = false;
     }
 
-    // === BOT BRAIN & SORTING ===
+    // === FAST SORTING LOOP (Quickly organize foundation) ===
+    function checkBotSort() {
+        if(gameState.gameOver) return;
+        
+        // 1. FLIP HIDDEN CARDS IMMEDIATELY IF POSSIBLE
+        if(gameState.bot.cards.filter(c => c.isFaceUp).length < 4) {
+            const hidden = gameState.bot.cards.find(c => !c.isFaceUp);
+            if(hidden) { 
+                hidden.isFaceUp = true; 
+                resetStalemate(); 
+                renderZone('bot'); 
+                return; // One action per tick
+            }
+        }
+
+        // 2. ORGANIZE: If I have an empty column AND a messy column, fix it.
+        let columns = [[],[],[],[]];
+        gameState.bot.cards.forEach(c => columns[c.col].push(c));
+        
+        let emptyColIndex = columns.findIndex(c => c.length === 0);
+        if(emptyColIndex !== -1) {
+            // Find a column that has HIDDEN cards (so moving the top card helps)
+            let messyColIndex = columns.findIndex(c => c.length > 1 && c.some(card => !card.isFaceUp));
+            if(messyColIndex !== -1) {
+                // Move top card to empty slot
+                let cardToMove = columns[messyColIndex].sort((a,b)=>a.y-b.y).pop(); // Get top physically
+                if(cardToMove.isFaceUp) {
+                    cardToMove.col = emptyColIndex;
+                    cardToMove.x = [50, 250, 450, 650][emptyColIndex];
+                    cardToMove.y = 20; 
+                    
+                    // Reveal the card underneath immediately
+                    let newTop = columns[messyColIndex][columns[messyColIndex].length-1];
+                    if(newTop && !newTop.isFaceUp) newTop.isFaceUp = true;
+                    
+                    renderAll();
+                }
+            }
+        }
+    }
+
+    // === MAIN BOT LOOP (Playing Cards) ===
     function runBotCycle() {
         if(gameState.gameOver) return;
         setTimeout(() => {
             let move = null;
-            let canMove = !gameState.botPass && !gameState.isCountDown;
-
-            if(canMove) {
+            if(!gameState.botPass && !gameState.isCountDown) {
                 for(let c of gameState.bot.cards.filter(c => c.isFaceUp)) {
                     if(isValid(c, gameState.centerLeft)) { move = {card:c, side:'left'}; break; }
                     if(isValid(c, gameState.centerRight)) { move = {card:c, side:'right'}; break; }
@@ -362,57 +390,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     if(move.side === 'left') gameState.centerLeft = move.card; else gameState.centerRight = move.card;
                     resetStalemate(); 
                     
-                    // FLIP NEW TOP
-                    let colCards = gameState.bot.cards.filter(c => c.col === move.card.col);
-                    if(colCards.length > 0) {
-                        let newTop = colCards[colCards.length - 1]; 
-                        if(!newTop.isFaceUp && gameState.bot.cards.filter(c => c.isFaceUp).length < 4) newTop.isFaceUp = true;
-                    }
+                    // Flip logic handled by Sorting Loop mainly, but double check here
                     renderAll(); checkWin();
                 });
-            } else {
-                // NO MOVES? -> SORT & FLIP
-                if(canMove) {
-                    // 1. FLIP existing hidden if < 4 live
-                    if(gameState.bot.cards.filter(c => c.isFaceUp).length < 4) {
-                        const hidden = gameState.bot.cards.find(c => !c.isFaceUp);
-                        if(hidden) { hidden.isFaceUp = true; resetStalemate(); renderZone('bot'); return; }
-                    }
-
-                    // 2. ORGANIZE: Move hidden stacks to empty columns
-                    // Find empty column
-                    let columns = [[],[],[],[]];
-                    gameState.bot.cards.forEach(c => columns[c.col].push(c));
-                    
-                    let emptyColIndex = columns.findIndex(c => c.length === 0);
-                    if(emptyColIndex !== -1) {
-                        // Find column with hidden cards (size > 1)
-                        let heavyColIndex = columns.findIndex(c => c.length > 1 && c.some(card => !card.isFaceUp));
-                        if(heavyColIndex !== -1) {
-                            // Move top card from heavy to empty
-                            let cardToMove = columns[heavyColIndex].pop(); // Get top
-                            if(cardToMove.isFaceUp) {
-                                cardToMove.col = emptyColIndex;
-                                cardToMove.x = [50, 250, 450, 650][emptyColIndex];
-                                cardToMove.y = 20; // Top of new col
-                                
-                                // Reveal card underneath
-                                let newTop = columns[heavyColIndex][columns[heavyColIndex].length-1];
-                                if(newTop && !newTop.isFaceUp) newTop.isFaceUp = true;
-                                
-                                renderAll();
-                            }
-                        }
-                    }
-                }
             }
             runBotCycle();
         }, getBotDelay());
     }
 
     function updateStats() {
-        // COUNT DISPLAY LOGIC: Total Cards - Borrowed Cards
-        // This ensures borrowing doesn't spike the "Cards Remaining" score
+        // Calculate true "Owned" cards by subtracting borrowed amount
         let pTotal = (gameState.player.deck.length + gameState.player.cards.length) - gameState.player.borrowedAmount;
         let bTotal = (gameState.bot.deck.length + gameState.bot.cards.length) - gameState.bot.borrowedAmount;
         
@@ -429,16 +416,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if(gameState.gameOver) return;
         gameState.gameOver = true;
         
-        // Count cards owned (ignoring borrowed status for calculation, as decks are reset)
-        // Wait, for Round End math: 
-        // Winner keeps their CURRENT deck count.
-        // Loser gets 52 - that count.
-        
         let winnerDeckSize = (winner === 'player') ? gameState.player.deck.length : gameState.bot.deck.length;
         
-        // BORROW VICTORY CHECK
-        // If you borrowed, and your deck is empty (or close), you might have 0 original cards.
-        // Let's use the visual stats as the truth.
         let pStat = parseInt(els.pCount.innerText);
         let bStat = parseInt(els.bCount.innerText);
 
@@ -447,7 +426,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         let pNext, bNext;
         if (winner === 'player') {
-            pNext = winnerDeckSize; // Simply keep what you have
+            pNext = winnerDeckSize; 
             bNext = 52 - pNext;
             els.overlayTitle.innerText = "ROUND WON!";
             els.overlayDesc.innerText = `You keep ${pNext} cards. Bot takes the rest.`;
