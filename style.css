@@ -407,3 +407,205 @@ body {
     background-color: #e6e6e6;
     transform: scale(1.02);
 }
+/* === GAME ARENA STYLES === */
+
+.game-body {
+    background-color: #302e2b; /* Dark Chess Background */
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Header Bar */
+.game-header {
+    height: 60px;
+    background-color: #262421;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 40px;
+    border-bottom: 1px solid #3c3a37;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    z-index: 10;
+}
+
+.player-badge {
+    color: #ccc;
+    font-weight: bold;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: #3c3a37;
+    padding: 8px 16px;
+    border-radius: 20px;
+}
+
+.opponent-badge i { color: #e6912c; } /* Bot Color */
+
+.game-timer {
+    color: white;
+    font-family: monospace;
+    font-size: 24px;
+    font-weight: bold;
+}
+
+/* Main Container */
+.arena-container {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between; /* Pushes piles apart */
+    padding: 20px;
+    max-width: 1200px;
+    margin: 0 auto;
+    width: 100%;
+}
+
+/* === ZONES === */
+.player-zone {
+    height: 180px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 60px; /* Gap between Deck and Foundations */
+}
+
+/* Special alignment for bottom player (Mirror image) */
+.player-zone-bottom {
+    flex-direction: row-reverse; /* Puts deck on right side for player */
+}
+
+/* The 4-3-2-1 Clusters */
+.foundation-area {
+    display: flex;
+    gap: 15px;
+    background: rgba(0,0,0,0.2);
+    padding: 15px;
+    border-radius: 12px;
+    border: 1px dashed #444;
+}
+
+/* Card Slots (Empty) */
+.card-slot {
+    width: 90px;
+    height: 126px; /* Standard Card Ratio */
+    background-color: #3a3835;
+    border-radius: 6px;
+    border: 2px solid #555;
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    transition: transform 0.1s;
+}
+
+/* Active Card styling */
+.playing-card {
+    width: 100%;
+    height: 100%;
+    background-color: white;
+    border-radius: 6px;
+    position: absolute; /* Stack on top of slot */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-weight: bold;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+    cursor: grab;
+    user-select: none;
+}
+.playing-card:active { cursor: grabbing; }
+
+/* Inner Card Art */
+.card-top { position: absolute; top: 4px; left: 4px; font-size: 14px; }
+.card-mid { font-size: 36px; }
+.card-bot { position: absolute; bottom: 4px; right: 4px; font-size: 14px; transform: rotate(180deg); }
+
+/* Card Backs */
+.card-back {
+    width: 100%;
+    height: 100%;
+    border-radius: 6px;
+    border: 2px solid white;
+    background: repeating-linear-gradient(45deg, #606dbc, #606dbc 10px, #465298 10px, #465298 20px);
+}
+
+.card-count-badge {
+    position: absolute;
+    bottom: -10px;
+    background: #222;
+    color: white;
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    border: 1px solid #555;
+}
+
+/* === BATTLEFIELD (Middle) === */
+.battlefield-zone {
+    flex-grow: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+    background-color: #355e3b; /* Classic Green Felt */
+    margin: 10px 0;
+    border-radius: 10px;
+    box-shadow: inset 0 0 30px rgba(0,0,0,0.6);
+}
+
+.boundary-line {
+    position: absolute;
+    width: 95%;
+    height: 2px;
+    background-color: rgba(255,255,255,0.2);
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.center-piles {
+    display: flex;
+    gap: 40px;
+    z-index: 2;
+}
+
+.center-slot {
+    border: 2px solid rgba(255,255,255,0.4);
+    background-color: rgba(0,0,0,0.2);
+    transform: scale(1.1); /* Make center cards slightly larger */
+}
+
+/* === OVERLAY === */
+.overlay {
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.85);
+    z-index: 100;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+.hidden { display: none; }
+
+.overlay-content {
+    background: #262421;
+    padding: 40px;
+    text-align: center;
+    border-radius: 12px;
+    border: 1px solid #444;
+}
+.overlay-content h1 { color: #81b64c; font-size: 40px; margin-bottom: 10px; }
+.overlay-content p { color: #ccc; margin-bottom: 20px; }
+
+.btn-restart, .btn-quit {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 5px;
+    font-weight: bold;
+    cursor: pointer;
+    margin: 0 5px;
+}
+.btn-restart { background: #81b64c; color: white; }
+.btn-quit { background: #444; color: #ccc; text-decoration: none; display: inline-block; }
