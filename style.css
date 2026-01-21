@@ -95,3 +95,23 @@
     </script>
 </body>
 </html>
+/* === FACE DOWN CARDS === */
+.playing-card.face-down {
+    background: repeating-linear-gradient(
+      45deg,
+      #606dbc,
+      #606dbc 10px,
+      #465298 10px,
+      #465298 20px
+    );
+    color: transparent !important; /* Hide the number/suit */
+    border: 2px solid white;
+    cursor: default;
+}
+
+/* Hide the inner symbols when face down */
+.playing-card.face-down .card-top,
+.playing-card.face-down .card-mid,
+.playing-card.face-down .card-bot {
+    display: none;
+}
