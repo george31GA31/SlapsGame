@@ -140,9 +140,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function startRoundWithCounts(pCount, bCount) {
         let fullDeck = createDeck();
-        // Correct Splicing logic to ensure 26 total
-        let pDeck = fullDeck.slice(0, pCount);
-        let bDeck = fullDeck.slice(pCount, 52);
+       // Ensure we use the full 52 cards regardless of the round
+let pDeck = fullDeck.slice(0, pCount);
+let bDeck = fullDeck.slice(pCount);
 
         gameState.player.cards = []; gameState.bot.cards = [];
         gameState.centerStack = []; gameState.centerLeft = null; gameState.centerRight = null;
@@ -163,12 +163,15 @@ document.addEventListener('DOMContentLoaded', () => {
         let pFoundSize = pPattern.reduce((a,b)=>a+b, 0);
         let bFoundSize = bPattern.reduce((a,b)=>a+b, 0);
 
-        // Deal Foundations (Modifies pDeck/bDeck in place by splice)
-        spawnFoundation(pDeck.splice(0, pFoundSize), 'player', pPattern);
-        spawnFoundation(bDeck.splice(0, bFoundSize), 'bot', bPattern);
-        
-        gameState.player.deck = pDeck;
-        gameState.bot.deck = bDeck;
+        // Copy the deck before splicing to prevent data loss
+const pFoundationCards = pDeck.splice(0, pFoundSize);
+const bFoundationCards = bDeck.splice(0, bFoundSize);
+
+spawnFoundation(pFoundationCards, 'player', pPattern);
+spawnFoundation(bFoundationCards, 'bot', bPattern);
+
+gameState.player.deck = pDeck;
+gameState.bot.deck = bDeck;
 
         renderAll();
         
@@ -475,7 +478,8 @@ document.addEventListener('DOMContentLoaded', () => {
         // ROBUST COUNTER: Sum of Deck + Foundation + SidePot + Center (if owned)
         // Actually, just count arrays.
         let obj = (who === 'player') ? gameState.player : gameState.bot;
-        let count = obj.deck.length + obj.cards.length + obj.sidePot.length;
+        // Foundation cards are stored in gameState.player.cards/bot.cards
+let count = obj.deck.length + obj.cards.length + obj.sidePot.length;
         // Center cards are technically "in limbo" until won, but for match win check we need total.
         // Simplified: The 52 card sum constraint handles this.
         return count;
