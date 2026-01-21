@@ -5,13 +5,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const VALUES = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
     let difficulty = parseInt(localStorage.getItem('slapsDifficulty')) || 5;
 
-    // AI SPEED
-    let botSpeedBase = 8000 - (difficulty * 720); 
-    const getBotDelay = () => Math.max(800, botSpeedBase + (Math.random() * 500));
+    // AI SPEED: Lvl 1 (~3s) -> Lvl 10 (~0.5s)
+    // Note: Since we combined loops, we need a faster "Tick" rate, 
+    // but the AI will only act based on a cooldown.
+    let reactionTime = Math.max(500, 3500 - (difficulty * 300));
+    let lastActionTime = 0;
     let globalZ = 100;
     
-    // MOVEMENT LOCKS
-    let botBusy = false; // PREVENTS DOUBLE MOVES
+    // LOCK
+    let botBusy = false; 
 
     let gameState = {
         player: { deck: [], cards: [], sidePot: [], borrowing: false, borrowedAmount: 0 },
@@ -50,7 +52,8 @@ document.addEventListener('DOMContentLoaded', () => {
             this.rank = VALUES.indexOf(value) + 1;
             this.color = (suit === "♥" || suit === "♦") ? "red" : "black";
             this.id = Math.random().toString(36).substr(2, 9);
-            this.owner = owner; this.isFaceUp = false;
+            this.owner = owner; 
+            this.isFaceUp = false;
             this.x = 0; this.y = 0; this.col = -1;
         }
         getHTML() {
@@ -64,17 +67,16 @@ document.addEventListener('DOMContentLoaded', () => {
     function flyCard(card, targetEl, callback) {
         if(!card || !targetEl) { callback(); return; }
         
-        // 1. Get Start Position (Robust)
-        let startLeft, startTop;
         let cardEl = document.getElementById(card.id);
+        let startLeft, startTop;
 
         if (cardEl) {
             const rect = cardEl.getBoundingClientRect();
             startLeft = rect.left;
             startTop = rect.top;
-            cardEl.style.visibility = 'hidden'; // Hide original
+            cardEl.style.visibility = 'hidden'; 
         } else {
-            // Fallback: Calculate manually if DOM is glitching
+            // Fallback: If DOM is missing, calc from boundary
             const boundary = card.owner === 'player' ? els.pBoundary : els.bBoundary;
             const bRect = boundary.getBoundingClientRect();
             startLeft = bRect.left + card.x;
@@ -83,29 +85,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const targetRect = targetEl.getBoundingClientRect();
         
-        // 2. Create Clone
         const clone = document.createElement('div');
         clone.innerHTML = `<div class="card-top">${card.value}</div><div class="card-mid">${card.suit}</div><div class="card-bot">${card.value}</div>`;
         clone.className = `playing-card flying-card`;
         clone.style.color = card.color === 'red' ? '#d9534f' : '#292b2c';
-        
-        // 3. Position Clone
         clone.style.width = '90px'; clone.style.height = '126px';
         clone.style.left = startLeft + 'px'; 
         clone.style.top = startTop + 'px';
         clone.style.zIndex = 99999;
         
         document.body.appendChild(clone);
-        void clone.offsetWidth; // Force Reflow
+        void clone.offsetWidth; 
 
-        // 4. Animate
         clone.style.left = targetRect.left + 'px'; 
         clone.style.top = targetRect.top + 'px';
 
         setTimeout(() => { 
             clone.remove(); 
             callback(); 
-        }, 600);
+        }, 500); // 0.5s animation
     }
 
     function init() {
@@ -117,6 +115,7 @@ document.addEventListener('DOMContentLoaded', () => {
         let pDeck = fullDeck.slice(0, pCount);
         let bDeck = fullDeck.slice(pCount, 52);
 
+        // Reset
         gameState.player.cards = []; gameState.bot.cards = [];
         gameState.centerStack = []; gameState.centerLeft = null; gameState.centerRight = null;
         gameState.player.sidePot = []; gameState.bot.sidePot = [];
@@ -124,7 +123,9 @@ document.addEventListener('DOMContentLoaded', () => {
         gameState.player.borrowing = false; gameState.bot.borrowing = false;
         gameState.player.borrowedAmount = 0; gameState.bot.borrowedAmount = 0;
         
-        botBusy = false; // Reset lock
+        gameState.slapActive = false;
+        gameState.isCountDown = false;
+        botBusy = false;
 
         els.overlay.classList.add('hidden');
         resetStalemateVisuals();
@@ -135,7 +136,6 @@ document.addEventListener('DOMContentLoaded', () => {
         // Pattern logic
         let pPattern = getPattern(pDeck.length);
         let bPattern = getPattern(bDeck.length);
-        
         let pFoundSize = pPattern.reduce((a,b)=>a+b, 0);
         let bFoundSize = bPattern.reduce((a,b)=>a+b, 0);
 
@@ -164,30 +164,17 @@ document.addEventListener('DOMContentLoaded', () => {
         gameState.bot.deck = bDeck;
 
         renderAll();
-        runBotCycle();
         
+        // SINGLE MASTER LOOP FOR BOT
+        setInterval(botMasterLoop, 250); // Runs 4 times a second, but checks constraints
+        
+        // Timers for other things
         setInterval(updateStats, 200);
-        setInterval(checkBotStalemate, 800);
-        setInterval(checkBotSort, 400); 
         setInterval(checkSlapOpportunity, 100); 
+        setInterval(checkStalemateConditions, 800); // Only checks waiting status
         
-        setInterval(() => {
-            if(gameState.gameOver) return;
-            if(gameState.player.deck.length === 0 && !gameState.player.borrowing && gameState.bot.deck.length > 1) {
-                let loan = Math.floor(gameState.bot.deck.length / 2);
-                gameState.player.deck.push(...gameState.bot.deck.splice(0, loan));
-                gameState.player.borrowing = true;
-                gameState.player.borrowedAmount = loan;
-                els.pBorrow.classList.add('borrow-active');
-            }
-            if(gameState.bot.deck.length === 0 && !gameState.bot.borrowing && gameState.player.deck.length > 1) {
-                let loan = Math.floor(gameState.player.deck.length / 2);
-                gameState.bot.deck.push(...gameState.player.deck.splice(0, loan));
-                gameState.bot.borrowing = true;
-                gameState.bot.borrowedAmount = loan;
-                els.bBorrow.classList.add('borrow-active');
-            }
-        }, 1000);
+        // Mid-Round Shortage Check
+        setInterval(checkShortage, 1000);
     }
 
     function getPattern(count) {
@@ -217,8 +204,6 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderAll() {
         renderZone('player'); renderZone('bot');
         renderCenter(els.cLeft, gameState.centerLeft); renderCenter(els.cRight, gameState.centerRight);
-        els.pBorrow.classList.toggle('borrow-active', gameState.player.borrowing);
-        els.bBorrow.classList.toggle('borrow-active', gameState.bot.borrowing);
     }
 
     function renderZone(who) {
@@ -300,10 +285,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if(side === 'right' && gameState.centerRight) gameState.centerStack.push(gameState.centerRight);
         if(side === 'left') gameState.centerLeft = card; else gameState.centerRight = card;
         
-        updateStats(); 
-        resetStalemate(); 
-        renderAll(); 
-        checkWin();
+        updateStats(); resetStalemate(); renderAll(); checkWin();
     }
 
     document.addEventListener('keydown', (e) => {
@@ -311,6 +293,98 @@ document.addEventListener('DOMContentLoaded', () => {
             e.preventDefault(); performSlap('player');
         }
     });
+
+    // === SINGLE MASTER BOT LOOP (THE BRAIN) ===
+    function botMasterLoop() {
+        if(gameState.gameOver || gameState.isCountDown || gameState.slapActive || botBusy) return;
+
+        let now = Date.now();
+        // Check Speed Constraint (unless it's an emergency like flipping a card)
+        if(now - lastActionTime < reactionTime) return;
+
+        // PRIORITY 1: PLAY A CARD (Valid Move)
+        let move = null;
+        for(let c of gameState.bot.cards.filter(c => c.isFaceUp)) {
+            if(isValid(c, gameState.centerLeft)) { move = {card:c, side:'left'}; break; }
+            if(isValid(c, gameState.centerRight)) { move = {card:c, side:'right'}; break; }
+        }
+
+        if(move) {
+            botBusy = true; // LOCK
+            lastActionTime = now;
+            
+            // Reflex Boost Logic (if causing Slap)
+            let reactionMod = 1.0;
+            let otherCenter = (move.side === 'left' ? gameState.centerRight : gameState.centerLeft);
+            if(otherCenter && otherCenter.rank === move.card.rank) reactionMod = 0.1;
+
+            setTimeout(() => {
+                flyCard(move.card, (move.side==='left'?els.cLeft:els.cRight), () => {
+                    let currentCenter = move.side === 'left' ? gameState.centerLeft : gameState.centerRight;
+                    if(!isValid(move.card, currentCenter)) { 
+                        // Failed (player moved first)
+                        botBusy = false; renderZone('bot'); return; 
+                    }
+
+                    gameState.bot.cards = gameState.bot.cards.filter(c => c.id !== move.card.id);
+                    if(move.side === 'left') gameState.centerStack.push(gameState.centerLeft);
+                    if(move.side === 'right') gameState.centerStack.push(gameState.centerRight);
+                    if(move.side === 'left') gameState.centerLeft = move.card; else gameState.centerRight = move.card;
+                    
+                    updateStats();
+                    resetStalemate();
+                    renderAll(); 
+                    checkWin();
+                    botBusy = false; // UNLOCK
+                });
+            }, 50 * reactionMod); // Small visual delay
+            return;
+        }
+
+        // PRIORITY 2: FLIP A CARD (If < 4 face up)
+        if(gameState.bot.cards.filter(c => c.isFaceUp).length < 4) {
+            const hidden = gameState.bot.cards.find(c => !c.isFaceUp);
+            if(hidden) {
+                botBusy = true; // Brief lock
+                lastActionTime = now;
+                setTimeout(() => {
+                    hidden.isFaceUp = true;
+                    resetStalemate();
+                    renderZone('bot');
+                    botBusy = false;
+                }, 300);
+                return;
+            }
+        }
+
+        // PRIORITY 3: SORT/ORGANIZE (Move card to empty slot)
+        let columns = [[],[],[],[]];
+        gameState.bot.cards.forEach(c => columns[c.col].push(c));
+        let emptyIdx = columns.findIndex(c => c.length === 0);
+        
+        if(emptyIdx !== -1) {
+            let messyIdx = columns.findIndex(c => c.length > 1 && c.some(card => !card.isFaceUp));
+            if(messyIdx !== -1) {
+                let cardToMove = columns[messyIdx].sort((a,b)=>a.y-b.y).pop();
+                if(cardToMove.isFaceUp) {
+                    botBusy = true;
+                    lastActionTime = now;
+                    setTimeout(() => {
+                        cardToMove.col = emptyIdx;
+                        cardToMove.x = [50, 250, 450, 650][emptyIdx];
+                        cardToMove.y = 20;
+                        let newTop = columns[messyIdx][columns[messyIdx].length-1];
+                        if(newTop && !newTop.isFaceUp) newTop.isFaceUp = true;
+                        renderAll();
+                        botBusy = false;
+                    }, 300);
+                    return;
+                }
+            }
+        }
+        
+        // If we got here, Bot did nothing. Bot "Pass" state is handled by checkStalemateConditions
+    }
 
     function checkSlapOpportunity() {
         if(gameState.gameOver || gameState.isCountDown || gameState.slapActive) return;
@@ -353,20 +427,29 @@ document.addEventListener('DOMContentLoaded', () => {
         } 
     });
 
-    function checkBotStalemate() {
-        if(gameState.isCountDown || gameState.gameOver || gameState.slapActive) return;
+    function checkStalemateConditions() {
+        if(gameState.isCountDown || gameState.gameOver || gameState.slapActive || botBusy) return;
+        
+        // 1. Can Bot Move?
         let bMoves = false;
-        gameState.bot.cards.filter(c => c.isFaceUp).forEach(c => { if(isValid(c, gameState.centerLeft) || isValid(c, gameState.centerRight)) bMoves = true; });
+        gameState.bot.cards.filter(c => c.isFaceUp).forEach(c => { 
+            if(isValid(c, gameState.centerLeft) || isValid(c, gameState.centerRight)) bMoves = true; 
+        });
+        
+        // 2. Can Bot Flip?
         if(gameState.bot.cards.filter(c => c.isFaceUp).length < 4 && gameState.bot.cards.some(c => !c.isFaceUp)) bMoves = true;
-        const isStart = !gameState.centerLeft && !gameState.centerRight;
 
-        if(bMoves && !isStart && gameState.botPass) { gameState.botPass = false; return; }
+        const isStart = !gameState.centerLeft && !gameState.centerRight;
 
         if(!bMoves || isStart) {
             if(!gameState.botPass) {
                 gameState.botPass = true; 
+                // Bot silently ready (Poker Face)
                 if(gameState.playerPass) startCountdown();
             }
+        } else {
+            // If bot suddenly has moves (e.g. player played), un-pass
+            if(gameState.botPass && !isStart) gameState.botPass = false;
         }
     }
 
@@ -404,92 +487,6 @@ document.addEventListener('DOMContentLoaded', () => {
         gameState.isCountDown = false; gameState.playerPass = false; gameState.botPass = false;
     }
 
-    function checkBotSort() {
-        if(gameState.gameOver) return;
-        // FAST FLIP if needed
-        if(gameState.bot.cards.filter(c => c.isFaceUp).length < 4) {
-            const hidden = gameState.bot.cards.find(c => !c.isFaceUp);
-            if(hidden) { hidden.isFaceUp = true; resetStalemate(); renderZone('bot'); return; }
-        }
-        // FAST SORT
-        let columns = [[],[],[],[]];
-        gameState.bot.cards.forEach(c => columns[c.col].push(c));
-        let emptyColIndex = columns.findIndex(c => c.length === 0);
-        if(emptyColIndex !== -1) {
-            let messyColIndex = columns.findIndex(c => c.length > 1 && c.some(card => !card.isFaceUp));
-            if(messyColIndex !== -1) {
-                let cardToMove = columns[messyColIndex].sort((a,b)=>a.y-b.y).pop();
-                if(cardToMove.isFaceUp) {
-                    cardToMove.col = emptyColIndex;
-                    cardToMove.x = [50, 250, 450, 650][emptyColIndex];
-                    cardToMove.y = 20; 
-                    let newTop = columns[messyColIndex][columns[messyColIndex].length-1];
-                    if(newTop && !newTop.isFaceUp) newTop.isFaceUp = true;
-                    renderAll();
-                }
-            }
-        }
-    }
-
-    function runBotCycle() {
-        if(gameState.gameOver) return;
-        setTimeout(() => {
-            // STOP IF BUSY
-            if(botBusy) { runBotCycle(); return; }
-
-            let move = null;
-            if(!gameState.botPass && !gameState.isCountDown) {
-                // PRIORITIZE: Sort moves by column (shuffle to be less predictable?)
-                // Just simple check is fine for now
-                for(let c of gameState.bot.cards.filter(c => c.isFaceUp)) {
-                    if(isValid(c, gameState.centerLeft)) { move = {card:c, side:'left'}; break; }
-                    if(isValid(c, gameState.centerRight)) { move = {card:c, side:'right'}; break; }
-                }
-            }
-            
-            let reactionMod = 1.0;
-            if(move) {
-                let otherCenter = (move.side === 'left' ? gameState.centerRight : gameState.centerLeft);
-                if(otherCenter && otherCenter.rank === move.card.rank) reactionMod = 0.1;
-            }
-
-            if(move) {
-                botBusy = true; // LOCK BOT
-                const targetEl = move.side === 'left' ? els.cLeft : els.cRight;
-                
-                setTimeout(() => {
-                    flyCard(move.card, targetEl, () => {
-                        let currentCenter = move.side === 'left' ? gameState.centerLeft : gameState.centerRight;
-                        if (!isValid(move.card, currentCenter)) { 
-                            renderZone('bot'); 
-                            botBusy = false; // RELEASE LOCK ON FAIL
-                            return; 
-                        }
-                        
-                        gameState.bot.cards = gameState.bot.cards.filter(c => c.id !== move.card.id);
-                        if(move.side === 'left') gameState.centerStack.push(gameState.centerLeft);
-                        if(move.side === 'right') gameState.centerStack.push(gameState.centerRight);
-                        if(move.side === 'left') gameState.centerLeft = move.card; else gameState.centerRight = move.card;
-                        
-                        updateStats();
-                        resetStalemate(); 
-                        
-                        // FLIP UNDERNEATH
-                        let colCards = gameState.bot.cards.filter(c => c.col === move.card.col);
-                        if(colCards.length > 0) {
-                            let newTop = colCards[colCards.length - 1]; 
-                            if(!newTop.isFaceUp && gameState.bot.cards.filter(c => c.isFaceUp).length < 4) newTop.isFaceUp = true;
-                        }
-                        renderAll(); checkWin();
-                        botBusy = false; // RELEASE LOCK ON SUCCESS
-                    });
-                }, getBotDelay() * reactionMod);
-            } else {
-                runBotCycle(); // KEEP TRYING
-            }
-        }, getBotDelay());
-    }
-
     function updateStats() {
         let pTotal = gameState.player.deck.length + gameState.player.cards.length + gameState.player.sidePot.length - gameState.player.borrowedAmount;
         let bTotal = gameState.bot.deck.length + gameState.bot.cards.length + gameState.bot.sidePot.length - gameState.bot.borrowedAmount;
@@ -502,30 +499,44 @@ document.addEventListener('DOMContentLoaded', () => {
         if(gameState.bot.cards.length === 0) endRound('bot');
     }
 
+    function checkShortage() {
+        if(gameState.gameOver) return;
+        if(gameState.player.deck.length === 0 && !gameState.player.borrowing && gameState.bot.deck.length > 1) {
+            let loan = Math.floor(gameState.bot.deck.length / 2);
+            gameState.player.deck.push(...gameState.bot.deck.splice(0, loan));
+            gameState.player.borrowing = true;
+            gameState.player.borrowedAmount = loan;
+            els.pBorrow.classList.add('borrow-active');
+        }
+        if(gameState.bot.deck.length === 0 && !gameState.bot.borrowing && gameState.player.deck.length > 1) {
+            let loan = Math.floor(gameState.player.deck.length / 2);
+            gameState.bot.deck.push(...gameState.player.deck.splice(0, loan));
+            gameState.bot.borrowing = true;
+            gameState.bot.borrowedAmount = loan;
+            els.bBorrow.classList.add('borrow-active');
+        }
+    }
+
     function endRound(winner) {
         if(gameState.gameOver) return;
         gameState.gameOver = true;
         
-        // Final Sync Check
-        let pTotalReal = gameState.player.deck.length + gameState.player.sidePot.length;
-        let bTotalReal = gameState.bot.deck.length + gameState.bot.sidePot.length;
+        let pTotal = parseInt(els.pCount.innerText);
+        let bTotal = parseInt(els.bCount.innerText);
 
-        // Correct for borrowed visual
-        pTotalReal = Math.max(0, pTotalReal - gameState.player.borrowedAmount);
-        bTotalReal = Math.max(0, bTotalReal - gameState.bot.borrowedAmount);
+        if(pTotal <= 0) { endMatch("YOU WIN THE MATCH!"); return; }
+        if(bTotal <= 0) { endMatch("BOT WINS THE MATCH!"); return; }
 
-        // Win Logic
-        if (pTotalReal <= 0 && winner === 'player') { endMatch("YOU WIN THE MATCH!"); return; }
-        if (bTotalReal <= 0 && winner === 'bot') { endMatch("BOT WINS THE MATCH!"); return; }
-
+        let winnerDeckSize = (winner === 'player') ? pTotal : bTotal;
         let pNext, bNext;
+
         if (winner === 'player') {
-            pNext = pTotalReal;
+            pNext = winnerDeckSize; 
             bNext = 52 - pNext;
             els.overlayTitle.innerText = "ROUND WON!";
             els.overlayDesc.innerText = `You keep ${pNext} cards. Bot takes the rest.`;
         } else {
-            bNext = bTotalReal;
+            bNext = winnerDeckSize;
             pNext = 52 - bNext;
             els.overlayTitle.innerText = "ROUND LOST";
             els.overlayDesc.innerText = `Bot keeps ${bNext} cards. You take the pile.`;
