@@ -1,20 +1,20 @@
 document.addEventListener('DOMContentLoaded', () => {
     
-    // === CONFIG ===
+    // === 1. CONFIGURATION ===
     const SUITS = ["♠", "♥", "♣", "♦"];
     const VALUES = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
     let difficulty = parseInt(localStorage.getItem('slapsDifficulty')) || 5;
 
-    // AI Speed: Level 1 (~6s) -> Level 10 (~0.5s)
+    // AI SPEED: Level 1 (~6s) -> Level 10 (~0.5s)
     let botSpeedBase = 6500 - (difficulty * 600); 
     const getBotDelay = () => Math.max(500, botSpeedBase + (Math.random() * 500));
 
-    // Global Z-Index Counter (Ensures last moved card is always on top)
+    // Global Z-Index
     let globalZ = 100;
 
     let gameState = {
         player: { deck: [], cards: [] },
-        bot: { deck: [], cards: [] }, // AI cards now track 'col' property
+        bot: { deck: [], cards: [] },
         centerLeft: null, centerRight: null,
         gameOver: false
     };
@@ -38,7 +38,7 @@ document.addEventListener('DOMContentLoaded', () => {
             this.owner = owner;
             this.isFaceUp = false;
             this.x = 0; this.y = 0;
-            this.col = -1; // For AI organization
+            this.col = -1; 
         }
         getHTML() {
             const faceClass = this.isFaceUp ? '' : 'face-down';
@@ -48,7 +48,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // === ANIMATION ENGINE ===
+    // === 2. ANIMATION ENGINE ===
     function flyCard(cardEl, targetEl, callback) {
         if(!cardEl || !targetEl) { callback(); return; }
         const startRect = cardEl.getBoundingClientRect();
@@ -60,10 +60,11 @@ document.addEventListener('DOMContentLoaded', () => {
         clone.classList.add('flying-card');
         clone.style.left = startRect.left + 'px';
         clone.style.top = startRect.top + 'px';
-        clone.style.zIndex = 99999; // Always on top of everything
+        clone.style.width = '90px'; clone.style.height = '126px';
+        clone.style.zIndex = 99999;
         
         document.body.appendChild(clone);
-        void clone.offsetWidth; // Force Reflow
+        void clone.offsetWidth;
 
         clone.style.left = targetRect.left + 'px';
         clone.style.top = targetRect.top + 'px';
@@ -74,12 +75,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 600);
     }
 
-    // === SETUP ===
+    // === 3. SETUP ===
     function init() {
         let deck = createDeck();
         gameState.player.deck = deck.slice(0, 16);
         gameState.bot.deck = deck.slice(16, 32);
-        
         spawnFoundation(deck.slice(32, 42), 'player');
         spawnFoundation(deck.slice(42, 52), 'bot');
         
@@ -94,20 +94,13 @@ document.addEventListener('DOMContentLoaded', () => {
     function createDeck() { return SUITS.flatMap(s => VALUES.map(v => new Card(s, v))).sort(() => Math.random() - 0.5); }
 
     function spawnFoundation(cards, owner) {
-        let xOffsets = [50, 250, 450, 650]; 
-        let pileSizes = [4, 3, 2, 1];
-        let cardIdx = 0;
-
+        let xOffsets = [50, 250, 450, 650], pileSizes = [4, 3, 2, 1], cardIdx = 0;
         for(let col=0; col<4; col++) {
             for(let row=0; row<pileSizes[col]; row++) {
                 if(cardIdx >= cards.length) break;
                 let c = cards[cardIdx++];
-                c.owner = owner;
-                c.col = col; // Assign column for AI logic
-                c.x = xOffsets[col]; 
-                c.y = 20 + (row * 30);
+                c.owner = owner; c.col = col; c.x = xOffsets[col]; c.y = 20 + (row * 30);
                 if(row === pileSizes[col]-1) c.isFaceUp = true;
-                
                 if(owner === 'player') gameState.player.cards.push(c);
                 else gameState.bot.cards.push(c);
             }
@@ -123,14 +116,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const container = who === 'player' ? els.pBoundary : els.bBoundary;
         const cards = who === 'player' ? gameState.player.cards : gameState.bot.cards;
         container.innerHTML = ''; 
-
         cards.forEach(c => {
             const div = document.createElement('div');
             div.innerHTML = c.getHTML();
             const el = div.firstElementChild;
             container.appendChild(el);
-            
-            // Interaction only for player
             if(who === 'player') setupInteraction(el, c);
         });
     }
@@ -145,14 +135,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // === PHYSICS & INTERACTION ===
+    // === 4. PHYSICS & WALL ===
     function setupInteraction(el, card) {
         el.addEventListener('mousedown', (e) => {
             if(e.button !== 0) return; 
-            
-            // Z-Index Fix: Always bring touched card to top
             el.style.zIndex = ++globalZ; 
-            
             startDrag(e, el, card);
         });
     }
@@ -163,25 +150,21 @@ document.addEventListener('DOMContentLoaded', () => {
         let origX = card.x, origY = card.y;
         let dragged = false;
 
-        // 1. DETERMINE IF CARD IS UNLOCKED
-        // A card is "Playable" if it matches left OR right center piles.
-        // If it is playable, the boundary wall is removed.
-        const canLeft = isValid(card, gameState.centerLeft);
-        const canRight = isValid(card, gameState.centerRight);
-        const isUnlocked = (canLeft || canRight) && card.isFaceUp;
-
         const boxW = 900, boxH = 250, cardW = 90, cardH = 126;
 
         function move(e) {
             dragged = true;
-            let dx = e.clientX - startX;
-            let dy = e.clientY - startY;
-            let newX = origX + dx;
-            let newY = origY + dy;
+            let dx = e.clientX - startX, dy = e.clientY - startY;
+            let newX = origX + dx, newY = origY + dy;
 
-            // 2. APPLY WALL LOGIC
-            if (!isUnlocked) {
-                // If not playable, CLAMP strictly inside box
+            // --- WALL LOGIC ---
+            // Is this card allowed to leave?
+            const canLeft = isValid(card, gameState.centerLeft);
+            const canRight = isValid(card, gameState.centerRight);
+            const isPlayable = (canLeft || canRight) && card.isFaceUp;
+
+            if (!isPlayable) {
+                // HARD STOP at box edges
                 newX = Math.max(0, Math.min(newX, boxW - cardW));
                 newY = Math.max(0, Math.min(newY, boxH - cardH));
             }
@@ -194,27 +177,21 @@ document.addEventListener('DOMContentLoaded', () => {
             document.removeEventListener('mousemove', move);
             document.removeEventListener('mouseup', drop);
             
-            // CLICK-TO-FLIP Logic
+            // FLIP
             if(!dragged && !card.isFaceUp) {
                 const liveCount = gameState.player.cards.filter(c => c.isFaceUp).length;
-                if(liveCount < 4) {
-                    card.isFaceUp = true;
-                    renderZone('player');
-                }
+                if(liveCount < 4) { card.isFaceUp = true; renderZone('player'); }
                 return;
             }
 
-            // ATTEMPT PLAY
             if(card.isFaceUp) {
                 if(isOver(e, els.cLeft) && isValid(card, gameState.centerLeft)) { playCard(card, 'left'); return; }
                 if(isOver(e, els.cRight) && isValid(card, gameState.centerRight)) { playCard(card, 'right'); return; }
             }
             
-            // SAVE POSITION (Rearranging)
-            // Even if face down, we update position so you can organize your hand
+            // REARRANGE (Save coords)
             card.x = parseInt(el.style.left);
             card.y = parseInt(el.style.top);
-            // Keep Z high so it stays on top of stack
             el.style.zIndex = globalZ; 
         }
         document.addEventListener('mousemove', move);
@@ -239,90 +216,73 @@ document.addEventListener('DOMContentLoaded', () => {
         checkWin();
     }
 
-    // === SMART BOT LOGIC ===
+    // === 5. BOT BRAIN (With Race Condition Fix) ===
     function runBotCycle() {
         if(gameState.gameOver) return;
 
         setTimeout(() => {
-            // 1. Analyze Bot Columns
-            // We group cards by their 'col' property (0,1,2,3)
             let columns = [[], [], [], []];
-            gameState.bot.cards.forEach(c => {
-                if(c.col >= 0 && c.col < 4) columns[c.col].push(c);
-            });
-            // Sort by Y (visual order)
+            gameState.bot.cards.forEach(c => { if(c.col >= 0 && c.col < 4) columns[c.col].push(c); });
             columns.forEach(col => col.sort((a,b) => a.y - b.y));
 
-            // 2. Check for Moves
             let move = null;
             let playableCards = gameState.bot.cards.filter(c => c.isFaceUp);
-            
             for(let c of playableCards) {
                 if(isValid(c, gameState.centerLeft)) { move = {card:c, side:'left'}; break; }
                 if(isValid(c, gameState.centerRight)) { move = {card:c, side:'right'}; break; }
             }
 
             if(move) {
-                // EXECUTE PLAY
                 const botEls = Array.from(els.bBoundary.children);
                 const idx = gameState.bot.cards.indexOf(move.card);
                 const cardEl = botEls[idx];
                 const targetEl = move.side === 'left' ? els.cLeft : els.cRight;
 
                 flyCard(cardEl, targetEl, () => {
-                    // Update State
+                    // --- RACE CONDITION CHECK ---
+                    // Re-check validity AFTER animation lands
+                    let currentCenter = move.side === 'left' ? gameState.centerLeft : gameState.centerRight;
+                    if (!isValid(move.card, currentCenter)) {
+                        // INVALID! Player played faster. Bot move fails.
+                        // We do nothing (update nothing), card snap backs visually next render
+                        renderZone('bot'); // Just resets position
+                        return;
+                    }
+
+                    // VALID - Proceed
                     gameState.bot.cards = gameState.bot.cards.filter(c => c.id !== move.card.id);
                     if(move.side === 'left') gameState.centerLeft = move.card; 
                     else gameState.centerRight = move.card;
 
-                    // LOGIC: FLIP NEXT CARD IN THAT COLUMN
-                    // We just removed a card from 'move.card.col'. 
-                    // Find the NEW top card of that column.
+                    // Flip Next Card
                     let colCards = gameState.bot.cards.filter(c => c.col === move.card.col);
-                    // Sort by Y position (highest Y is bottom of screen/top of stack)
                     colCards.sort((a,b) => a.y - b.y);
-                    
                     if(colCards.length > 0) {
-                        let newTop = colCards[colCards.length - 1]; // Last one is physically top
-                        if(!newTop.isFaceUp) {
-                            // Check live limit rule
-                            const liveCount = gameState.bot.cards.filter(c => c.isFaceUp).length;
-                            if(liveCount < 4) newTop.isFaceUp = true;
-                        }
+                        let newTop = colCards[colCards.length - 1];
+                        if(!newTop.isFaceUp && gameState.bot.cards.filter(c => c.isFaceUp).length < 4) newTop.isFaceUp = true;
                     }
-
                     renderAll();
                     checkWin();
                 });
             } else {
-                // NO MOVES? TRY TO FILL GAPS
-                // If a column is empty, move a card from a full column to it
+                // FILL GAPS
                 let emptyCol = columns.findIndex(c => c.length === 0);
                 if(emptyCol !== -1) {
-                    // Find a column with >1 card AND hidden cards (so moving helps)
                     let sourceCol = columns.findIndex(c => c.length > 1 && c.some(card => !card.isFaceUp));
                     if(sourceCol !== -1) {
-                        let cardToMove = columns[sourceCol][columns[sourceCol].length - 1]; // Top card
+                        let cardToMove = columns[sourceCol][columns[sourceCol].length - 1]; 
                         if(cardToMove.isFaceUp) {
-                            // Move it in data
                             cardToMove.col = emptyCol;
-                            // Reset visual position for new column
                             let xOffsets = [50, 250, 450, 650];
-                            cardToMove.x = xOffsets[emptyCol];
-                            cardToMove.y = 20; // Top of new pile
-                            
-                            // Flip the card revealed in the OLD column
+                            cardToMove.x = xOffsets[emptyCol]; cardToMove.y = 20;
                             let oldColCards = columns[sourceCol];
-                            // The one below the one we just moved
                             let revealedCard = oldColCards[oldColCards.length - 2]; 
                             if(revealedCard && !revealedCard.isFaceUp) revealedCard.isFaceUp = true;
-
                             renderAll();
                         }
                     }
                 }
             }
-            
             runBotCycle();
         }, getBotDelay());
     }
