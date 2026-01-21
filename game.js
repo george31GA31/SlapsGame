@@ -1,258 +1,284 @@
 document.addEventListener('DOMContentLoaded', () => {
     
-    // === CONFIG ===
+    // CONFIG
     const SUITS = ["♠", "♥", "♣", "♦"];
     const VALUES = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
-    
-    let difficultyLevel = parseInt(localStorage.getItem('slapsDifficulty')) || 5;
-    let botSpeed = Math.max(800, 3000 - (difficultyLevel * 250));
+    let difficulty = parseInt(localStorage.getItem('slapsDifficulty')) || 5;
+    let botSpeed = Math.max(800, 3000 - (difficulty * 250));
 
+    // STATE
     let gameState = {
-        player: { drawDeck: [], foundations: [[], [], [], []] },
-        bot: { drawDeck: [], foundations: [[], [], [], []] },
+        player: { deck: [], cards: [] }, // cards = array of objects on board
+        bot: { deck: [], cards: [] },
         centerLeft: null, centerRight: null,
-        isGameOver: false
+        gameOver: false
     };
 
+    // DOM
     const els = {
-        playerFoundations: [
-            document.getElementById('player-found-4'), document.getElementById('player-found-3'),
-            document.getElementById('player-found-2'), document.getElementById('player-found-1')
-        ],
-        botFoundations: [
-            document.getElementById('bot-found-4'), document.getElementById('bot-found-3'),
-            document.getElementById('bot-found-2'), document.getElementById('bot-found-1')
-        ],
-        centerLeft: document.getElementById('center-left'),
-        centerRight: document.getElementById('center-right'),
-        playerDeckCount: document.getElementById('player-deck-count'),
-        botDeckCount: document.getElementById('bot-deck-count'),
-        overlay: document.getElementById('game-overlay'),
-        overlayTitle: document.getElementById('overlay-title'),
-        overlayDesc: document.getElementById('overlay-desc')
+        pBoundary: document.getElementById('player-boundary'),
+        bBoundary: document.getElementById('bot-boundary'),
+        cLeft: document.getElementById('center-left'),
+        cRight: document.getElementById('center-right'),
+        pCount: document.getElementById('player-count'),
+        bCount: document.getElementById('bot-count'),
+        overlay: document.getElementById('game-overlay')
     };
 
     class Card {
-        constructor(suit, value) {
-            this.suit = suit;
-            this.value = value;
+        constructor(suit, value, owner) {
+            this.suit = suit; this.value = value;
             this.rank = VALUES.indexOf(value) + 1;
             this.color = (suit === "♥" || suit === "♦") ? "red" : "black";
             this.id = Math.random().toString(36).substr(2, 9);
-            this.isFaceUp = true;
+            this.owner = owner;
+            this.isFaceUp = false; // Start face down
+            this.x = 0; this.y = 0; // Physics coordinates
         }
         getHTML() {
             const faceClass = this.isFaceUp ? '' : 'face-down';
-            return `
-            <div class="playing-card ${faceClass}" id="${this.id}" style="color: ${this.color === 'red' ? '#d9534f' : '#292b2c'}">
-                <div class="card-top">${this.value}</div>
-                <div class="card-mid">${this.suit}</div>
-                <div class="card-bot">${this.value}</div>
+            return `<div class="playing-card ${faceClass}" id="${this.id}" style="color: ${this.color === 'red' ? '#d9534f' : '#292b2c'}; left:${this.x}px; top:${this.y}px;">
+                <div class="card-top">${this.value}</div><div class="card-mid">${this.suit}</div><div class="card-bot">${this.value}</div>
             </div>`;
         }
     }
 
-    // === ANIMATION: PHYSICAL CARD TOSS ===
-    function flyCard(startEl, targetEl, callback) {
-        if (!startEl || !targetEl) { callback(); return; }
-        const rectStart = startEl.getBoundingClientRect();
-        const rectTarget = targetEl.getBoundingClientRect();
+    function init() {
+        let deck = createDeck();
+        // Deal
+        gameState.player.deck = deck.slice(0, 16);
+        gameState.bot.deck = deck.slice(16, 32);
+        
+        // Foundations (10 cards each)
+        let pFound = deck.slice(32, 42);
+        let bFound = deck.slice(42, 52);
+        
+        spawnFoundation(pFound, 'player');
+        spawnFoundation(bFound, 'bot');
+        
+        // Initial Centers
+        if(gameState.player.deck.length) gameState.centerLeft = gameState.player.deck.pop();
+        if(gameState.bot.deck.length) gameState.centerRight = gameState.bot.deck.pop();
 
-        const clone = startEl.cloneNode(true);
-        clone.classList.add('flying-card');
-        clone.style.left = rectStart.left + 'px';
-        clone.style.top = rectStart.top + 'px';
-        document.body.appendChild(clone);
-
-        // Force reflow
-        void clone.offsetWidth;
-
-        clone.style.left = rectTarget.left + 'px';
-        clone.style.top = rectTarget.top + 'px';
-
-        setTimeout(() => {
-            clone.remove();
-            callback();
-        }, 600); // 0.6s matches CSS transition
+        renderAll();
+        startBot();
+        setInterval(updateStats, 500);
     }
 
-    function initGame() {
-        let fullDeck = shuffle(createDeck());
-        let pHand = fullDeck.slice(0, 26);
-        let bHand = fullDeck.slice(26, 52);
-        distribute(pHand, gameState.player);
-        distribute(bHand, gameState.bot);
-        
-        // Initial Flip
-        if(gameState.player.drawDeck.length > 0) gameState.centerLeft = gameState.player.drawDeck.pop();
-        if(gameState.bot.drawDeck.length > 0) gameState.centerRight = gameState.bot.drawDeck.pop();
-        
-        renderBoard();
-        startBotBrain();
-        checkStalemateLoop();
+    function createDeck() {
+        let d = SUITS.flatMap(s => VALUES.map(v => new Card(s, v)));
+        return d.sort(() => Math.random() - 0.5);
     }
 
-    function createDeck() { return SUITS.flatMap(suit => VALUES.map(value => new Card(suit, value))); }
-    function shuffle(deck) { for (let i = deck.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [deck[i], deck[j]] = [deck[j], deck[i]]; } return deck; }
-    
-    function distribute(hand, entity) {
-        let piles = [4, 3, 2, 1];
-        for(let i=0; i<4; i++) {
-            let stack = hand.splice(0, piles[i]);
-            stack.forEach((card, index) => card.isFaceUp = (index === stack.length - 1));
-            entity.foundations[i] = stack;
+    function spawnFoundation(cards, owner) {
+        // Organize nicely at start (4 piles of 4-3-2-1)
+        let xOffsets = [50, 250, 450, 650]; // Neat columns
+        let pileSizes = [4, 3, 2, 1];
+        let cardIdx = 0;
+
+        for(let col=0; col<4; col++) {
+            for(let row=0; row<pileSizes[col]; row++) {
+                if(cardIdx >= cards.length) break;
+                let c = cards[cardIdx++];
+                c.owner = owner;
+                c.x = xOffsets[col];
+                c.y = 20 + (row * 20); // Cascade down
+                if(row === pileSizes[col]-1) c.isFaceUp = true; // Top card up
+                
+                if(owner === 'player') gameState.player.cards.push(c);
+                else gameState.bot.cards.push(c);
+            }
         }
-        entity.drawDeck = hand;
     }
 
-    // === BOT BRAIN ===
-    function startBotBrain() {
+    // === RENDER ===
+    function renderAll() {
+        renderZone('player');
+        renderZone('bot');
+        renderCenter(els.cLeft, gameState.centerLeft);
+        renderCenter(els.cRight, gameState.centerRight);
+    }
+
+    function renderZone(who) {
+        const container = who === 'player' ? els.pBoundary : els.bBoundary;
+        const cards = who === 'player' ? gameState.player.cards : gameState.bot.cards;
+        container.innerHTML = ''; // Clear
+
+        cards.forEach(c => {
+            const div = document.createElement('div');
+            div.innerHTML = c.getHTML();
+            const el = div.firstElementChild;
+            container.appendChild(el);
+
+            if(who === 'player') setupInteraction(el, c);
+        });
+    }
+
+    function renderCenter(el, card) {
+        el.innerHTML = '';
+        if(card) {
+            card.isFaceUp = true; 
+            card.x = 0; card.y = 0; // Reset physics for slot
+            el.innerHTML = card.getHTML();
+            const div = el.querySelector('.playing-card');
+            div.style.position = 'relative'; // Slot mode
+            div.style.left = '0'; div.style.top = '0';
+        }
+    }
+
+    // === INTERACTION (PHYSICS & RULES) ===
+    function setupInteraction(el, card) {
+        // 1. FLIP LOGIC
+        el.addEventListener('mousedown', (e) => {
+            if(e.button !== 0) return; // Left click only
+            if(!card.isFaceUp) {
+                // Rule: "Cannot have more than 4 live cards"
+                const liveCount = gameState.player.cards.filter(c => c.isFaceUp).length;
+                if(liveCount < 4) {
+                    card.isFaceUp = true;
+                    renderZone('player');
+                }
+                return; // Don't drag if just flipping
+            }
+            startDrag(e, el, card);
+        });
+    }
+
+    function startDrag(e, el, card) {
+        e.preventDefault();
+        let startX = e.clientX;
+        let startY = e.clientY;
+        let origLeft = card.x;
+        let origTop = card.y;
+        
+        // Visual lift
+        el.style.zIndex = 1000;
+        
+        function move(e) {
+            let dx = e.clientX - startX;
+            let dy = e.clientY - startY;
+            el.style.left = (origLeft + dx) + 'px';
+            el.style.top = (origTop + dy) + 'px';
+        }
+
+        function drop(e) {
+            document.removeEventListener('mousemove', move);
+            document.removeEventListener('mouseup', drop);
+            
+            // Check Center Drop
+            if(isOver(e, els.cLeft) && isValid(card, gameState.centerLeft)) {
+                playCard(card, 'left');
+            } else if(isOver(e, els.cRight) && isValid(card, gameState.centerRight)) {
+                playCard(card, 'right');
+            } else {
+                // Check Boundary
+                const box = els.pBoundary.getBoundingClientRect();
+                const cardRect = el.getBoundingClientRect();
+                
+                // Logic: Is card inside box?
+                const inside = (
+                    cardRect.left >= box.left && 
+                    cardRect.right <= box.right && 
+                    cardRect.top >= box.top && 
+                    cardRect.bottom <= box.bottom
+                );
+
+                if(inside) {
+                    // Update physics to new position
+                    card.x = parseInt(el.style.left);
+                    card.y = parseInt(el.style.top);
+                    el.style.zIndex = 10;
+                } else {
+                    // "Physically cannot leave boundary" -> Snap Back
+                    el.style.left = origLeft + 'px';
+                    el.style.top = origTop + 'px';
+                    el.style.zIndex = 10;
+                }
+            }
+        }
+        document.addEventListener('mousemove', move);
+        document.addEventListener('mouseup', drop);
+    }
+
+    function isOver(e, target) {
+        const r = target.getBoundingClientRect();
+        return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+    }
+
+    function isValid(card, center) {
+        if(!center) return false;
+        let diff = Math.abs(card.rank - center.rank);
+        return (diff === 1 || diff === 12);
+    }
+
+    function playCard(card, side) {
+        // Remove from player array
+        gameState.player.cards = gameState.player.cards.filter(c => c.id !== card.id);
+        
+        // Set to center
+        if(side === 'left') gameState.centerLeft = card;
+        else gameState.centerRight = card;
+        
+        renderAll();
+        checkWin();
+    }
+
+    // === BOT ===
+    function startBot() {
         setInterval(() => {
-            if (gameState.isGameOver) return;
-            let possibleMoves = [];
-            let flipMoveIndex = -1;
-
-            for (let i = 0; i < 4; i++) {
-                let pile = gameState.bot.foundations[i];
-                if (pile.length === 0) continue;
-                let topCard = pile[pile.length - 1];
-
-                if (!topCard.isFaceUp) { flipMoveIndex = i; break; }
-
-                let targets = [{ name: 'left', card: gameState.centerLeft }, { name: 'right', card: gameState.centerRight }];
-                targets.forEach(t => {
-                    if (isValidMove(topCard, t.card)) possibleMoves.push({ pileIndex: i, target: t.name });
-                });
+            if(gameState.gameOver) return;
+            
+            // Bot needs to flip?
+            const live = gameState.bot.cards.filter(c => c.isFaceUp).length;
+            if(live < 4) {
+                const hidden = gameState.bot.cards.find(c => !c.isFaceUp);
+                if(hidden) { hidden.isFaceUp = true; renderZone('bot'); return; }
             }
 
-            if (flipMoveIndex !== -1) {
-                setTimeout(() => {
-                    gameState.bot.foundations[flipMoveIndex][gameState.bot.foundations[flipMoveIndex].length - 1].isFaceUp = true;
-                    renderBoard();
-                }, botSpeed / 2);
-                return;
+            // Find Move
+            const playable = gameState.bot.cards.filter(c => c.isFaceUp);
+            let move = null;
+            
+            for(let c of playable) {
+                if(isValid(c, gameState.centerLeft)) { move = {card:c, side:'left'}; break; }
+                if(isValid(c, gameState.centerRight)) { move = {card:c, side:'right'}; break; }
             }
 
-            if (possibleMoves.length > 0) {
-                let move = possibleMoves[0];
-                const startSlot = els.botFoundations[move.pileIndex];
-                const cardEl = startSlot.lastElementChild;
-                const targetEl = move.target === 'left' ? els.centerLeft : els.centerRight;
-
-                // Trigger Animation
-                flyCard(cardEl, targetEl, () => {
-                    playCard('bot', move.pileIndex, move.target);
-                });
+            if(move) {
+                // Remove from bot array
+                gameState.bot.cards = gameState.bot.cards.filter(c => c.id !== move.card.id);
+                if(move.side === 'left') gameState.centerLeft = move.card;
+                else gameState.centerRight = move.card;
+                renderAll();
+                checkWin();
             }
 
         }, botSpeed);
     }
 
-    // === RENDER ===
-    function renderBoard() {
-        renderCenterPile(els.centerLeft, gameState.centerLeft);
-        renderCenterPile(els.centerRight, gameState.centerRight);
-        els.playerDeckCount.innerText = gameState.player.drawDeck.length;
-        els.botDeckCount.innerText = gameState.bot.drawDeck.length;
-
-        // Player Stacks (Cascading + Drag)
-        gameState.player.foundations.forEach((pile, index) => {
-            const slot = els.playerFoundations[index];
-            slot.innerHTML = '';
-            pile.forEach((card, i) => {
-                const temp = document.createElement('div');
-                temp.innerHTML = card.getHTML();
-                const cardEl = temp.firstElementChild;
-                cardEl.style.top = (i * 25) + 'px'; // Cascade
-                slot.appendChild(cardEl);
-
-                if (i === pile.length - 1) { // Only top card interactive
-                    if (card.isFaceUp) setupDragEvents(cardEl, card, index);
-                    else cardEl.onclick = () => { card.isFaceUp = true; renderBoard(); };
-                }
-            });
-        });
-
-        // Bot Stacks (Cascading)
-        gameState.bot.foundations.forEach((pile, index) => {
-            const slot = els.botFoundations[index];
-            slot.innerHTML = '';
-            pile.forEach((card, i) => {
-                const temp = document.createElement('div');
-                temp.innerHTML = card.getHTML();
-                const cardEl = temp.firstElementChild;
-                cardEl.style.top = (i * 25) + 'px';
-                slot.appendChild(cardEl);
-            });
-        });
-        checkWinCondition();
+    function updateStats() {
+        let pTotal = gameState.player.deck.length + gameState.player.cards.length;
+        let bTotal = gameState.bot.deck.length + gameState.bot.cards.length;
+        els.pCount.innerText = pTotal;
+        els.bCount.innerText = bTotal;
+        
+        // Stalemate Check (Simple Flip)
+        // If neither can move for X seconds, logic would go here
+        // For MVP: Randomly flip deck every 5s if stuck
     }
 
-    function renderCenterPile(element, card) {
-        element.innerHTML = '';
-        if(card) {
-            element.innerHTML = card.getHTML();
-            let div = element.querySelector('.playing-card');
-            if(div) { div.style.cursor = 'default'; div.style.position = 'relative'; div.classList.remove('face-down'); }
+    function checkWin() {
+        if(gameState.player.cards.length === 0 && gameState.player.deck.length === 0) {
+            gameState.gameOver = true;
+            document.querySelector('#overlay-title').innerText = "YOU WIN!";
+            els.overlay.classList.remove('hidden');
+        }
+        if(gameState.bot.cards.length === 0 && gameState.bot.deck.length === 0) {
+            gameState.gameOver = true;
+            document.querySelector('#overlay-title').innerText = "BOT WINS!";
+            els.overlay.classList.remove('hidden');
         }
     }
-    
-    function isValidMove(card, centerCard) {
-        if (!centerCard) return false;
-        const diff = Math.abs(card.rank - centerCard.rank);
-        return (diff === 1 || diff === 12);
-    }
 
-    function playCard(who, pileIndex, whichCenter) {
-        let card = (who === 'player') ? gameState.player.foundations[pileIndex].pop() : gameState.bot.foundations[pileIndex].pop();
-        if (whichCenter === 'left') gameState.centerLeft = card; else gameState.centerRight = card;
-        renderBoard();
-    }
-
-    function setupDragEvents(element, cardObj, pileIndex) {
-        let isDragging = false, startX, startY;
-        element.addEventListener('mousedown', (e) => {
-            e.preventDefault(); if (gameState.isGameOver || !cardObj.isFaceUp) return;
-            isDragging = true; element.style.zIndex = 1000; element.style.position = 'fixed';
-            const rect = element.getBoundingClientRect(); startX = e.clientX - rect.left; startY = e.clientY - rect.top;
-            element.style.left = (e.clientX - startX) + 'px'; element.style.top = (e.clientY - startY) + 'px';
-
-            function onMouseMove(moveEvent) { if (!isDragging) return; element.style.left = (moveEvent.clientX - startX) + 'px'; element.style.top = (moveEvent.clientY - startY) + 'px'; }
-            function onMouseUp(upEvent) {
-                isDragging = false; document.removeEventListener('mousemove', onMouseMove); document.removeEventListener('mouseup', onMouseUp);
-                if (isOverElement(upEvent, els.centerLeft) && isValidMove(cardObj, gameState.centerLeft)) playCard('player', pileIndex, 'left');
-                else if (isOverElement(upEvent, els.centerRight) && isValidMove(cardObj, gameState.centerRight)) playCard('player', pileIndex, 'right');
-                else renderBoard();
-            }
-            document.addEventListener('mousemove', onMouseMove); document.addEventListener('mouseup', onMouseUp);
-        });
-    }
-    function isOverElement(e, targetEl) { const rect = targetEl.getBoundingClientRect(); return (e.clientX >= rect.left && e.clientX <= rect.right && e.clientY >= rect.top && e.clientY <= rect.bottom); }
-
-    function checkWinCondition() {
-        if (gameState.player.foundations.every(p => p.length === 0) && !gameState.isGameOver) endGame("VICTORY!", "You cleared your board!");
-        if (gameState.bot.foundations.every(p => p.length === 0) && !gameState.isGameOver) endGame("DEFEAT", "The bot was faster.");
-    }
-    function endGame(title, desc) {
-        gameState.isGameOver = true;
-        els.overlayTitle.innerText = title;
-        els.overlayDesc.innerText = desc;
-        els.overlay.classList.remove('hidden');
-    }
-
-    let lastMoveState = "";
-    function checkStalemateLoop() {
-        setInterval(() => {
-            if (gameState.isGameOver) return;
-            let currentTopCards = (gameState.centerLeft ? gameState.centerLeft.id : "") + (gameState.centerRight ? gameState.centerRight.id : "");
-            if(currentTopCards === lastMoveState) {
-                 if (gameState.player.drawDeck.length > 0) gameState.centerLeft = gameState.player.drawDeck.pop(); 
-                 if (gameState.bot.drawDeck.length > 0) gameState.centerRight = gameState.bot.drawDeck.pop(); 
-                 renderBoard(); 
-            }
-            lastMoveState = currentTopCards;
-        }, 5000); // 5 sec stalemate check
-    }
-
-    initGame();
+    init();
 });
