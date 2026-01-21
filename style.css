@@ -1,0 +1,191 @@
+/* 1. GLOBAL RESET & COLORS */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+body {
+    background-color: #302e2b; /* Dark Grey Background */
+    color: #ffffff;
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+}
+
+.main-layout {
+    display: flex;
+    width: 100%;
+    max-width: 1600px;
+    height: 100%;
+}
+
+/* 2. LEFT SIDEBAR */
+.sidebar {
+    width: 180px;
+    background-color: #262421;
+    display: flex;
+    flex-direction: column;
+    padding: 15px;
+    border-right: 1px solid #3c3a37;
+}
+
+.logo {
+    font-size: 20px;
+    font-weight: bold;
+    color: #81b64c; /* Chess Green */
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+.search-bar {
+    background: #3c3a37;
+    padding: 8px;
+    border-radius: 5px;
+    display: flex;
+    align-items: center;
+    margin-bottom: 20px;
+}
+.search-bar input {
+    background: transparent;
+    border: none;
+    color: white;
+    margin-left: 10px;
+    width: 100%;
+    outline: none;
+}
+
+.nav-links { list-style: none; }
+.nav-links li {
+    padding: 12px 10px;
+    color: #c3c3c3;
+    font-size: 14px;
+    cursor: default; /* Unclickable visual */
+}
+.nav-links li i { margin-right: 10px; width: 20px; text-align: center;}
+
+.auth-buttons { margin-top: auto; display: flex; flex-direction: column; gap: 10px; }
+.btn-signup { background-color: #81b64c; color: white; border: none; padding: 12px; border-radius: 5px; font-weight: bold; cursor: pointer; }
+.btn-login { background-color: #454341; color: #c3c3c3; border: none; padding: 12px; border-radius: 5px; font-weight: bold; cursor: pointer; }
+
+.bottom-links { margin-top: 20px; font-size: 12px; color: #787673; text-align: center; display: flex; justify-content: space-around;}
+
+/* 3. CENTER STAGE (Slaps Table) */
+.center-stage {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    background-color: #302e2b;
+    padding: 20px;
+}
+
+.game-preview {
+    width: 600px;
+    height: 600px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* Creating the "Felt Table" look with CSS */
+.slaps-table-visual {
+    width: 100%;
+    height: 100%;
+    background-color: #769656; /* Green Felt */
+    border-radius: 10px;
+    position: relative;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* A pile of cards in the middle */
+.center-pile {
+    width: 100px;
+    height: 140px;
+    background-color: white;
+    border-radius: 8px;
+    border: 2px solid #ddd;
+    box-shadow: 2px 2px 5px rgba(0,0,0,0.3);
+}
+
+.player-info {
+    margin-top: 20px;
+    display: flex;
+    align-items: center;
+    background-color: #262421;
+    padding: 10px 20px;
+    border-radius: 5px;
+}
+.player-info input {
+    background: transparent;
+    border: none;
+    color: white;
+    font-size: 16px;
+    margin-left: 10px;
+    outline: none;
+}
+
+/* 4. RIGHT PANEL (Action Cards) */
+.action-panel {
+    width: 350px;
+    background-color: #211f1c; /* Slightly darker right panel */
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+}
+
+.panel-header {
+    font-size: 24px;
+    font-weight: bold;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.card {
+    background-color: #262421;
+    border-radius: 8px;
+    padding: 15px;
+    display: flex;
+    align-items: center;
+    margin-bottom: 15px;
+    transition: 0.2s;
+}
+
+/* Styling for the card that works */
+.card.clickable:hover {
+    background-color: #3c3a37;
+    cursor: pointer;
+    transform: translateY(-2px);
+}
+
+/* Styling for disabled cards */
+.card.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.card-icon {
+    font-size: 24px;
+    margin-right: 15px;
+    color: #c3c3c3;
+    width: 30px;
+    text-align: center;
+}
+
+.card-text h3 { font-size: 16px; color: white; margin-bottom: 4px; }
+.card-text p { font-size: 12px; color: #989694; }
+
+.footer-links {
+    margin-top: auto;
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: #989694;
+}
