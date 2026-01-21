@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Game Setup - Slaps.GG</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="setup-body">
+
+    <div class="setup-container">
+        <a href="index.html" class="back-link"><i class="fa-solid fa-arrow-left"></i> Back to Menu</a>
+
+        <h1>Configure Bot Match</h1>
+        
+        <div class="bot-preview">
+            <i class="fa-solid fa-robot" id="bot-icon"></i>
+            <h2 id="difficulty-text">Difficulty: 5</h2>
+        </div>
+
+        <div class="slider-container">
+            <span>Easy (1)</span>
+            <input type="range" min="1" max="10" value="5" class="slider" id="difficulty-slider">
+            <span>Master (10)</span>
+        </div>
+
+        <p class="description" id="difficulty-desc">Balanced speed and strategy.</p>
+
+        <a href="game.html" class="btn-start" id="start-btn">START MATCH</a>
+    </div>
+
+    <script>
+        // Simple script to update the text when slider moves
+        const slider = document.getElementById('difficulty-slider');
+        const text = document.getElementById('difficulty-text');
+        const desc = document.getElementById('difficulty-desc');
+        const botIcon = document.getElementById('bot-icon');
+        const startBtn = document.getElementById('start-btn');
+
+        // Descriptions for levels
+        const descriptions = {
+            low: "Slow reactions. Good for learning.",
+            mid: "Balanced speed and strategy.",
+            high: "Superhuman reflexes. Good luck."
+        };
+
+        slider.oninput = function() {
+            let val = this.value;
+            text.innerText = "Difficulty: " + val;
+            
+            // Save difficulty to browser memory so the game knows later
+            localStorage.setItem('slapsDifficulty', val);
+
+            // Update text and color based on value
+            if (val <= 3) {
+                desc.innerText = descriptions.low;
+                botIcon.style.color = "#81b64c"; // Green
+            } else if (val <= 7) {
+                desc.innerText = descriptions.mid;
+                botIcon.style.color = "#e6912c"; // Orange
+            } else {
+                desc.innerText = descriptions.high;
+                botIcon.style.color = "#cc3333"; // Red
+            }
+        }
+        
+        // Initialize the save
+        localStorage.setItem('slapsDifficulty', 5);
+    </script>
+</body>
+</html>
