@@ -48,26 +48,42 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // === ANIMATION ENGINE (FIXED) ===
     function flyCard(cardEl, targetEl, callback) {
         if(!cardEl || !targetEl) { callback(); return; }
         const startRect = cardEl.getBoundingClientRect();
         const targetRect = targetEl.getBoundingClientRect();
+        
+        // Create the flying clone
         const clone = cardEl.cloneNode(true);
         if(clone.classList.contains('face-down')) clone.classList.remove('face-down');
         clone.classList.add('flying-card');
-        clone.style.left = startRect.left + 'px'; clone.style.top = startRect.top + 'px';
-        clone.style.width = '90px'; clone.style.height = '126px'; clone.style.zIndex = 99999;
+        clone.style.left = startRect.left + 'px'; 
+        clone.style.top = startRect.top + 'px';
+        clone.style.width = '90px'; 
+        clone.style.height = '126px'; 
+        clone.style.zIndex = 99999;
+        
+        // HIDE ORIGINAL INSTANTLY TO PREVENT DUPLICATION
+        cardEl.style.visibility = 'hidden'; 
+
         document.body.appendChild(clone);
-        void clone.offsetWidth;
-        clone.style.left = targetRect.left + 'px'; clone.style.top = targetRect.top + 'px';
-        setTimeout(() => { clone.remove(); callback(); }, 600);
+        void clone.offsetWidth; // Force Reflow
+
+        // Animate
+        clone.style.left = targetRect.left + 'px'; 
+        clone.style.top = targetRect.top + 'px';
+
+        setTimeout(() => { 
+            clone.remove(); 
+            callback(); 
+        }, 600);
     }
 
     function init() {
         let deck = createDeck();
         gameState.player.deck = deck.slice(0, 16); gameState.bot.deck = deck.slice(16, 32);
         spawnFoundation(deck.slice(32, 42), 'player'); spawnFoundation(deck.slice(42, 52), 'bot');
-        // Initial state: Empty Centers
         renderAll(); runBotCycle(); setInterval(updateStats, 200); setInterval(checkBotStalemate, 800);
     }
 
@@ -128,14 +144,12 @@ document.addEventListener('DOMContentLoaded', () => {
         let origX = card.x, origY = card.y;
         let dragged = false;
         
-        // UNLOCK CHECK
         const canLeft = isValid(card, gameState.centerLeft);
         const canRight = isValid(card, gameState.centerRight);
         const isUnlocked = (canLeft || canRight) && card.isFaceUp;
         const boxW = 900, boxH = 250, cardW = 90, cardH = 126;
 
         function move(e) {
-            // Relaxed threshold: Must move > 15px to count as drag
             if(Math.abs(e.clientX - startX) > 15 || Math.abs(e.clientY - startY) > 15) dragged = true;
             
             if(dragged) {
@@ -149,11 +163,10 @@ document.addEventListener('DOMContentLoaded', () => {
         function drop(e) {
             document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', drop);
             
-            // CLICK TO FLIP
             if(!dragged && !card.isFaceUp) {
                 if(gameState.player.cards.filter(c => c.isFaceUp).length < 4) { 
                     card.isFaceUp = true; 
-                    resetStalemate(); // Flipping counts as a move
+                    resetStalemate(); 
                     renderZone('player'); 
                 }
                 return;
@@ -187,12 +200,10 @@ document.addEventListener('DOMContentLoaded', () => {
         renderAll(); checkWin();
     }
 
-    // === DECK & STALEMATE LOGIC ===
+    // === STALEMATE ===
     els.pDeck.addEventListener('click', () => {
         if(gameState.isCountDown || gameState.gameOver) return;
-        
         if(!gameState.playerPass) {
-            // Player wants to Wait/Reveal
             gameState.playerPass = true;
             els.pDeck.classList.add('waiting');
             els.pDeckText.innerText = "WAIT";
@@ -202,15 +213,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function checkBotStalemate() {
         if(gameState.isCountDown || gameState.gameOver) return;
-
-        // 1. Does Bot have moves?
         let bMoves = false;
         gameState.bot.cards.filter(c => c.isFaceUp).forEach(c => {
             if(isValid(c, gameState.centerLeft) || isValid(c, gameState.centerRight)) bMoves = true;
         });
         if(gameState.bot.cards.filter(c => c.isFaceUp).length < 4 && gameState.bot.cards.some(c => !c.isFaceUp)) bMoves = true;
-
-        // 2. Or is it the start of the game?
         const isStart = !gameState.centerLeft && !gameState.centerRight;
 
         if(!bMoves || isStart) {
@@ -221,7 +228,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 if(gameState.playerPass) startCountdown();
             }
         } else {
-            // If bot suddenly has a move (e.g. player changed center), un-wait
             if(gameState.botPass && !isStart) {
                 gameState.botPass = false;
                 els.bDeck.classList.remove('waiting');
@@ -235,37 +241,25 @@ document.addEventListener('DOMContentLoaded', () => {
         let count = 3;
         els.pDeck.classList.remove('waiting'); els.bDeck.classList.remove('waiting');
         els.pDeck.classList.add('counting'); els.bDeck.classList.add('counting');
-        
         const timer = setInterval(() => {
             els.pDeckText.innerText = count; els.bDeckText.innerText = count;
             count--;
-            if(count < 0) {
-                clearInterval(timer);
-                executeReveal();
-            }
+            if(count < 0) { clearInterval(timer); executeReveal(); }
         }, 800);
     }
 
     function executeReveal() {
         if(gameState.player.deck.length > 0) gameState.centerRight = gameState.player.deck.pop();
         if(gameState.bot.deck.length > 0) gameState.centerLeft = gameState.bot.deck.pop();
-        
         resetStalemateVisuals();
         renderAll();
     }
 
-    function resetStalemate() {
-        gameState.playerPass = false; 
-        resetStalemateVisuals();
-    }
-
+    function resetStalemate() { gameState.playerPass = false; resetStalemateVisuals(); }
     function resetStalemateVisuals() {
-        els.pDeck.classList.remove('waiting', 'counting'); 
-        els.bDeck.classList.remove('waiting', 'counting');
+        els.pDeck.classList.remove('waiting', 'counting'); els.bDeck.classList.remove('waiting', 'counting');
         els.pDeckText.innerText = "Start"; els.bDeckText.innerText = "";
-        gameState.isCountDown = false;
-        gameState.playerPass = false; 
-        gameState.botPass = false;
+        gameState.isCountDown = false; gameState.playerPass = false; gameState.botPass = false;
     }
 
     // === BOT BRAIN ===
@@ -273,7 +267,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if(gameState.gameOver) return;
         setTimeout(() => {
             let move = null;
-            // Only move if we aren't waiting/counting
             if(!gameState.botPass && !gameState.isCountDown) {
                 for(let c of gameState.bot.cards.filter(c => c.isFaceUp)) {
                     if(isValid(c, gameState.centerLeft)) { move = {card:c, side:'left'}; break; }
@@ -293,10 +286,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     gameState.bot.cards = gameState.bot.cards.filter(c => c.id !== move.card.id);
                     if(move.side === 'left') gameState.centerLeft = move.card; else gameState.centerRight = move.card;
+                    resetStalemate(); 
                     
-                    resetStalemate(); // Bot moved, reset everything
-
-                    // Flip logic
                     let colCards = gameState.bot.cards.filter(c => c.col === move.card.col);
                     if(colCards.length > 0) {
                         let newTop = colCards[colCards.length - 1]; 
@@ -305,10 +296,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     renderAll(); checkWin();
                 });
             } else {
-                // If bot has no moves, it might just need to flip a card locally
                 if(gameState.bot.cards.filter(c => c.isFaceUp).length < 4 && !gameState.botPass) {
                     const hidden = gameState.bot.cards.find(c => !c.isFaceUp);
-                    if(hidden) { hidden.isFaceUp = true; renderZone('bot'); }
+                    if(hidden) { hidden.isFaceUp = true; resetStalemate(); renderZone('bot'); }
                 }
             }
             runBotCycle();
