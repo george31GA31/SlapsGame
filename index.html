@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Slaps.com - Play Online</title>
+    <title>Slaps.GG - Play Online</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
@@ -32,24 +32,61 @@
                 <button class="btn-signup">Sign Up</button>
                 <button class="btn-login">Log In</button>
             </div>
-
-            <div class="bottom-links">
-                <span>English</span>
-                <span>Support</span>
-            </div>
         </nav>
 
         <main class="center-stage">
-            <div class="game-preview">
-                <div class="slaps-table-visual">
-                    <div class="center-pile"></div>
+            
+            <div class="player-area opponent">
+                <div class="player-info">
+                    <i class="fa-solid fa-robot"></i> <span>Bot (Opponent)</span>
+                </div>
+                
+                <div class="cards-layout top-layout">
+                    <div class="deck-slot">
+                        <div class="card-back"></div>
+                        <span class="label">Draw Deck</span>
+                    </div>
+
+                    <div class="foundation-container">
+                        <div class="foundation-slot" id="opp-found-4"></div> 
+                        <div class="foundation-slot" id="opp-found-3"></div> 
+                        <div class="foundation-slot" id="opp-found-2"></div> 
+                        <div class="foundation-slot" id="opp-found-1"></div> 
+                    </div>
                 </div>
             </div>
-            
-            <div class="player-info">
-                <i class="fa-solid fa-user"></i>
-                <input type="text" id="nickname" value="Guest Player">
+
+
+            <div class="play-area">
+                <div class="boundary-line"></div>
+                <div class="center-piles-container">
+                    <div class="center-pile" id="center-pile-left"></div>
+                    <div class="center-pile" id="center-pile-right"></div>
+                </div>
             </div>
+
+
+            <div class="player-area player">
+                
+                <div class="cards-layout bottom-layout">
+                    <div class="foundation-container">
+                        <div class="foundation-slot" id="player-found-4"></div> 
+                        <div class="foundation-slot" id="player-found-3"></div> 
+                        <div class="foundation-slot" id="player-found-2"></div> 
+                        <div class="foundation-slot" id="player-found-1"></div> 
+                    </div>
+
+                    <div class="deck-slot" id="player-draw-deck">
+                        <div class="card-back"></div>
+                        <span class="label">Draw Deck</span>
+                    </div>
+                </div>
+
+                <div class="player-info">
+                    <i class="fa-solid fa-user"></i> <span>You</span>
+                </div>
+            </div>
+
         </main>
 
         <aside class="action-panel">
@@ -58,7 +95,6 @@
             </div>
 
             <div class="action-cards">
-                
                 <div class="card disabled">
                     <div class="card-icon"><i class="fa-solid fa-bolt"></i></div>
                     <div class="card-text">
@@ -79,23 +115,9 @@
                     <div class="card-icon"><i class="fa-solid fa-handshake"></i></div>
                     <div class="card-text">
                         <h3>Play a Friend</h3>
-                        <p>Invite a friend to a game of slaps</p>
+                        <p>Invite a friend</p>
                     </div>
                 </div>
-
-                <div class="card disabled">
-                    <div class="card-icon"><i class="fa-solid fa-trophy"></i></div>
-                    <div class="card-text">
-                        <h3>Tournaments</h3>
-                        <p>Join an Arena where anyone can win</p>
-                    </div>
-                </div>
-
-            </div>
-
-            <div class="footer-links">
-                <span><i class="fa-solid fa-folder-open"></i> Game History</span>
-                <span><i class="fa-solid fa-chart-simple"></i> Leaderboard</span>
             </div>
         </aside>
 
