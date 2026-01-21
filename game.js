@@ -1,6 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
     
-    // CONFIG
     const SUITS = ["♠", "♥", "♣", "♦"];
     const VALUES = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
     let difficulty = parseInt(localStorage.getItem('slapsDifficulty')) || 5;
@@ -92,7 +91,7 @@ document.addEventListener('DOMContentLoaded', () => {
         els.bBorrow.classList.remove('borrow-active');
         document.querySelectorAll('.slot').forEach(s => s.innerHTML = '');
 
-        // Determine Foundation Size based on specific patterns if < 10
+        // Pattern logic
         let pPattern = getPattern(pDeck.length);
         let bPattern = getPattern(bDeck.length);
         
@@ -120,24 +119,20 @@ document.addEventListener('DOMContentLoaded', () => {
             6: [2,2,1,1], 5: [2,1,1,1], 4: [1,1,1,1],
             3: [1,1,1], 2: [1,1], 1: [1]
         };
-        return patterns[count] || [count]; // Fallback
+        return patterns[count] || [count];
     }
 
     function createDeck() { return SUITS.flatMap(s => VALUES.map(v => new Card(s, v))).sort(() => Math.random() - 0.5); }
 
     function spawnFoundation(cards, owner, pattern) {
-        // Pattern e.g. [4,3,2,1]
-        // Columns: 0 (4 cards), 1 (3 cards), etc.
         let cardIdx = 0;
         let xOffsets = [50, 250, 450, 650];
-
         pattern.forEach((pileSize, colIndex) => {
             for(let i=0; i<pileSize; i++) {
                 if(cardIdx < cards.length) {
                     let c = cards[cardIdx++];
                     c.owner = owner; c.col = colIndex;
                     c.x = xOffsets[colIndex]; c.y = 20 + (i * 30);
-                    // Top card of each pile is Face Up
                     c.isFaceUp = (i === pileSize - 1);
                     if(owner === 'player') gameState.player.cards.push(c); else gameState.bot.cards.push(c);
                 }
@@ -148,8 +143,6 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderAll() {
         renderZone('player'); renderZone('bot');
         renderCenter(els.cLeft, gameState.centerLeft); renderCenter(els.cRight, gameState.centerRight);
-        
-        // BORROW LABELS
         els.pBorrow.classList.toggle('borrow-active', gameState.player.deck.length === 0);
         els.bBorrow.classList.toggle('borrow-active', gameState.bot.deck.length === 0);
     }
@@ -235,7 +228,6 @@ document.addEventListener('DOMContentLoaded', () => {
         resetStalemate(); renderAll(); checkWin();
     }
 
-    // === SLAP LOGIC ===
     document.addEventListener('keydown', (e) => {
         if(e.code === 'Space' && !gameState.gameOver && !gameState.isCountDown) {
             e.preventDefault(); performSlap('player');
@@ -275,7 +267,6 @@ document.addEventListener('DOMContentLoaded', () => {
         setTimeout(() => { gameState.slapActive = false; resetStalemate(); }, 1000);
     }
 
-    // === STALEMATE & CONSUMPTION ===
     els.pDeck.addEventListener('click', () => {
         if(gameState.isCountDown || gameState.gameOver) return;
         if(!gameState.playerPass) {
@@ -318,19 +309,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if(gameState.centerLeft) gameState.centerStack.push(gameState.centerLeft);
         if(gameState.centerRight) gameState.centerStack.push(gameState.centerRight);
 
-        // CONSUMPTION LOGIC (Borrowing consumes Opponent's Deck)
         let pCard, bCard;
-
         if(gameState.player.deck.length === 0) {
-            // Player empty -> Take 2 from Bot
             if(gameState.bot.deck.length > 0) pCard = gameState.bot.deck.pop();
             if(gameState.bot.deck.length > 0) bCard = gameState.bot.deck.pop();
         } else if(gameState.bot.deck.length === 0) {
-            // Bot empty -> Take 2 from Player
             if(gameState.player.deck.length > 0) bCard = gameState.player.deck.pop();
             if(gameState.player.deck.length > 0) pCard = gameState.player.deck.pop();
         } else {
-            // Normal
             pCard = gameState.player.deck.pop();
             bCard = gameState.bot.deck.pop();
         }
@@ -423,7 +409,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if(gameState.gameOver) return;
         gameState.gameOver = true;
         
-        // MATCH WIN CHECK: Total Cards = 0
         let pTotal = parseInt(els.pCount.innerText);
         let bTotal = parseInt(els.bCount.innerText);
 
