@@ -5,23 +5,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const VALUES = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
     let difficulty = parseInt(localStorage.getItem('slapsDifficulty')) || 5;
 
-    // DIFFICULTY SETTINGS
-    const difficultySettings = {
-        1: { min: 2000, max: 3000 },
-        2: { min: 1500, max: 2500 },
-        3: { min: 1000, max: 2000 },
-        4: { min: 250,  max: 1500 }
-    };
-
+    // AI TUNING
+    // Higher difficulty = Lower delay
     const getAiDelay = () => {
-        if (difficulty <= 4) {
-            let s = difficultySettings[difficulty];
-            return Math.floor(Math.random() * (s.max - s.min + 1)) + s.min;
-        } else {
-            let minDelay = Math.max(200, 3500 - (difficulty * 350));
-            let maxDelay = Math.max(400, 4500 - (difficulty * 400));
-            return Math.floor(Math.random() * (maxDelay - minDelay + 1)) + minDelay;
-        }
+        let base = 3000 - (difficulty * 250); // Lvl 5 = 1750ms
+        return Math.max(600, base + Math.random() * 500);
     };
 
     let globalZ = 100;
@@ -30,8 +18,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let lastActionTime = 0;
 
     let gameState = {
-        player: { deck: [], cards: [], sidePot: [] },
-        bot: { deck: [], cards: [], sidePot: [] },
+        player: { deck: [], cards: [], sidePot: [], borrowing: false },
+        bot: { deck: [], cards: [], sidePot: [], borrowing: false },
         centerLeft: null, centerRight: null,
         centerStack: [], 
         gameOver: false,
@@ -65,14 +53,22 @@ document.addEventListener('DOMContentLoaded', () => {
         sBSlaps: document.getElementById('b-slaps')
     };
 
-    // Global Drag Listeners
+    // Global Listeners
     document.addEventListener('mousedown', () => isPlayerDragging = true);
     document.addEventListener('mouseup', () => isPlayerDragging = false);
+    
+    // Slap Listener
+    window.addEventListener('keydown', (e) => {
+        if(e.code === 'Space' && !gameState.gameOver && !gameState.isCountDown) {
+            e.preventDefault(); 
+            performSlap('player');
+        }
+    });
 
     class Card {
         constructor(suit, value, owner) {
             this.suit = suit; this.value = value;
-            this.rank = VALUES.indexOf(value) + 1;
+            this.rank = VALUES.indexOf(value) + 1; // 1-13
             this.color = (suit === "♥" || suit === "♦") ? "red" : "black";
             this.id = Math.random().toString(36).substr(2, 9);
             this.owner = owner; 
@@ -89,39 +85,46 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function flyCard(card, targetEl, callback) {
         if(!card || !targetEl) { callback(); return; }
+        
+        let startLeft = 0, startTop = 0;
         let cardEl = document.getElementById(card.id);
-        let startLeft, startTop;
 
         if (cardEl) {
             const rect = cardEl.getBoundingClientRect();
-            startLeft = rect.left;
-            startTop = rect.top;
+            startLeft = rect.left; startTop = rect.top;
             cardEl.style.visibility = 'hidden'; 
         } else {
-            const boundary = card.owner === 'player' ? els.pBoundary : els.bBoundary;
+            // Fallback if visual is missing: Start from deck center
+            const boundary = card.owner === 'player' ? els.pDeck : els.bDeck;
             const bRect = boundary.getBoundingClientRect();
-            startLeft = bRect.left + card.x;
-            startTop = bRect.top + card.y;
+            startLeft = bRect.left; startTop = bRect.top;
         }
 
         const targetRect = targetEl.getBoundingClientRect();
+        
         const clone = document.createElement('div');
-        clone.innerHTML = `<div class="card-top">${card.value}</div><div class="card-mid">${card.suit}</div><div class="card-bot">${card.value}</div>`;
         clone.className = `playing-card flying-card`;
-        clone.style.color = card.color === 'red' ? '#d9534f' : '#292b2c';
         clone.style.width = '110px'; clone.style.height = '154px';
         clone.style.left = startLeft + 'px'; clone.style.top = startTop + 'px';
+        clone.style.color = card.color === 'red' ? '#d9534f' : '#292b2c';
+        clone.innerHTML = `<div class="card-top">${card.value}</div><div class="card-mid">${card.suit}</div><div class="card-bot">${card.value}</div>`;
         clone.style.zIndex = 99999;
         
         document.body.appendChild(clone);
-        void clone.offsetWidth; 
+        void clone.offsetWidth; // Force Reflow
 
+        // Animation
         let dist = Math.hypot(targetRect.left - startLeft, targetRect.top - startTop);
-        let duration = Math.max(300, dist * 0.8); 
-        clone.style.transition = `all ${duration}ms ease-out`;
-        clone.style.left = targetRect.left + 'px'; clone.style.top = targetRect.top + 'px';
+        let duration = Math.max(300, dist * 0.6); // Fast but smooth
 
-        setTimeout(() => { clone.remove(); callback(); }, duration); 
+        clone.style.transition = `all ${duration}ms ease-out`;
+        clone.style.left = targetRect.left + 'px'; 
+        clone.style.top = targetRect.top + 'px';
+
+        setTimeout(() => { 
+            clone.remove(); 
+            callback(); 
+        }, duration); 
     }
 
     function init() {
@@ -129,17 +132,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function startRoundWithCounts(pCount, bCount) {
-        // 1. Create Cards
+        // Init Cards
         let fullCards = SUITS.flatMap(s => VALUES.map(v => new Card(s, v, ""))).sort(() => Math.random() - 0.5);
-        
-        // 2. COUNTER FIX: Assign ownership BEFORE splitting so the counter sees them immediately
-        fullCards.forEach((c, i) => {
-            c.owner = (i < pCount) ? 'player' : 'bot';
-        });
+        fullCards.forEach((c, i) => { c.owner = (i < pCount) ? 'player' : 'bot'; });
 
-        // 3. INVISIBLE CARD FIX: Use the full array for splitting
         let pDeck = fullCards.slice(0, pCount);
-        let bDeck = fullCards.slice(pCount); // Slice to end
+        let bDeck = fullCards.slice(pCount);
 
         gameState.player.cards = []; gameState.bot.cards = [];
         gameState.centerStack = []; gameState.centerLeft = null; gameState.centerRight = null;
@@ -150,6 +148,7 @@ document.addEventListener('DOMContentLoaded', () => {
         els.overlay.classList.add('hidden');
         resetStalemateVisuals();
 
+        // Foundation Logic
         let pPattern = getPattern(pDeck.length);
         let bPattern = getPattern(bDeck.length);
         
@@ -162,11 +161,10 @@ document.addEventListener('DOMContentLoaded', () => {
         gameState.player.deck = pDeck;
         gameState.bot.deck = bDeck;
 
-        // Force Initial Render
         renderAll();
         
-        // Delay AI logic
-        lastActionTime = Date.now() + 3000; 
+        // DELAY START
+        lastActionTime = Date.now() + 2000; 
 
         if (!window.masterLoopSet) {
             setInterval(botMasterLoop, 200); 
@@ -201,16 +199,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function renderAll() {
         renderZone('player'); renderZone('bot');
-        renderCenter(els.cLeft, gameState.centerLeft); renderCenter(els.cRight, gameState.centerRight);
+        renderCenter(els.cLeft, gameState.centerLeft); 
+        renderCenter(els.cRight, gameState.centerRight);
     }
 
     function renderZone(who) {
-        // DRAG PROTECTION: Do not update DOM if player is dragging
+        // Prevent refresh while dragging to avoid "glitch drop"
         if(who === 'player' && isPlayerDragging) return;
 
         const container = who === 'player' ? els.pBoundary : els.bBoundary;
         const cards = who === 'player' ? gameState.player.cards : gameState.bot.cards;
         container.innerHTML = ''; 
+        
         cards.forEach(c => {
             const el = document.createElement('div');
             const faceClass = c.isFaceUp ? '' : 'face-down';
@@ -228,7 +228,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderCenter(el, card) {
         el.innerHTML = '';
         if(card) {
-            card.isFaceUp = true; card.x = 0; card.y = 0;
+            card.isFaceUp = true; 
             const centerEl = document.createElement('div');
             centerEl.className = 'playing-card';
             centerEl.style.color = card.color === 'red' ? '#d9534f' : '#292b2c';
@@ -239,44 +239,52 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function setupInteraction(el, card) {
-        el.addEventListener('mousedown', (e) => { if(e.button !== 0) return; el.style.zIndex = ++globalZ; startDrag(e, el, card); });
+        el.addEventListener('mousedown', (e) => { 
+            if(e.button !== 0) return; 
+            el.style.zIndex = ++globalZ; 
+            startDrag(e, el, card); 
+        });
     }
 
     function startDrag(e, el, card) {
         e.preventDefault();
         isPlayerDragging = true;
         let startX = e.clientX, startY = e.clientY;
-        let origX = card.x, origY = card.y;
         let dragged = false;
-        const boxW = 900, boxH = 250, cardW = 110, cardH = 154; 
 
         function move(e) {
-            if(Math.abs(e.clientX - startX) > 15 || Math.abs(e.clientY - startY) > 15) dragged = true;
+            if(Math.abs(e.clientX - startX) > 5 || Math.abs(e.clientY - startY) > 5) dragged = true;
             if(dragged) {
-                let dx = e.clientX - startX, dy = e.clientY - startY;
-                let newX = origX + dx, newY = origY + dy;
-                if (!(card.isFaceUp && (isValid(card, gameState.centerLeft) || isValid(card, gameState.centerRight)))) {
-                    newX = Math.max(0, Math.min(newX, boxW - cardW)); newY = Math.max(0, Math.min(newY, boxH - cardH));
-                }
-                el.style.left = newX + 'px'; el.style.top = newY + 'px';
+                let dx = e.clientX - startX;
+                let dy = e.clientY - startY;
+                // FREE MOVEMENT: No constraints, allows physics to feel natural
+                el.style.transform = `translate(${dx}px, ${dy}px)`;
             }
         }
 
         function drop(e) {
-            document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', drop);
+            document.removeEventListener('mousemove', move); 
+            document.removeEventListener('mouseup', drop);
             isPlayerDragging = false;
-            if(!dragged && !card.isFaceUp) {
-                if(gameState.player.cards.filter(c => c.isFaceUp).length < 4) { card.isFaceUp = true; resetStalemate(); renderZone('player'); }
-                return;
-            }
+            el.style.transform = 'none'; // Reset visual transform
+
             if(dragged && card.isFaceUp) {
-                if(isOver(e, els.cLeft) && isValid(card, gameState.centerLeft)) { playCard(card, 'left'); return; }
-                if(isOver(e, els.cRight) && isValid(card, gameState.centerRight)) { playCard(card, 'right'); return; }
+                // Check Drop Zones
+                if(isOver(e, els.cLeft) && isValid(card, gameState.centerLeft)) { 
+                    playCard(card, 'left'); 
+                    return; 
+                }
+                if(isOver(e, els.cRight) && isValid(card, gameState.centerRight)) { 
+                    playCard(card, 'right'); 
+                    return; 
+                }
             }
-            card.x = parseInt(el.style.left); card.y = parseInt(el.style.top); el.style.zIndex = globalZ; 
+            
+            // If invalid, Re-render handles snap back automatically
             renderZone('player'); 
         }
-        document.addEventListener('mousemove', move); document.addEventListener('mouseup', drop);
+        document.addEventListener('mousemove', move); 
+        document.addEventListener('mouseup', drop);
     }
 
     function isOver(e, target) {
@@ -285,30 +293,36 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function isValid(card, center) {
-        if(!center) return false;
+        // Can't play on empty center (must use deck)
+        if(!center) return false; 
         let diff = Math.abs(card.rank - center.rank);
-        return (diff === 1 || diff === 12);
+        return (diff === 1 || diff === 12); // 12 covers A vs K
     }
 
     function playCard(card, side) {
+        // Logic Update
         gameState.player.cards = gameState.player.cards.filter(c => c.id !== card.id);
-        if(side === 'left' && gameState.centerLeft) gameState.centerStack.push(gameState.centerLeft);
-        if(side === 'right' && gameState.centerRight) gameState.centerStack.push(gameState.centerRight);
-        if(side === 'left') gameState.centerLeft = card; else gameState.centerRight = card;
-        updateStats(); resetStalemate(); renderAll(); checkWin();
-    }
-
-    document.addEventListener('keydown', (e) => {
-        if(e.code === 'Space' && !gameState.gameOver && !gameState.isCountDown) {
-            e.preventDefault(); performSlap('player');
+        
+        if(side === 'left') {
+            if(gameState.centerLeft) gameState.centerStack.push(gameState.centerLeft);
+            gameState.centerLeft = card;
+        } else {
+            if(gameState.centerRight) gameState.centerStack.push(gameState.centerRight);
+            gameState.centerRight = card;
         }
-    });
+        
+        updateStats(); 
+        resetStalemate(); 
+        renderAll(); 
+        checkWin();
+    }
 
     function botMasterLoop() {
         if(gameState.gameOver || gameState.isCountDown || gameState.slapActive || botBusy) return;
         let now = Date.now();
         if(now - lastActionTime < getAiDelay()) return;
 
+        // 1. Bot Play Logic
         let move = null;
         for(let c of gameState.bot.cards.filter(c => c.isFaceUp)) {
             if(isValid(c, gameState.centerLeft)) { move = {card:c, side:'left'}; break; }
@@ -317,29 +331,48 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if(move) {
             botBusy = true; lastActionTime = now;
-            let other = (move.side === 'left' ? gameState.centerRight : gameState.centerLeft);
-            let reactionMod = (other && other.rank === move.card.rank) ? 0.1 : 1.0;
+            let targetPile = (move.side === 'left' ? gameState.centerLeft : gameState.centerRight);
+            let otherPile = (move.side === 'left' ? gameState.centerRight : gameState.centerLeft);
+            
+            // Reflex Boost if playing a Slap (e.g. laying a 9 on a 9)
+            // Wait, standard slaps is playing ON TOP.
+            // If I play a 9 on a 9, that's a slap.
+            let reactionMod = 1.0;
+            if (targetPile && targetPile.rank === move.card.rank) reactionMod = 0.1;
 
             setTimeout(() => {
                 flyCard(move.card, (move.side==='left'?els.cLeft:els.cRight), () => {
-                    let currentCenter = move.side === 'left' ? gameState.centerLeft : gameState.centerRight;
-                    if(!isValid(move.card, currentCenter)) { botBusy = false; renderZone('bot'); return; }
+                    // Re-validate in case player moved first
+                    let current = move.side === 'left' ? gameState.centerLeft : gameState.centerRight;
+                    if(!isValid(move.card, current)) { 
+                        botBusy = false; renderZone('bot'); return; 
+                    }
+
                     gameState.bot.cards = gameState.bot.cards.filter(c => c.id !== move.card.id);
-                    if(move.side === 'left' && gameState.centerLeft) gameState.centerStack.push(gameState.centerLeft);
-                    if(move.side === 'right' && gameState.centerRight) gameState.centerStack.push(gameState.centerRight);
-                    if(move.side === 'left') gameState.centerLeft = move.card; else gameState.centerRight = move.card;
+                    if(move.side === 'left') {
+                        if(gameState.centerLeft) gameState.centerStack.push(gameState.centerLeft);
+                        gameState.centerLeft = move.card;
+                    } else {
+                        if(gameState.centerRight) gameState.centerStack.push(gameState.centerRight);
+                        gameState.centerRight = move.card;
+                    }
+                    
                     updateStats(); resetStalemate(); renderAll(); checkWin(); botBusy = false;
                 });
             }, 50 * reactionMod);
             return;
         }
 
+        // 2. Bot Flip Logic
         if(gameState.bot.cards.filter(c => c.isFaceUp).length < 4) {
             const hidden = gameState.bot.cards.find(c => !c.isFaceUp);
             if(hidden) {
                 botBusy = true;
-                setTimeout(() => { hidden.isFaceUp = true; resetStalemate(); renderZone('bot'); botBusy = false; lastActionTime = now; }, 300);
-                return;
+                setTimeout(() => { 
+                    hidden.isFaceUp = true; 
+                    resetStalemate(); renderZone('bot'); 
+                    botBusy = false; lastActionTime = now; 
+                }, 300);
             }
         }
     }
@@ -347,6 +380,8 @@ document.addEventListener('DOMContentLoaded', () => {
     function checkSlapOpportunity() {
         if(gameState.gameOver || gameState.isCountDown || gameState.slapActive) return;
         if(!gameState.centerLeft || !gameState.centerRight) return;
+        
+        // MATCHING RANKS = SLAP
         if(gameState.centerLeft.rank === gameState.centerRight.rank) {
             if(!gameState.slapActive) {
                 let reactionBase = 2000 - (difficulty * 180);
@@ -356,11 +391,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function performSlap(who) {
-        if(gameState.slapActive || !gameState.centerLeft || !gameState.centerRight || gameState.centerLeft.rank !== gameState.centerRight.rank) return;
+        if(gameState.slapActive) return;
+        if(!gameState.centerLeft || !gameState.centerRight) return;
+        if(gameState.centerLeft.rank !== gameState.centerRight.rank) return;
+
         gameState.slapActive = true;
         let loser = (who === 'player') ? 'bot' : 'player';
         
-        // SLAP VISUAL FIX
         els.slapAlert.innerText = (who === 'player' ? "PLAYER 1 SLAPS WON!" : "AI SLAPS WON!");
         els.slapAlert.style.display = 'block';
         setTimeout(() => { els.slapAlert.style.display = 'none'; }, 1500);
@@ -369,23 +406,27 @@ document.addEventListener('DOMContentLoaded', () => {
         updateScoreboard();
 
         let wonCards = [...gameState.centerStack, gameState.centerLeft, gameState.centerRight];
-        wonCards.forEach(c => c.owner = loser); // OWNERSHIP TRANSFER FIX
-        (loser === 'player' ? gameState.player.sidePot : gameState.bot.sidePot).push(...wonCards);
+        wonCards.forEach(c => c.owner = loser);
+        
+        // Add to sidepot
+        if(loser === 'player') gameState.player.sidePot.push(...wonCards);
+        else gameState.bot.sidePot.push(...wonCards);
+
         gameState.centerLeft = null; gameState.centerRight = null; gameState.centerStack = [];
         
         renderAll(); updateStats();
         setTimeout(() => { gameState.slapActive = false; resetStalemate(); }, 1000);
     }
 
-    // DRAW DECK FIX: Force Start
+    // Force Start on Empty Board
     els.pDeck.addEventListener('click', () => {
         if(gameState.isCountDown || gameState.gameOver) return;
-        const isStart = !gameState.centerLeft && !gameState.centerRight; 
+        const isStart = !gameState.centerLeft && !gameState.centerRight;
         if(!gameState.playerPass) {
             gameState.playerPass = true;
             els.pDeck.classList.add('waiting');
             els.pDeckText.innerText = "WAIT";
-            if(gameState.botPass || isStart) startCountdown(); 
+            if(gameState.botPass || isStart) startCountdown();
         } 
     });
 
@@ -393,8 +434,15 @@ document.addEventListener('DOMContentLoaded', () => {
         if(gameState.isCountDown || gameState.gameOver || gameState.slapActive || botBusy) return;
         let bMoves = gameState.bot.cards.some(c => c.isFaceUp && (isValid(c, gameState.centerLeft) || isValid(c, gameState.centerRight)));
         let bFlips = gameState.bot.cards.filter(c => c.isFaceUp).length < 4 && gameState.bot.cards.some(c => !c.isFaceUp);
-        if(!bMoves && !bFlips) { if(!gameState.botPass) { gameState.botPass = true; if(gameState.playerPass) startCountdown(); } }
-        else { if(gameState.botPass) gameState.botPass = false; }
+        
+        if(!bMoves && !bFlips) { 
+            if(!gameState.botPass) { 
+                gameState.botPass = true; 
+                if(gameState.playerPass) startCountdown(); 
+            } 
+        } else { 
+            gameState.botPass = false; 
+        }
     }
 
     function startCountdown() {
@@ -415,14 +463,13 @@ document.addEventListener('DOMContentLoaded', () => {
         let pPop = gameState.player.deck.pop();
         let bPop = gameState.bot.deck.pop();
 
-        if(!pPop && gameState.bot.deck.length > 0) {
-             pPop = gameState.bot.deck.pop(); 
-        }
-        if(!bPop && gameState.player.deck.length > 0) {
-             bPop = gameState.player.deck.pop();
-        }
+        // Borrow Logic
+        if(!pPop && gameState.bot.deck.length > 0) pPop = gameState.bot.deck.pop();
+        if(!bPop && gameState.player.deck.length > 0) bPop = gameState.player.deck.pop();
 
-        if(pPop) gameState.centerRight = pPop; if(bPop) gameState.centerLeft = bPop;
+        if(pPop) gameState.centerRight = pPop; 
+        if(bPop) gameState.centerLeft = bPop;
+        
         resetStalemateVisuals(); renderAll(); updateStats();
     }
 
@@ -433,7 +480,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updateStats() {
-        // COUNTER FIX: Scan everything
+        // Robust Count
         const everyCard = [
             ...gameState.player.deck, ...gameState.player.cards, ...gameState.player.sidePot, 
             ...gameState.bot.deck, ...gameState.bot.cards, ...gameState.bot.sidePot, 
