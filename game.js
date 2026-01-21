@@ -1,31 +1,30 @@
 document.addEventListener('DOMContentLoaded', () => {
     
-    // === CONFIG ===
+    // === CONFIGURATION ===
     const SUITS = ["♠", "♥", "♣", "♦"];
     const VALUES = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
     let difficulty = parseInt(localStorage.getItem('slapsDifficulty')) || 5;
 
-    // AI SPEED CONFIGURATION
-    // Level 5 Target: ~3000ms (3.0s)
-    // Formula: 5500 - (5 * 500) = 3000ms
-    // Level 1 = 5000ms (Slow)
-    // Level 10 = 500ms (Unbeatable)
-    let baseReactionTime = 5500 - (difficulty * 500);
-    
-    let lastActionTime = 0;
-    let lastActionType = 'none'; // 'play', 'flip', 'sort', 'none'
+    // AI SPEED - Humanized
+    // Base Delay: Reaction time
+    // Travel Time: Calculated distance
+    let botBaseSpeed = 3500 - (difficulty * 300); // 3.5s to 0.5s reaction
     let globalZ = 100;
+    
+    // LOCKS & FLAGS
     let botBusy = false; 
+    let isPlayerDragging = false; // PREVENTS DROP BUG
 
     let gameState = {
-        player: { deck: [], cards: [], sidePot: [], borrowing: false, borrowedAmount: 0 },
-        bot: { deck: [], cards: [], sidePot: [], borrowing: false, borrowedAmount: 0 },
+        player: { deck: [], cards: [], sidePot: [], borrowing: false },
+        bot: { deck: [], cards: [], sidePot: [], borrowing: false },
         centerLeft: null, centerRight: null,
         centerStack: [], 
         gameOver: false,
         playerPass: false, botPass: false,
         isCountDown: false,
-        slapActive: false
+        slapActive: false,
+        scores: { pRounds: 0, bRounds: 0, pSlaps: 0, bSlaps: 0 }
     };
 
     const els = {
@@ -45,8 +44,17 @@ document.addEventListener('DOMContentLoaded', () => {
         overlayTitle: document.getElementById('overlay-title'),
         overlayDesc: document.getElementById('overlay-desc'),
         btnAction: document.getElementById('btn-action'),
-        slapMsg: document.getElementById('slap-message')
+        slapMsg: document.getElementById('slap-message'),
+        // Scoreboard
+        sPRounds: document.getElementById('p-rounds'),
+        sBRounds: document.getElementById('b-rounds'),
+        sPSlaps: document.getElementById('p-slaps'),
+        sBSlaps: document.getElementById('b-slaps')
     };
+
+    // Global Drag Listeners to fix the "Drop" bug
+    document.addEventListener('mousedown', () => isPlayerDragging = true);
+    document.addEventListener('mouseup', () => isPlayerDragging = false);
 
     class Card {
         constructor(suit, value, owner) {
@@ -68,7 +76,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function flyCard(card, targetEl, callback) {
         if(!card || !targetEl) { callback(); return; }
-        
         let cardEl = document.getElementById(card.id);
         let startLeft, startTop;
 
@@ -98,13 +105,18 @@ document.addEventListener('DOMContentLoaded', () => {
         document.body.appendChild(clone);
         void clone.offsetWidth; 
 
+        // CALCULATE HUMAN TRAVEL SPEED (Pixels per ms)
+        let dist = Math.hypot(targetRect.left - startLeft, targetRect.top - startTop);
+        let duration = Math.max(300, dist * 0.8); // 0.8ms per pixel
+
+        clone.style.transition = `all ${duration}ms ease-out`;
         clone.style.left = targetRect.left + 'px'; 
         clone.style.top = targetRect.top + 'px';
 
         setTimeout(() => { 
             clone.remove(); 
             callback(); 
-        }, 500); 
+        }, duration); 
     }
 
     function init() {
@@ -116,24 +128,20 @@ document.addEventListener('DOMContentLoaded', () => {
         let pDeck = fullDeck.slice(0, pCount);
         let bDeck = fullDeck.slice(pCount, 52);
 
+        // Reset
         gameState.player.cards = []; gameState.bot.cards = [];
         gameState.centerStack = []; gameState.centerLeft = null; gameState.centerRight = null;
         gameState.player.sidePot = []; gameState.bot.sidePot = [];
         gameState.gameOver = false; gameState.playerPass = false; gameState.botPass = false;
         gameState.player.borrowing = false; gameState.bot.borrowing = false;
-        gameState.player.borrowedAmount = 0; gameState.bot.borrowedAmount = 0;
-        
-        gameState.slapActive = false;
-        gameState.isCountDown = false;
-        botBusy = false;
-        lastActionTime = Date.now();
-        lastActionType = 'none';
+        gameState.slapActive = false; gameState.isCountDown = false; botBusy = false;
 
         els.overlay.classList.add('hidden');
         resetStalemateVisuals();
-        els.pBorrow.classList.remove('borrow-active');
-        els.bBorrow.classList.remove('borrow-active');
-        document.querySelectorAll('.slot').forEach(s => s.innerHTML = '');
+        
+        // Initial Start Delay so bot doesn't move instantly
+        setTimeout(() => { botBusy = false; }, 2000); 
+        botBusy = true; // Paused at start
 
         // Pattern logic
         let pPattern = getPattern(pDeck.length);
@@ -141,24 +149,7 @@ document.addEventListener('DOMContentLoaded', () => {
         let pFoundSize = pPattern.reduce((a,b)=>a+b, 0);
         let bFoundSize = bPattern.reduce((a,b)=>a+b, 0);
 
-        // Borrow Check
-        if((pDeck.length - pFoundSize) <= 0 && bDeck.length > 10) {
-             let loan = Math.floor((bDeck.length - bFoundSize) / 2);
-             let borrowed = bDeck.splice(bFoundSize, loan);
-             pDeck.push(...borrowed);
-             gameState.player.borrowing = true;
-             gameState.player.borrowedAmount = loan;
-             els.pBorrow.classList.add('borrow-active');
-        }
-        if((bDeck.length - bFoundSize) <= 0 && pDeck.length > 10) {
-             let loan = Math.floor((pDeck.length - pFoundSize) / 2);
-             let borrowed = pDeck.splice(pFoundSize, loan);
-             bDeck.push(...borrowed);
-             gameState.bot.borrowing = true;
-             gameState.bot.borrowedAmount = loan;
-             els.bBorrow.classList.add('borrow-active');
-        }
-
+        // Deal
         spawnFoundation(pDeck.splice(0, pFoundSize), 'player', pPattern);
         spawnFoundation(bDeck.splice(0, bFoundSize), 'bot', bPattern);
         
@@ -167,16 +158,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         renderAll();
         
-        // SINGLE MASTER LOOP (250ms tick)
-        setInterval(botMasterLoop, 250); 
-        
-        // Other Timers
-        setInterval(updateStats, 200);
+        // Single Master Loop
+        setInterval(botMasterLoop, 200); 
+        setInterval(updateStats, 100); // Frequent update for labels
         setInterval(checkSlapOpportunity, 100); 
         setInterval(checkStalemateConditions, 800); 
-        
-        // Mid-Round Shortage Check
-        setInterval(checkShortage, 1000);
     }
 
     function getPattern(count) {
@@ -196,7 +182,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     let c = cards[cardIdx++];
                     c.owner = owner; c.col = colIndex;
                     c.x = xOffsets[colIndex]; c.y = 20 + (i * 30);
-                    c.isFaceUp = (i === pileSize - 1);
+                    c.isFaceUp = (i === pileSize - 1); // Only last card face up
                     if(owner === 'player') gameState.player.cards.push(c); else gameState.bot.cards.push(c);
                 }
             }
@@ -209,6 +195,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function renderZone(who) {
+        // FIX: Don't re-render player zone if dragging
+        if(who === 'player' && isPlayerDragging) return;
+
         const container = who === 'player' ? els.pBoundary : els.bBoundary;
         const cards = who === 'player' ? gameState.player.cards : gameState.bot.cards;
         container.innerHTML = ''; 
@@ -237,6 +226,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function startDrag(e, el, card) {
         e.preventDefault();
+        isPlayerDragging = true; // LOCK RENDER
         let startX = e.clientX, startY = e.clientY;
         let origX = card.x, origY = card.y;
         let dragged = false;
@@ -257,6 +247,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         function drop(e) {
             document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', drop);
+            isPlayerDragging = false; // UNLOCK RENDER
+
             if(!dragged && !card.isFaceUp) {
                 if(gameState.player.cards.filter(c => c.isFaceUp).length < 4) { card.isFaceUp = true; resetStalemate(); renderZone('player'); }
                 return;
@@ -266,6 +258,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if(isOver(e, els.cRight) && isValid(card, gameState.centerRight)) { playCard(card, 'right'); return; }
             }
             card.x = parseInt(el.style.left); card.y = parseInt(el.style.top); el.style.zIndex = globalZ; 
+            renderZone('player'); // Snap back
         }
         document.addEventListener('mousemove', move); document.addEventListener('mouseup', drop);
     }
@@ -297,45 +290,35 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // === MASTER BOT LOOP ===
+    let lastActionTime = 0;
+    
     function botMasterLoop() {
         if(gameState.gameOver || gameState.isCountDown || gameState.slapActive || botBusy) return;
 
         let now = Date.now();
-        let timeSinceLast = now - lastActionTime;
+        // Wait for reaction time (randomized slightly)
+        if(now - lastActionTime < (botBaseSpeed + Math.random()*500)) return;
 
-        // 1. DETERMINE PLAY COST
-        // Standard Play: baseReactionTime
-        // Combo Play (Last was Play): baseReactionTime * 0.7 (30% reduction)
-        // Flip/Sort: baseReactionTime * 0.2 (80% reduction)
-        
-        let playCost = (lastActionType === 'play') ? baseReactionTime * 0.7 : baseReactionTime;
-        let flipSortCost = baseReactionTime * 0.2;
-
-        // PRIORITY 1: PLAY
+        // 1. PLAY PRIORITY
         let move = null;
-        if(timeSinceLast > playCost) {
-            for(let c of gameState.bot.cards.filter(c => c.isFaceUp)) {
-                if(isValid(c, gameState.centerLeft)) { move = {card:c, side:'left'}; break; }
-                if(isValid(c, gameState.centerRight)) { move = {card:c, side:'right'}; break; }
-            }
+        for(let c of gameState.bot.cards.filter(c => c.isFaceUp)) {
+            if(isValid(c, gameState.centerLeft)) { move = {card:c, side:'left'}; break; }
+            if(isValid(c, gameState.centerRight)) { move = {card:c, side:'right'}; break; }
         }
 
         if(move) {
             botBusy = true;
             lastActionTime = now;
-            lastActionType = 'play';
             
-            // Reflex Boost Logic
+            // Reflex Boost
             let reactionMod = 1.0;
-            let otherCenter = (move.side === 'left' ? gameState.centerRight : gameState.centerLeft);
-            if(otherCenter && otherCenter.rank === move.card.rank) reactionMod = 0.1; // 90% boost
+            let other = (move.side === 'left' ? gameState.centerRight : gameState.centerLeft);
+            if(other && other.rank === move.card.rank) reactionMod = 0.1;
 
             setTimeout(() => {
                 flyCard(move.card, (move.side==='left'?els.cLeft:els.cRight), () => {
                     let currentCenter = move.side === 'left' ? gameState.centerLeft : gameState.centerRight;
-                    if(!isValid(move.card, currentCenter)) { 
-                        botBusy = false; renderZone('bot'); return; 
-                    }
+                    if(!isValid(move.card, currentCenter)) { botBusy = false; renderZone('bot'); return; }
 
                     gameState.bot.cards = gameState.bot.cards.filter(c => c.id !== move.card.id);
                     if(move.side === 'left') gameState.centerStack.push(gameState.centerLeft);
@@ -352,48 +335,47 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // PRIORITY 2: FLIP (Fast)
-        if(timeSinceLast > flipSortCost && gameState.bot.cards.filter(c => c.isFaceUp).length < 4) {
-            const hidden = gameState.bot.cards.find(c => !c.isFaceUp);
-            if(hidden) {
-                botBusy = true;
-                lastActionTime = now;
-                lastActionType = 'flip';
-                setTimeout(() => {
-                    hidden.isFaceUp = true;
-                    resetStalemate();
-                    renderZone('bot');
-                    botBusy = false;
-                }, 300);
-                return;
-            }
+        // 2. FLIP/SORT PRIORITY
+        // Group columns
+        let columns = [[],[],[],[]];
+        gameState.bot.cards.forEach(c => columns[c.col].push(c));
+
+        // A. Flip if needed
+        let closedTop = gameState.bot.cards.find(c => {
+            let col = columns[c.col];
+            return col[col.length-1] === c && !c.isFaceUp;
+        });
+        
+        if(closedTop && gameState.bot.cards.filter(c => c.isFaceUp).length < 4) {
+            botBusy = true;
+            setTimeout(() => {
+                closedTop.isFaceUp = true;
+                resetStalemate(); renderZone('bot');
+                botBusy = false; lastActionTime = now;
+            }, 300);
+            return;
         }
 
-        // PRIORITY 3: SORT (Fast)
-        if(timeSinceLast > flipSortCost) {
-            let columns = [[],[],[],[]];
-            gameState.bot.cards.forEach(c => columns[c.col].push(c));
-            let emptyIdx = columns.findIndex(c => c.length === 0);
+        // B. Sort: Move from big stack to empty stack
+        let emptyIdx = columns.findIndex(c => c.length === 0);
+        if(emptyIdx !== -1) {
+            let messyIdx = columns.findIndex(c => c.length > 1 && !c[c.length-1].isFaceUp); // Actually this logic is complex. 
+            // Simplified: Find column with face-down cards
+            messyIdx = columns.findIndex(c => c.length > 1 && c.some(card => !card.isFaceUp));
             
-            if(emptyIdx !== -1) {
-                let messyIdx = columns.findIndex(c => c.length > 1 && c.some(card => !card.isFaceUp));
-                if(messyIdx !== -1) {
-                    let cardToMove = columns[messyIdx].sort((a,b)=>a.y-b.y).pop();
-                    if(cardToMove.isFaceUp) {
-                        botBusy = true;
-                        lastActionTime = now;
-                        lastActionType = 'sort';
-                        setTimeout(() => {
-                            cardToMove.col = emptyIdx;
-                            cardToMove.x = [50, 250, 450, 650][emptyIdx];
-                            cardToMove.y = 20;
-                            let newTop = columns[messyIdx][columns[messyIdx].length-1];
-                            if(newTop && !newTop.isFaceUp) newTop.isFaceUp = true;
-                            renderAll();
-                            botBusy = false;
-                        }, 300);
-                        return;
-                    }
+            if(messyIdx !== -1) {
+                let cardToMove = columns[messyIdx][columns[messyIdx].length-1]; // Top card
+                if(cardToMove.isFaceUp) {
+                    botBusy = true;
+                    setTimeout(() => {
+                        cardToMove.col = emptyIdx;
+                        cardToMove.x = [50, 250, 450, 650][emptyIdx];
+                        cardToMove.y = 20;
+                        // Card under it becomes new top, but wait to flip
+                        renderAll();
+                        botBusy = false; lastActionTime = now;
+                    }, 400); // Travel time logic approximated
+                    return;
                 }
             }
         }
@@ -412,8 +394,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function performSlap(who) {
         if(gameState.slapActive) return;
-        if(!gameState.centerLeft || !gameState.centerRight) return;
-        if(gameState.centerLeft.rank !== gameState.centerRight.rank) return;
+        if(!gameState.centerLeft || !gameState.centerRight || gameState.centerLeft.rank !== gameState.centerRight.rank) return;
 
         gameState.slapActive = true;
         let loser = (who === 'player') ? 'bot' : 'player';
@@ -421,6 +402,10 @@ document.addEventListener('DOMContentLoaded', () => {
         els.slapMsg.innerText = (who === 'player' ? "PLAYER" : "AI") + " SLAPS WON!";
         els.slapMsg.classList.add('visible');
         setTimeout(() => els.slapMsg.classList.remove('visible'), 1500);
+
+        // Score Update
+        if(who === 'player') gameState.scores.pSlaps++; else gameState.scores.bSlaps++;
+        updateScoreboard();
 
         let wonCards = [...gameState.centerStack, gameState.centerLeft, gameState.centerRight];
         (loser === 'player' ? gameState.player.sidePot : gameState.bot.sidePot).push(...wonCards);
@@ -443,21 +428,20 @@ document.addEventListener('DOMContentLoaded', () => {
     function checkStalemateConditions() {
         if(gameState.isCountDown || gameState.gameOver || gameState.slapActive || botBusy) return;
         
-        let bMoves = false;
-        gameState.bot.cards.filter(c => c.isFaceUp).forEach(c => { 
-            if(isValid(c, gameState.centerLeft) || isValid(c, gameState.centerRight)) bMoves = true; 
-        });
-        if(gameState.bot.cards.filter(c => c.isFaceUp).length < 4 && gameState.bot.cards.some(c => !c.isFaceUp)) bMoves = true;
+        let bMoves = gameState.bot.cards.some(c => c.isFaceUp && (isValid(c, gameState.centerLeft) || isValid(c, gameState.centerRight)));
+        
+        // Can Bot Flip? (Also counts as a move availability)
+        let bFlips = gameState.bot.cards.filter(c => c.isFaceUp).length < 4 && gameState.bot.cards.some(c => !c.isFaceUp);
 
         const isStart = !gameState.centerLeft && !gameState.centerRight;
 
-        if(!bMoves || isStart) {
+        if(!bMoves && !bFlips) {
             if(!gameState.botPass) {
                 gameState.botPass = true; 
                 if(gameState.playerPass) startCountdown();
             }
         } else {
-            if(gameState.botPass && !isStart) gameState.botPass = false;
+            if(gameState.botPass) gameState.botPass = false;
         }
     }
 
@@ -479,11 +463,20 @@ document.addEventListener('DOMContentLoaded', () => {
         let pDeckPop = gameState.player.deck.pop();
         let bDeckPop = gameState.bot.deck.pop();
 
-        if(gameState.player.borrowing && pDeckPop) gameState.player.borrowedAmount = Math.max(0, gameState.player.borrowedAmount - 1);
-        if(gameState.bot.borrowing && bDeckPop) gameState.bot.borrowedAmount = Math.max(0, gameState.bot.borrowedAmount - 1);
-
         if(pDeckPop) gameState.centerRight = pDeckPop;
         if(bDeckPop) gameState.centerLeft = bDeckPop;
+
+        // SHORTAGE LOGIC: If deck is empty, take from opponent if they have cards
+        if(!pDeckPop && gameState.bot.deck.length > 0) {
+             let stole = gameState.bot.deck.pop(); // Take 1
+             let stole2 = gameState.bot.deck.pop(); // Take 2 (for center)
+             if(stole2) gameState.centerRight = stole2; // Player plays stolen card
+        }
+        if(!bDeckPop && gameState.player.deck.length > 0) {
+             let stole = gameState.player.deck.pop();
+             let stole2 = gameState.player.deck.pop();
+             if(stole2) gameState.centerLeft = stole2;
+        }
 
         resetStalemateVisuals(); renderAll(); updateStats();
     }
@@ -495,29 +488,30 @@ document.addEventListener('DOMContentLoaded', () => {
         gameState.isCountDown = false; gameState.playerPass = false; gameState.botPass = false;
     }
 
-    function checkShortage() {
-        if(gameState.gameOver) return;
-        if(gameState.player.deck.length === 0 && !gameState.player.borrowing && gameState.bot.deck.length > 1) {
-            let loan = Math.floor(gameState.bot.deck.length / 2);
-            gameState.player.deck.push(...gameState.bot.deck.splice(0, loan));
-            gameState.player.borrowing = true;
-            gameState.player.borrowedAmount = loan;
-            els.pBorrow.classList.add('borrow-active');
-        }
-        if(gameState.bot.deck.length === 0 && !gameState.bot.borrowing && gameState.player.deck.length > 1) {
-            let loan = Math.floor(gameState.player.deck.length / 2);
-            gameState.bot.deck.push(...gameState.player.deck.splice(0, loan));
-            gameState.bot.borrowing = true;
-            gameState.bot.borrowedAmount = loan;
-            els.bBorrow.classList.add('borrow-active');
-        }
-    }
-
     function updateStats() {
-        let pTotal = gameState.player.deck.length + gameState.player.cards.length + gameState.player.sidePot.length - gameState.player.borrowedAmount;
-        let bTotal = gameState.bot.deck.length + gameState.bot.cards.length + gameState.bot.sidePot.length - gameState.bot.borrowedAmount;
-        els.pCount.innerText = Math.max(0, pTotal); 
-        els.bCount.innerText = Math.max(0, bTotal);
+        // STRICT OWNER COUNTING (Fixes Round 3 Math)
+        // Count every card object that has owner='player'
+        let allLists = [
+            ...gameState.player.deck, ...gameState.player.cards, ...gameState.player.sidePot,
+            ...gameState.bot.deck, ...gameState.bot.cards, ...gameState.bot.sidePot
+        ];
+        
+        let pTotal = allLists.filter(c => c.owner === 'player').length;
+        let bTotal = allLists.filter(c => c.owner === 'bot').length;
+
+        els.pCount.innerText = pTotal;
+        els.bCount.innerText = bTotal;
+
+        // Update Borrow Labels based on DECK size only (Visual)
+        els.pBorrow.classList.toggle('borrow-active', gameState.player.deck.length === 0);
+        els.bBorrow.classList.toggle('borrow-active', gameState.bot.deck.length === 0);
+    }
+    
+    function updateScoreboard() {
+        els.sPRounds.innerText = gameState.scores.pRounds;
+        els.sBRounds.innerText = gameState.scores.bRounds;
+        els.sPSlaps.innerText = gameState.scores.pSlaps;
+        els.sBSlaps.innerText = gameState.scores.bSlaps;
     }
 
     function checkWin() {
@@ -529,28 +523,25 @@ document.addEventListener('DOMContentLoaded', () => {
         if(gameState.gameOver) return;
         gameState.gameOver = true;
         
-        let winnerHold = (winner === 'player') 
-            ? gameState.player.deck.length + gameState.player.sidePot.length
-            : gameState.bot.deck.length + gameState.bot.sidePot.length;
+        let pTotal = parseInt(els.pCount.innerText);
+        let bTotal = parseInt(els.bCount.innerText);
 
-        if(winnerHold === 0) {
-            endMatch(winner === 'player' ? "YOU WIN THE MATCH!" : "BOT WINS THE MATCH!");
-            return;
-        }
+        if(pTotal <= 0) { endMatch("YOU WIN THE MATCH!"); return; }
+        if(bTotal <= 0) { endMatch("BOT WINS THE MATCH!"); return; }
 
-        if((winner === 'player' && gameState.player.borrowing) || (winner === 'bot' && gameState.bot.borrowing)) {
-            endMatch(winner === 'player' ? "YOU WIN THE MATCH!" : "BOT WINS THE MATCH!");
-            return;
-        }
+        if(winner === 'player') gameState.scores.pRounds++; else gameState.scores.bRounds++;
+        updateScoreboard();
 
+        let winnerDeckSize = (winner === 'player') ? pTotal : bTotal;
         let pNext, bNext;
+
         if (winner === 'player') {
-            pNext = winnerHold;
+            pNext = winnerDeckSize; 
             bNext = 52 - pNext;
             els.overlayTitle.innerText = "ROUND WON!";
             els.overlayDesc.innerText = `You keep ${pNext} cards. Bot takes the rest.`;
         } else {
-            bNext = winnerHold;
+            bNext = winnerDeckSize;
             pNext = 52 - bNext;
             els.overlayTitle.innerText = "ROUND LOST";
             els.overlayDesc.innerText = `Bot keeps ${bNext} cards. You take the pile.`;
