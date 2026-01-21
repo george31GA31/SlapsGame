@@ -1,6 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
     
-    // CONFIG
+    // === CONFIGURATION ===
     const SUITS = ["♠", "♥", "♣", "♦"];
     const VALUES = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
     let difficulty = parseInt(localStorage.getItem('slapsDifficulty')) || 5;
@@ -47,8 +47,10 @@ document.addEventListener('DOMContentLoaded', () => {
             this.rank = VALUES.indexOf(value) + 1;
             this.color = (suit === "♥" || suit === "♦") ? "red" : "black";
             this.id = Math.random().toString(36).substr(2, 9);
-            this.owner = owner; this.isFaceUp = false;
+            this.owner = owner; 
+            this.isFaceUp = false;
             this.x = 0; this.y = 0; this.col = -1;
+            this.locked = false; // PREVENTS DOUBLE SELECTION
         }
         getHTML() {
             const faceClass = this.isFaceUp ? '' : 'face-down';
@@ -58,23 +60,53 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function flyCard(cardEl, targetEl, callback) {
-        if(!cardEl || !targetEl) { callback(); return; }
-        const startRect = cardEl.getBoundingClientRect();
-        const targetRect = targetEl.getBoundingClientRect();
-        const clone = cardEl.cloneNode(true);
-        if(clone.classList.contains('face-down')) clone.classList.remove('face-down');
-        clone.classList.add('flying-card');
-        clone.style.left = startRect.left + 'px'; clone.style.top = startRect.top + 'px';
-        clone.style.width = '90px'; clone.style.height = '126px'; clone.style.zIndex = 99999;
+    function flyCard(card, targetEl, callback) {
+        if(!card || !targetEl) { callback(); return; }
         
-        // HIDE ORIGINAL INSTANTLY
-        cardEl.style.visibility = 'hidden'; 
+        // 1. Try to find the element
+        let cardEl = document.getElementById(card.id);
+        let startLeft, startTop;
+
+        if (cardEl) {
+            const rect = cardEl.getBoundingClientRect();
+            startLeft = rect.left;
+            startTop = rect.top;
+            cardEl.style.visibility = 'hidden'; // Hide original immediately
+        } else {
+            // 2. Fallback: Calculate position manually if DOM is missing (Fixes "Fly from 0,0")
+            const boundary = card.owner === 'player' ? els.pBoundary : els.bBoundary;
+            const bRect = boundary.getBoundingClientRect();
+            startLeft = bRect.left + card.x;
+            startTop = bRect.top + card.y;
+        }
+
+        const targetRect = targetEl.getBoundingClientRect();
+        
+        // 3. Create Clone
+        const clone = document.createElement('div');
+        clone.innerHTML = `<div class="card-top">${card.value}</div><div class="card-mid">${card.suit}</div><div class="card-bot">${card.value}</div>`;
+        clone.className = `playing-card flying-card`;
+        clone.style.color = card.color === 'red' ? '#d9534f' : '#292b2c';
+        
+        // Force dimensions and position
+        clone.style.width = '90px'; clone.style.height = '126px';
+        clone.style.left = startLeft + 'px'; 
+        clone.style.top = startTop + 'px';
+        clone.style.zIndex = 99999;
         
         document.body.appendChild(clone);
-        void clone.offsetWidth;
-        clone.style.left = targetRect.left + 'px'; clone.style.top = targetRect.top + 'px';
-        setTimeout(() => { clone.remove(); callback(); }, 600);
+        
+        // Force Reflow
+        void clone.offsetWidth; 
+
+        // 4. Animate
+        clone.style.left = targetRect.left + 'px'; 
+        clone.style.top = targetRect.top + 'px';
+
+        setTimeout(() => { 
+            clone.remove(); 
+            callback(); 
+        }, 600);
     }
 
     function init() {
@@ -102,7 +134,6 @@ document.addEventListener('DOMContentLoaded', () => {
         // Pattern logic
         let pPattern = getPattern(pDeck.length);
         let bPattern = getPattern(bDeck.length);
-        
         let pFoundSize = pPattern.reduce((a,b)=>a+b, 0);
         let bFoundSize = bPattern.reduce((a,b)=>a+b, 0);
 
@@ -135,9 +166,10 @@ document.addEventListener('DOMContentLoaded', () => {
         
         setInterval(updateStats, 200);
         setInterval(checkBotStalemate, 800);
-        setInterval(checkBotSort, 400); // Fast Sort
+        setInterval(checkBotSort, 400); 
         setInterval(checkSlapOpportunity, 100); 
         
+        // Mid-Round Shortage Check
         setInterval(() => {
             if(gameState.gameOver) return;
             if(gameState.player.deck.length === 0 && !gameState.player.borrowing && gameState.bot.deck.length > 1) {
@@ -175,6 +207,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     c.owner = owner; c.col = colIndex;
                     c.x = xOffsets[colIndex]; c.y = 20 + (i * 30);
                     c.isFaceUp = (i === pileSize - 1);
+                    c.locked = false; // Reset lock
                     if(owner === 'player') gameState.player.cards.push(c); else gameState.bot.cards.push(c);
                 }
             }
@@ -373,10 +406,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function checkBotSort() {
         if(gameState.gameOver) return;
+        // 1. Flip Hidden Cards
         if(gameState.bot.cards.filter(c => c.isFaceUp).length < 4) {
             const hidden = gameState.bot.cards.find(c => !c.isFaceUp);
             if(hidden) { hidden.isFaceUp = true; resetStalemate(); renderZone('bot'); return; }
         }
+        // 2. Sort Logic
         let columns = [[],[],[],[]];
         gameState.bot.cards.forEach(c => columns[c.col].push(c));
         let emptyColIndex = columns.findIndex(c => c.length === 0);
@@ -401,7 +436,9 @@ document.addEventListener('DOMContentLoaded', () => {
         setTimeout(() => {
             let move = null;
             if(!gameState.botPass && !gameState.isCountDown) {
+                // Find Valid Move
                 for(let c of gameState.bot.cards.filter(c => c.isFaceUp)) {
+                    if(c.locked) continue; // Skip locked cards
                     if(isValid(c, gameState.centerLeft)) { move = {card:c, side:'left'}; break; }
                     if(isValid(c, gameState.centerRight)) { move = {card:c, side:'right'}; break; }
                 }
@@ -411,35 +448,42 @@ document.addEventListener('DOMContentLoaded', () => {
             if(move) {
                 let otherCenter = (move.side === 'left' ? gameState.centerRight : gameState.centerLeft);
                 if(otherCenter && otherCenter.rank === move.card.rank) reactionMod = 0.1;
+                move.card.locked = true; // Lock card instantly to prevent duplicates
             }
 
             if(move) {
-                // FIXED DOM TARGETING
-                const cardEl = document.getElementById(move.card.id);
-                if(cardEl) {
-                    const targetEl = move.side === 'left' ? els.cLeft : els.cRight;
-                    setTimeout(() => {
-                        flyCard(cardEl, targetEl, () => {
-                            if (!isValid(move.card, (move.side==='left'?gameState.centerLeft:gameState.centerRight))) { renderZone('bot'); return; }
-                            gameState.bot.cards = gameState.bot.cards.filter(c => c.id !== move.card.id);
-                            if(move.side === 'left') gameState.centerStack.push(gameState.centerLeft);
-                            if(move.side === 'right') gameState.centerStack.push(gameState.centerRight);
-                            if(move.side === 'left') gameState.centerLeft = move.card; else gameState.centerRight = move.card;
-                            updateStats();
-                            resetStalemate(); 
-                            let colCards = gameState.bot.cards.filter(c => c.col === move.card.col);
-                            if(colCards.length > 0) {
-                                let newTop = colCards[colCards.length - 1]; 
-                                if(!newTop.isFaceUp && gameState.bot.cards.filter(c => c.isFaceUp).length < 4) newTop.isFaceUp = true;
-                            }
-                            renderAll(); checkWin();
-                        });
-                    }, getBotDelay() * reactionMod);
-                }
+                // PASS CARD OBJECT DIRECTLY TO FLYCARD
+                const targetEl = move.side === 'left' ? els.cLeft : els.cRight;
+                
+                setTimeout(() => {
+                    flyCard(move.card, targetEl, () => {
+                        let currentCenter = move.side === 'left' ? gameState.centerLeft : gameState.centerRight;
+                        if (!isValid(move.card, currentCenter)) { 
+                            move.card.locked = false; // Unlock on fail
+                            renderZone('bot'); 
+                            return; 
+                        }
+                        
+                        gameState.bot.cards = gameState.bot.cards.filter(c => c.id !== move.card.id);
+                        if(move.side === 'left') gameState.centerStack.push(gameState.centerLeft);
+                        if(move.side === 'right') gameState.centerStack.push(gameState.centerRight);
+                        if(move.side === 'left') gameState.centerLeft = move.card; else gameState.centerRight = move.card;
+                        
+                        updateStats();
+                        resetStalemate(); 
+                        
+                        let colCards = gameState.bot.cards.filter(c => c.col === move.card.col);
+                        if(colCards.length > 0) {
+                            let newTop = colCards[colCards.length - 1]; 
+                            if(!newTop.isFaceUp && gameState.bot.cards.filter(c => c.isFaceUp).length < 4) newTop.isFaceUp = true;
+                        }
+                        renderAll(); checkWin();
+                    });
+                }, getBotDelay() * reactionMod);
             } else {
-                runBotCycle();
+                runBotCycle(); // Retry loop
             }
-        }, getBotDelay()); // Initial delay
+        }, getBotDelay()); // Initial loop delay
     }
 
     function updateStats() {
