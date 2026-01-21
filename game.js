@@ -108,7 +108,7 @@ document.addEventListener('DOMContentLoaded', () => {
         clone.innerHTML = `<div class="card-top">${card.value}</div><div class="card-mid">${card.suit}</div><div class="card-bot">${card.value}</div>`;
         clone.className = `playing-card flying-card`;
         clone.style.color = card.color === 'red' ? '#d9534f' : '#292b2c';
-        clone.style.width = '90px'; clone.style.height = '126px';
+        clone.style.width = '110px'; clone.style.height = '154px';
         clone.style.left = startLeft + 'px'; clone.style.top = startTop + 'px';
         clone.style.zIndex = 99999;
         
@@ -128,13 +128,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function startRoundWithCounts(pCount, bCount) {
-        // 1. Create Cards
         let fullCards = SUITS.flatMap(s => VALUES.map(v => new Card(s, v, ""))).sort(() => Math.random() - 0.5);
-        
-        // 2. COUNTER FIX: Assign ownership BEFORE splitting so the counter sees them immediately
-        fullCards.forEach((c, i) => {
-            c.owner = (i < pCount) ? 'player' : 'bot';
-        });
+        fullCards.forEach((c, i) => { c.owner = (i < pCount) ? 'player' : 'bot'; });
 
         let pDeck = fullCards.slice(0, pCount);
         let bDeck = fullCards.slice(pCount, 52);
@@ -161,8 +156,6 @@ document.addEventListener('DOMContentLoaded', () => {
         gameState.bot.deck = bDeck;
 
         renderAll();
-        
-        // 3. HUMAN SPEED FIX: Add 3 second delay before bot starts thinking
         lastActionTime = Date.now() + 3000; 
 
         if (!window.masterLoopSet) {
@@ -202,9 +195,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function renderZone(who) {
-        // 4. SNAP BACK FIX: Do not redraw player zone if they are dragging a card
         if(who === 'player' && isPlayerDragging) return;
-
         const container = who === 'player' ? els.pBoundary : els.bBoundary;
         const cards = who === 'player' ? gameState.player.cards : gameState.bot.cards;
         container.innerHTML = ''; 
@@ -216,6 +207,7 @@ document.addEventListener('DOMContentLoaded', () => {
             el.style.color = c.color === 'red' ? '#d9534f' : '#292b2c';
             el.style.left = `${c.x}px`; el.style.top = `${c.y}px`;
             el.innerHTML = `<div class="card-top">${c.value}</div><div class="card-mid">${c.suit}</div><div class="card-bot">${c.value}</div>`;
+            el.style.zIndex = globalZ++; // FIX Z-INDEX STACKING
             container.appendChild(el);
             if(who === 'player') setupInteraction(el, c);
         });
@@ -244,7 +236,7 @@ document.addEventListener('DOMContentLoaded', () => {
         let startX = e.clientX, startY = e.clientY;
         let origX = card.x, origY = card.y;
         let dragged = false;
-        const boxW = 900, boxH = 250, cardW = 90, cardH = 126;
+        const boxW = 900, boxH = 250, cardW = 110, cardH = 154; // UPDATED DIMENSIONS
 
         function move(e) {
             if(Math.abs(e.clientX - startX) > 15 || Math.abs(e.clientY - startY) > 15) dragged = true;
@@ -356,7 +348,6 @@ document.addEventListener('DOMContentLoaded', () => {
         gameState.slapActive = true;
         let loser = (who === 'player') ? 'bot' : 'player';
         
-        // 5. SLAP TEXT FIX: Explicitly target style.display
         els.slapAlert.innerText = (who === 'player' ? "PLAYER 1 SLAPS WON!" : "AI SLAPS WON!");
         els.slapAlert.style.display = 'block';
         setTimeout(() => { els.slapAlert.style.display = 'none'; }, 1500);
@@ -372,6 +363,18 @@ document.addEventListener('DOMContentLoaded', () => {
         renderAll(); updateStats();
         setTimeout(() => { gameState.slapActive = false; resetStalemate(); }, 1000);
     }
+
+    // CLICK LISTENER FIX: Force start if board is empty
+    els.pDeck.addEventListener('click', () => {
+        if(gameState.isCountDown || gameState.gameOver) return;
+        const isStart = !gameState.centerLeft && !gameState.centerRight; // Check if start of round
+        if(!gameState.playerPass) {
+            gameState.playerPass = true;
+            els.pDeck.classList.add('waiting');
+            els.pDeckText.innerText = "WAIT";
+            if(gameState.botPass || isStart) startCountdown(); // Force countdown if start
+        } 
+    });
 
     function checkStalemateConditions() {
         if(gameState.isCountDown || gameState.gameOver || gameState.slapActive || botBusy) return;
@@ -417,10 +420,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updateStats() {
-        // 6. MATH FIX: Count total of cards in Deck + Foundation + SidePot only (Ignore Center)
-        // This ensures count drops when card is laid, and stays consistent
-        let pTotal = gameState.player.cards.length + gameState.player.deck.length + gameState.player.sidePot.length;
-        let bTotal = gameState.bot.cards.length + gameState.bot.deck.length + gameState.bot.sidePot.length;
+        // Collect EVERY card in the game
+        const everyCard = [
+            ...gameState.player.deck, ...gameState.player.cards, ...gameState.player.sidePot, 
+            ...gameState.bot.deck, ...gameState.bot.cards, ...gameState.bot.sidePot, 
+            ...gameState.centerStack, gameState.centerLeft, gameState.centerRight
+        ].filter(c => c !== null);
+
+        let pTotal = everyCard.filter(c => c.owner === 'player').length;
+        let bTotal = everyCard.filter(c => c.owner === 'bot').length;
 
         els.pCount.innerText = pTotal;
         els.bCount.innerText = bTotal;
