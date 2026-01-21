@@ -1,621 +1,97 @@
-/* 1. GLOBAL RESET & COLORS */
-* {
-    box-sizing: border-box;
-    margin: 0;
-    padding: 0;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Match Setup - Slaps.GG</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="setup-body">
 
-body {
-    background-color: #302e2b; /* Dark Grey Background */
-    color: #ffffff;
-    height: 100vh;
-    display: flex;
-    justify-content: center;
-}
+    <div class="bg-gradient"></div>
 
-.main-layout {
-    display: flex;
-    width: 100%;
-    max-width: 1600px;
-    height: 100%;
-}
+    <div class="setup-card">
+        <div class="setup-header">
+            <a href="index.html" class="back-btn"><i class="fa-solid fa-chevron-left"></i></a>
+            <h2>MATCH CONFIGURATION</h2>
+        </div>
 
-/* 2. LEFT SIDEBAR */
-.sidebar {
-    width: 180px;
-    background-color: #262421;
-    display: flex;
-    flex-direction: column;
-    padding: 15px;
-    border-right: 1px solid #3c3a37;
-}
+        <div class="bot-profile-container">
+            <div class="avatar-ring" id="avatar-ring">
+                <i class="fa-solid fa-robot" id="bot-icon"></i>
+            </div>
+            <h1 id="difficulty-title">ROOKIE</h1>
+            <p class="bot-desc" id="difficulty-desc">Slow reaction time. Perfect for learning.</p>
+        </div>
 
-.logo {
-    font-size: 20px;
-    font-weight: bold;
-    color: #81b64c; /* Chess Green */
-    margin-bottom: 20px;
-    text-align: center;
-}
+        <div class="controls-area">
+            <div class="slider-header">
+                <span>DIFFICULTY LEVEL</span>
+                <span id="level-display" class="level-badge">LVL 1</span>
+            </div>
+            
+            <div class="custom-slider-wrapper">
+                <input type="range" min="1" max="10" value="5" class="pro-slider" id="difficulty-slider">
+                <div class="slider-track-fill" id="track-fill"></div>
+            </div>
 
-.search-bar {
-    background: #3c3a37;
-    padding: 8px;
-    border-radius: 5px;
-    display: flex;
-    align-items: center;
-    margin-bottom: 20px;
-}
-.search-bar input {
-    background: transparent;
-    border: none;
-    color: white;
-    margin-left: 10px;
-    width: 100%;
-    outline: none;
-}
+            <div class="slider-labels">
+                <span>Easy</span>
+                <span>Master</span>
+            </div>
+        </div>
 
-.nav-links { list-style: none; }
-.nav-links li {
-    padding: 12px 10px;
-    color: #c3c3c3;
-    font-size: 14px;
-    cursor: default; /* Unclickable visual */
-}
-.nav-links li i { margin-right: 10px; width: 20px; text-align: center;}
+        <a href="game.html" class="btn-launch" id="start-btn">
+            INITIALIZE MATCH <i class="fa-solid fa-play"></i>
+        </a>
+    </div>
 
-.auth-buttons { margin-top: auto; display: flex; flex-direction: column; gap: 10px; }
-.btn-signup { background-color: #81b64c; color: white; border: none; padding: 12px; border-radius: 5px; font-weight: bold; cursor: pointer; }
-.btn-login { background-color: #454341; color: #c3c3c3; border: none; padding: 12px; border-radius: 5px; font-weight: bold; cursor: pointer; }
+    <script>
+        const slider = document.getElementById('difficulty-slider');
+        const levelDisplay = document.getElementById('level-display');
+        const title = document.getElementById('difficulty-title');
+        const desc = document.getElementById('difficulty-desc');
+        const botIcon = document.getElementById('bot-icon');
+        const avatarRing = document.getElementById('avatar-ring');
+        const trackFill = document.getElementById('track-fill');
 
-.bottom-links { margin-top: 20px; font-size: 12px; color: #787673; text-align: center; display: flex; justify-content: space-around;}
+        const difficultyData = [
+            { name: "ROOKIE",       color: "#81b64c", desc: "Very slow. Good for learning mechanics." }, 
+            { name: "NOVICE",       color: "#81b64c", desc: "Still learning. Reacts slowly." },          
+            { name: "AMATEUR",      color: "#81b64c", desc: "Knows the rules, but hesitates." },         
+            { name: "INTERMEDIATE", color: "#e6912c", desc: "A standard opponent. Pays attention." },    
+            { name: "SKILLED",      color: "#e6912c", desc: "Reacts quickly to obvious moves." },        
+            { name: "GOOD",         color: "#e6912c", desc: "Makes very few mistakes." },                
+            { name: "ADVANCED",     color: "#e6912c", desc: "Competitive reaction times." },             
+            { name: "PROVEN",       color: "#cc3333", desc: "Fast. Very fast." },                        
+            { name: "MASTER",       color: "#cc3333", desc: "Near instant reactions." },                 
+            { name: "UNBEATABLE",   color: "#cc3333", desc: "Good luck. You will need it." }             
+        ];
 
-/* 3. CENTER STAGE (Slaps Table) */
-.center-stage {
-    flex-grow: 1;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    background-color: #302e2b;
-    padding: 20px;
-}
+        function updateUI(val) {
+            const data = difficultyData[val - 1];
+            
+            // Text Updates
+            title.innerText = data.name;
+            desc.innerText = data.desc;
+            levelDisplay.innerText = "LVL " + val;
+            
+            // Visual Updates
+            let percentage = ((val - 1) / 9) * 100;
+            trackFill.style.width = percentage + "%";
+            
+            botIcon.style.color = data.color;
+            avatarRing.style.borderColor = data.color;
+            avatarRing.style.boxShadow = `0 0 15px ${data.color}40`; // 40 is hex for transparency
+            levelDisplay.style.backgroundColor = data.color;
+            trackFill.style.backgroundColor = data.color;
 
-.game-preview {
-    width: 600px;
-    height: 600px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-}
+            localStorage.setItem('slapsDifficulty', val);
+        }
 
-/* Creating the "Felt Table" look with CSS */
-.slaps-table-visual {
-    width: 100%;
-    height: 100%;
-    background-color: #769656; /* Green Felt */
-    border-radius: 10px;
-    position: relative;
-    box-shadow: 0 5px 15px rgba(0,0,0,0.5);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-}
-
-/* A pile of cards in the middle */
-.center-pile {
-    width: 100px;
-    height: 140px;
-    background-color: white;
-    border-radius: 8px;
-    border: 2px solid #ddd;
-    box-shadow: 2px 2px 5px rgba(0,0,0,0.3);
-}
-
-.player-info {
-    margin-top: 20px;
-    display: flex;
-    align-items: center;
-    background-color: #262421;
-    padding: 10px 20px;
-    border-radius: 5px;
-}
-.player-info input {
-    background: transparent;
-    border: none;
-    color: white;
-    font-size: 16px;
-    margin-left: 10px;
-    outline: none;
-}
-
-/* 4. RIGHT PANEL (Action Cards) */
-.action-panel {
-    width: 350px;
-    background-color: #211f1c; /* Slightly darker right panel */
-    padding: 20px;
-    display: flex;
-    flex-direction: column;
-}
-
-.panel-header {
-    font-size: 24px;
-    font-weight: bold;
-    margin-bottom: 20px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.card {
-    background-color: #262421;
-    border-radius: 8px;
-    padding: 15px;
-    display: flex;
-    align-items: center;
-    margin-bottom: 15px;
-    transition: 0.2s;
-}
-
-/* Styling for the card that works */
-.card.clickable:hover {
-    background-color: #3c3a37;
-    cursor: pointer;
-    transform: translateY(-2px);
-}
-
-/* Styling for disabled cards */
-.card.disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-
-.card-icon {
-    font-size: 24px;
-    margin-right: 15px;
-    color: #c3c3c3;
-    width: 30px;
-    text-align: center;
-}
-
-.card-text h3 { font-size: 16px; color: white; margin-bottom: 4px; }
-.card-text p { font-size: 12px; color: #989694; }
-
-.footer-links {
-    margin-top: auto;
-    display: flex;
-    justify-content: space-between;
-    font-size: 12px;
-    color: #989694;
-}
-/* === PLAYING CARD STYLING === */
-.playing-card {
-    width: 100%;
-    height: 100%;
-    background-color: white;
-    border-radius: 5px;
-    position: relative;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    font-weight: bold;
-    font-size: 20px;
-    box-shadow: 2px 2px 5px rgba(0,0,0,0.3);
-    cursor: grab; /* Shows the hand icon for dragging */
-    user-select: none; /* Prevents highlighting text */
-}
-
-/* Top Left Number */
-.card-value-top {
-    position: absolute;
-    top: 2px;
-    left: 5px;
-    font-size: 14px;
-}
-
-/* Bottom Right Number (Rotated) */
-.card-value-bottom {
-    position: absolute;
-    bottom: 2px;
-    right: 5px;
-    font-size: 14px;
-    transform: rotate(180deg);
-}
-
-/* The Big Suit in the middle */
-.card-suit {
-    font-size: 32px;
-}
-
-/* The little number badge showing stack height */
-.stack-count {
-    position: absolute;
-    bottom: -10px;
-    right: -10px;
-    background-color: #81b64c;
-    color: white;
-    border-radius: 50%;
-    width: 20px;
-    height: 20px;
-    font-size: 12px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    border: 1px solid white;
-    z-index: 10;
-}
-/* === PRO SETUP PAGE STYLES (BIG & BOLD VERSION) === */
-
-.setup-body {
-    background-color: #161513;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 100vh;
-    font-family: 'Segoe UI', sans-serif;
-    color: white;
-}
-
-/* Background Texture */
-.bg-gradient {
-    position: absolute;
-    width: 100%;
-    height: 100%;
-    background: radial-gradient(circle at center, #262421 0%, #111 100%);
-    z-index: -1;
-}
-
-.setup-card {
-    background: rgba(30, 29, 27, 0.95);
-    width: 600px; /* Wider card */
-    padding: 50px;
-    border-radius: 20px;
-    box-shadow: 0 30px 80px rgba(0,0,0,0.8);
-    border: 1px solid #3c3a37;
-    display: flex;
-    flex-direction: column;
-    align-items: center; /* Center everything */
-    gap: 30px;
-}
-
-.top-navigation {
-    width: 100%;
-    display: flex;
-    justify-content: flex-start;
-}
-.back-link {
-    color: #777;
-    text-decoration: none;
-    font-weight: bold;
-    font-size: 14px;
-    letter-spacing: 1px;
-    transition: 0.2s;
-}
-.back-link:hover { color: white; }
-
-/* === THE AVATAR === */
-.central-avatar {
-    margin-top: 10px;
-}
-
-.avatar-glow {
-    width: 140px; /* Big Icon */
-    height: 140px;
-    border-radius: 50%;
-    border: 4px solid #81b64c;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    font-size: 70px;
-    background-color: #1e1d1b;
-    transition: all 0.2s ease-out; /* Smooth color change */
-}
-
-/* === INFO DISPLAY === */
-.info-display {
-    text-align: center;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 10px;
-    width: 100%;
-}
-
-#difficulty-title {
-    font-size: 48px; /* HUGE TEXT */
-    font-weight: 900;
-    margin: 0;
-    letter-spacing: 2px;
-    text-transform: uppercase;
-    text-shadow: 0 5px 15px rgba(0,0,0,0.5);
-}
-
-.difficulty-level-box {
-    background-color: #81b64c;
-    color: white;
-    padding: 5px 15px;
-    border-radius: 4px;
-    font-weight: bold;
-    font-size: 14px;
-    letter-spacing: 1px;
-}
-
-#difficulty-desc {
-    color: #999;
-    font-size: 16px;
-    margin-top: 5px;
-}
-
-/* === SLIDER SECTION === */
-.slider-section {
-    width: 100%;
-    margin: 20px 0;
-}
-
-.big-slider {
-    width: 100%;
-    height: 12px;
-    border-radius: 6px;
-    background: #333;
-    outline: none;
-    appearance: none;
-    cursor: pointer;
-    transition: 0.2s;
-}
-
-.big-slider::-webkit-slider-thumb {
-    appearance: none;
-    width: 30px;
-    height: 30px;
-    background: white;
-    border-radius: 50%;
-    cursor: pointer;
-    box-shadow: 0 0 10px rgba(255,255,255,0.5);
-    border: 2px solid #ccc;
-    transition: transform 0.1s;
-}
-.big-slider::-webkit-slider-thumb:hover { transform: scale(1.1); }
-
-.slider-labels {
-    display: flex;
-    justify-content: space-between;
-    margin-top: 10px;
-    color: #555;
-    font-weight: bold;
-    font-size: 12px;
-    letter-spacing: 1px;
-}
-
-/* === MEGA START BUTTON === */
-.btn-mega-start {
-    width: 100%;
-    background: white;
-    color: black;
-    text-align: center;
-    padding: 20px;
-    font-size: 24px;
-    font-weight: 900;
-    text-decoration: none;
-    border-radius: 12px;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    transition: transform 0.1s, background-color 0.2s;
-}
-
-.btn-mega-start:hover {
-    background-color: #e6e6e6;
-    transform: scale(1.02);
-}
-/* === GAME ARENA STYLES === */
-
-.game-body {
-    background-color: #302e2b; /* Dark Chess Background */
-    height: 100vh;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-}
-
-/* Header Bar */
-.game-header {
-    height: 60px;
-    background-color: #262421;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 0 40px;
-    border-bottom: 1px solid #3c3a37;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-    z-index: 10;
-}
-
-.player-badge {
-    color: #ccc;
-    font-weight: bold;
-    font-size: 14px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    background: #3c3a37;
-    padding: 8px 16px;
-    border-radius: 20px;
-}
-
-.opponent-badge i { color: #e6912c; } /* Bot Color */
-
-.game-timer {
-    color: white;
-    font-family: monospace;
-    font-size: 24px;
-    font-weight: bold;
-}
-
-/* Main Container */
-.arena-container {
-    flex-grow: 1;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between; /* Pushes piles apart */
-    padding: 20px;
-    max-width: 1200px;
-    margin: 0 auto;
-    width: 100%;
-}
-
-/* === ZONES === */
-.player-zone {
-    height: 180px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 60px; /* Gap between Deck and Foundations */
-}
-
-/* Special alignment for bottom player (Mirror image) */
-.player-zone-bottom {
-    flex-direction: row-reverse; /* Puts deck on right side for player */
-}
-
-/* The 4-3-2-1 Clusters */
-.foundation-area {
-    display: flex;
-    gap: 15px;
-    background: rgba(0,0,0,0.2);
-    padding: 15px;
-    border-radius: 12px;
-    border: 1px dashed #444;
-}
-
-/* Card Slots (Empty) */
-.card-slot {
-    width: 90px;
-    height: 126px; /* Standard Card Ratio */
-    background-color: #3a3835;
-    border-radius: 6px;
-    border: 2px solid #555;
-    position: relative;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    transition: transform 0.1s;
-}
-
-/* Active Card styling */
-.playing-card {
-    width: 100%;
-    height: 100%;
-    background-color: white;
-    border-radius: 6px;
-    position: absolute; /* Stack on top of slot */
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    font-weight: bold;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.5);
-    cursor: grab;
-    user-select: none;
-}
-.playing-card:active { cursor: grabbing; }
-
-/* Inner Card Art */
-.card-top { position: absolute; top: 4px; left: 4px; font-size: 14px; }
-.card-mid { font-size: 36px; }
-.card-bot { position: absolute; bottom: 4px; right: 4px; font-size: 14px; transform: rotate(180deg); }
-
-/* Card Backs */
-.card-back {
-    width: 100%;
-    height: 100%;
-    border-radius: 6px;
-    border: 2px solid white;
-    background: repeating-linear-gradient(45deg, #606dbc, #606dbc 10px, #465298 10px, #465298 20px);
-}
-
-.card-count-badge {
-    position: absolute;
-    bottom: -10px;
-    background: #222;
-    color: white;
-    font-size: 10px;
-    padding: 2px 6px;
-    border-radius: 4px;
-    border: 1px solid #555;
-}
-
-/* === BATTLEFIELD (Middle) === */
-.battlefield-zone {
-    flex-grow: 1;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    position: relative;
-    background-color: #355e3b; /* Classic Green Felt */
-    margin: 10px 0;
-    border-radius: 10px;
-    box-shadow: inset 0 0 30px rgba(0,0,0,0.6);
-    /* Fix for drag and drop accuracy */
-.center-slot {
-    /* Ensure the slot is always below the dragged card */
-    z-index: 1; 
-}
-
-/* While dragging, the card needs to be on top of EVERYTHING */
-.playing-card {
-    transition: transform 0.1s; /* Smooth pickup animation */
-}
-}
-
-.boundary-line {
-    position: absolute;
-    width: 95%;
-    height: 2px;
-    background-color: rgba(255,255,255,0.2);
-    top: 50%;
-    transform: translateY(-50%);
-}
-
-.center-piles {
-    display: flex;
-    gap: 40px;
-    z-index: 2;
-}
-
-.center-slot {
-    border: 2px solid rgba(255,255,255,0.4);
-    background-color: rgba(0,0,0,0.2);
-    transform: scale(1.1); /* Make center cards slightly larger */
-}
-
-/* === OVERLAY === */
-.overlay {
-    position: fixed;
-    top: 0; left: 0; width: 100%; height: 100%;
-    background: rgba(0,0,0,0.85);
-    z-index: 100;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-}
-.hidden { display: none; }
-
-.overlay-content {
-    background: #262421;
-    padding: 40px;
-    text-align: center;
-    border-radius: 12px;
-    border: 1px solid #444;
-}
-.overlay-content h1 { color: #81b64c; font-size: 40px; margin-bottom: 10px; }
-.overlay-content p { color: #ccc; margin-bottom: 20px; }
-
-.btn-restart, .btn-quit {
-    padding: 10px 20px;
-    border: none;
-    border-radius: 5px;
-    font-weight: bold;
-    cursor: pointer;
-    margin: 0 5px;
-}
-.btn-restart { background: #81b64c; color: white; }
-.btn-quit { background: #444; color: #ccc; text-decoration: none; display: inline-block; }
+        slider.oninput = function() { updateUI(this.value); };
+        updateUI(5);
+    </script>
+</body>
+</html>
