@@ -25,16 +25,22 @@ body { background-color: #1a4731; color: white; height: 100vh; overflow: hidden;
 .label-text { font-size: 12px; color: #ccc; text-transform: uppercase; letter-spacing: 1px; }
 .rotated { transform: rotate(180deg); }
 
-/* DECK STATUSES */
+/* BORROW LABEL */
+.borrow-label {
+    display: none; /* Hidden by default */
+    background: #e67e22; color: white; 
+    font-size: 10px; font-weight: bold;
+    padding: 2px 6px; border-radius: 4px;
+    margin-top: 5px; box-shadow: 0 2px 5px black;
+}
+.borrow-active { display: block; }
+
 .deck-text { position: absolute; z-index: 20; color: white; font-weight: 900; font-size: 14px; text-align: center; text-shadow: 0 2px 4px black; width: 100%; pointer-events: none; text-transform: uppercase; }
 .clickable-deck { cursor: pointer; }
 .clickable-deck:hover { box-shadow: 0 0 10px rgba(255,255,255,0.5); }
 
-/* "WAIT" Status - Yellow */
 .waiting .card-back { border-color: #f1c40f !important; box-shadow: 0 0 15px #f1c40f !important; }
 .waiting .deck-text { color: #f1c40f; }
-
-/* "COUNTDOWN" Status - Orange/Green */
 .counting .card-back { border-color: #2ecc71 !important; box-shadow: 0 0 20px #2ecc71 !important; }
 .counting .deck-text { font-size: 32px; color: #2ecc71; }
 
