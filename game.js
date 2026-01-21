@@ -1,11 +1,11 @@
 document.addEventListener('DOMContentLoaded', () => {
     
-    // === CONFIG ===
+    // === CONFIGURATION ===
     const SUITS = ["♠", "♥", "♣", "♦"];
     const VALUES = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
     let difficulty = parseInt(localStorage.getItem('slapsDifficulty')) || 5;
 
-    // DIFFICULTY Formulae
+    // DIFFICULTY SETTINGS
     const difficultySettings = {
         1: { min: 2000, max: 3000 },
         2: { min: 1500, max: 2500 },
@@ -30,8 +30,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let lastActionTime = 0;
 
     let gameState = {
-        player: { deck: [], cards: [], sidePot: [], borrowing: false },
-        bot: { deck: [], cards: [], sidePot: [], borrowing: false },
+        player: { deck: [], cards: [], sidePot: [] },
+        bot: { deck: [], cards: [], sidePot: [] },
         centerLeft: null, centerRight: null,
         centerStack: [], 
         gameOver: false,
@@ -65,6 +65,7 @@ document.addEventListener('DOMContentLoaded', () => {
         sBSlaps: document.getElementById('b-slaps')
     };
 
+    // Global Drag Listeners
     document.addEventListener('mousedown', () => isPlayerDragging = true);
     document.addEventListener('mouseup', () => isPlayerDragging = false);
 
@@ -128,11 +129,17 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function startRoundWithCounts(pCount, bCount) {
+        // 1. Create Cards
         let fullCards = SUITS.flatMap(s => VALUES.map(v => new Card(s, v, ""))).sort(() => Math.random() - 0.5);
-        fullCards.forEach((c, i) => { c.owner = (i < pCount) ? 'player' : 'bot'; });
+        
+        // 2. COUNTER FIX: Assign ownership BEFORE splitting so the counter sees them immediately
+        fullCards.forEach((c, i) => {
+            c.owner = (i < pCount) ? 'player' : 'bot';
+        });
 
+        // 3. INVISIBLE CARD FIX: Use the full array for splitting
         let pDeck = fullCards.slice(0, pCount);
-        let bDeck = fullCards.slice(pCount, 52);
+        let bDeck = fullCards.slice(pCount); // Slice to end
 
         gameState.player.cards = []; gameState.bot.cards = [];
         gameState.centerStack = []; gameState.centerLeft = null; gameState.centerRight = null;
@@ -155,7 +162,10 @@ document.addEventListener('DOMContentLoaded', () => {
         gameState.player.deck = pDeck;
         gameState.bot.deck = bDeck;
 
+        // Force Initial Render
         renderAll();
+        
+        // Delay AI logic
         lastActionTime = Date.now() + 3000; 
 
         if (!window.masterLoopSet) {
@@ -195,7 +205,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function renderZone(who) {
+        // DRAG PROTECTION: Do not update DOM if player is dragging
         if(who === 'player' && isPlayerDragging) return;
+
         const container = who === 'player' ? els.pBoundary : els.bBoundary;
         const cards = who === 'player' ? gameState.player.cards : gameState.bot.cards;
         container.innerHTML = ''; 
@@ -207,7 +219,7 @@ document.addEventListener('DOMContentLoaded', () => {
             el.style.color = c.color === 'red' ? '#d9534f' : '#292b2c';
             el.style.left = `${c.x}px`; el.style.top = `${c.y}px`;
             el.innerHTML = `<div class="card-top">${c.value}</div><div class="card-mid">${c.suit}</div><div class="card-bot">${c.value}</div>`;
-            el.style.zIndex = globalZ++; // FIX Z-INDEX STACKING
+            el.style.zIndex = globalZ++; 
             container.appendChild(el);
             if(who === 'player') setupInteraction(el, c);
         });
@@ -236,7 +248,7 @@ document.addEventListener('DOMContentLoaded', () => {
         let startX = e.clientX, startY = e.clientY;
         let origX = card.x, origY = card.y;
         let dragged = false;
-        const boxW = 900, boxH = 250, cardW = 110, cardH = 154; // UPDATED DIMENSIONS
+        const boxW = 900, boxH = 250, cardW = 110, cardH = 154; 
 
         function move(e) {
             if(Math.abs(e.clientX - startX) > 15 || Math.abs(e.clientY - startY) > 15) dragged = true;
@@ -348,6 +360,7 @@ document.addEventListener('DOMContentLoaded', () => {
         gameState.slapActive = true;
         let loser = (who === 'player') ? 'bot' : 'player';
         
+        // SLAP VISUAL FIX
         els.slapAlert.innerText = (who === 'player' ? "PLAYER 1 SLAPS WON!" : "AI SLAPS WON!");
         els.slapAlert.style.display = 'block';
         setTimeout(() => { els.slapAlert.style.display = 'none'; }, 1500);
@@ -356,7 +369,7 @@ document.addEventListener('DOMContentLoaded', () => {
         updateScoreboard();
 
         let wonCards = [...gameState.centerStack, gameState.centerLeft, gameState.centerRight];
-        wonCards.forEach(c => c.owner = loser);
+        wonCards.forEach(c => c.owner = loser); // OWNERSHIP TRANSFER FIX
         (loser === 'player' ? gameState.player.sidePot : gameState.bot.sidePot).push(...wonCards);
         gameState.centerLeft = null; gameState.centerRight = null; gameState.centerStack = [];
         
@@ -364,15 +377,15 @@ document.addEventListener('DOMContentLoaded', () => {
         setTimeout(() => { gameState.slapActive = false; resetStalemate(); }, 1000);
     }
 
-    // CLICK LISTENER FIX: Force start if board is empty
+    // DRAW DECK FIX: Force Start
     els.pDeck.addEventListener('click', () => {
         if(gameState.isCountDown || gameState.gameOver) return;
-        const isStart = !gameState.centerLeft && !gameState.centerRight; // Check if start of round
+        const isStart = !gameState.centerLeft && !gameState.centerRight; 
         if(!gameState.playerPass) {
             gameState.playerPass = true;
             els.pDeck.classList.add('waiting');
             els.pDeckText.innerText = "WAIT";
-            if(gameState.botPass || isStart) startCountdown(); // Force countdown if start
+            if(gameState.botPass || isStart) startCountdown(); 
         } 
     });
 
@@ -420,7 +433,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updateStats() {
-        // Collect EVERY card in the game
+        // COUNTER FIX: Scan everything
         const everyCard = [
             ...gameState.player.deck, ...gameState.player.cards, ...gameState.player.sidePot, 
             ...gameState.bot.deck, ...gameState.bot.cards, ...gameState.bot.sidePot, 
