@@ -127,9 +127,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function startRoundWithCounts(pCount, bCount) {
-        let fullDeck = SUITS.flatMap(s => VALUES.map(v => new Card(s, v, ""))).sort(() => Math.random() - 0.5);
-        let pDeck = fullDeck.slice(0, pCount);
-        let bDeck = fullDeck.slice(pCount, 52);
+        // Pre-assign ownership based on the split so the counter sees 26 immediately
+// Step 1: Create the cards
+let fullCards = SUITS.flatMap(s => VALUES.map(v => new Card(s, v, ""))).sort(() => Math.random() - 0.5);
+
+// Step 2: Tag them with an owner immediately so the counter sees 26 each
+fullCards.forEach((c, i) => {
+    c.owner = (i < pCount) ? 'player' : 'bot';
+});
+let pDeck = fullCards.slice(0, pCount);
+let bDeck = fullCards.slice(pCount, 52);
 
         gameState.player.cards = []; gameState.bot.cards = [];
         gameState.centerStack = []; gameState.centerLeft = null; gameState.centerRight = null;
@@ -383,9 +390,19 @@ document.addEventListener('DOMContentLoaded', () => {
         if(gameState.centerRight) gameState.centerStack.push(gameState.centerRight);
         if(isPlayerDragging) { isPlayerDragging = false; renderZone('player'); }
 
-        let pPop = gameState.player.deck.pop(), bPop = gameState.bot.deck.pop();
-        if(!pPop && gameState.bot.deck.length > 0) { gameState.bot.deck.pop(); pPop = gameState.bot.deck.pop(); }
-        if(!bPop && gameState.player.deck.length > 0) { gameState.player.deck.pop(); bPop = gameState.player.deck.pop(); }
+        // Reveal Deduction Fix: Ensure counter drops correctly during borrow
+let pPop = gameState.player.deck.pop();
+let bPop = gameState.bot.deck.pop();
+
+// If Player borrows: They use a card from Bot's deck. 
+// Bot loses a card from their actual deck (Counter -1), 
+// and Player progresses without using their own (effectively Counter -1 visual progress).
+if(!pPop && gameState.bot.deck.length > 0) {
+     pPop = gameState.bot.deck.pop(); 
+}
+if(!bPop && gameState.player.deck.length > 0) {
+     bPop = gameState.player.deck.pop();
+}
 
         if(pPop) gameState.centerRight = pPop; if(bPop) gameState.centerLeft = bPop;
         resetStalemateVisuals(); renderAll(); updateStats();
@@ -398,12 +415,27 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updateStats() {
-        const allCards = [...gameState.player.deck, ...gameState.player.cards, ...gameState.player.sidePot, ...gameState.bot.deck, ...gameState.bot.cards, ...gameState.bot.sidePot, ...gameState.centerStack, gameState.centerLeft, gameState.centerRight].filter(c => c);
-        let pT = allCards.filter(c => c.owner === 'player').length, bT = allCards.filter(c => c.owner === 'bot').length;
-        els.pCount.innerText = pT; els.bCount.innerText = bT;
-        els.pBorrow.classList.toggle('borrow-active', gameState.player.deck.length <= 10);
-        els.bBorrow.classList.toggle('borrow-active', gameState.bot.deck.length <= 10);
-    }
+    // We create a list of EVERY card currently on the screen or in decks
+    const everyCardInGame = [
+        ...gameState.player.deck, 
+        ...gameState.player.cards, 
+        ...gameState.player.sidePot, 
+        ...gameState.bot.deck, 
+        ...gameState.bot.cards, 
+        ...gameState.bot.sidePot, 
+        ...gameState.centerStack, // The pile underneath the top center cards
+        gameState.centerLeft,     // The current left center card
+        gameState.centerRight     // The current right center card
+    ].filter(card => card !== null); // Ignore empty slots
+
+    // Count how many of those cards still have your "tag" on them
+    let pTotal = everyCardInGame.filter(c => c.owner === 'player').length;
+    let bTotal = everyCardInGame.filter(c => c.owner === 'bot').length;
+
+    // Update the visual numbers on the left widget
+    els.pCount.innerText = pTotal; 
+    els.bCount.innerText = bTotal;
+}
     
     function updateScoreboard() {
         els.sPRounds.innerText = gameState.scores.pRounds; els.sBRounds.innerText = gameState.scores.bRounds;
