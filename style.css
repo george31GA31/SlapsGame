@@ -2,48 +2,10 @@
 * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; user-select: none; }
 body { background-color: #302e2b; color: #ffffff; height: 100vh; overflow: hidden; display: flex; justify-content: center; }
 
-/* === INDEX: SIDEBAR LAYOUT === */
-.main-layout { display: flex; width: 100%; max-width: 1600px; height: 100%; }
-.sidebar { width: 180px; background-color: #262421; display: flex; flex-direction: column; padding: 15px; border-right: 1px solid #3c3a37; }
-.logo { font-size: 20px; font-weight: bold; color: #81b64c; margin-bottom: 20px; text-align: center; }
-.search-bar { background: #3c3a37; padding: 8px; border-radius: 5px; display: flex; align-items: center; margin-bottom: 20px; }
-.search-bar input { background: transparent; border: none; color: white; margin-left: 10px; width: 100%; outline: none; }
-.nav-links { list-style: none; } .nav-links li { padding: 12px 10px; color: #c3c3c3; font-size: 14px; cursor: default; }
-.auth-buttons { margin-top: auto; display: flex; flex-direction: column; gap: 10px; }
-.btn-signup { background-color: #81b64c; color: white; border: none; padding: 12px; border-radius: 5px; font-weight: bold; cursor: pointer; }
-.btn-login { background-color: #454341; color: #c3c3c3; border: none; padding: 12px; border-radius: 5px; font-weight: bold; cursor: pointer; }
-.center-stage { flex-grow: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; background-color: #302e2b; padding: 20px; }
-.game-preview { width: 600px; height: 600px; display: flex; justify-content: center; align-items: center; }
-.slaps-table-visual { width: 100%; height: 100%; background-color: #769656; border-radius: 10px; position: relative; box-shadow: 0 5px 15px rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; }
-.center-pile { width: 100px; height: 140px; background-color: white; border-radius: 8px; border: 2px solid #ddd; box-shadow: 2px 2px 5px rgba(0,0,0,0.3); }
-.action-panel { width: 350px; background-color: #211f1c; padding: 20px; display: flex; flex-direction: column; }
-.panel-header { font-size: 24px; font-weight: bold; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }
-.card { background-color: #262421; border-radius: 8px; padding: 15px; display: flex; align-items: center; margin-bottom: 15px; transition: 0.2s; }
-.card.clickable:hover { background-color: #3c3a37; cursor: pointer; transform: translateY(-2px); }
-.card.disabled { opacity: 0.5; cursor: not-allowed; }
-.card-icon { font-size: 24px; margin-right: 15px; color: #c3c3c3; width: 30px; text-align: center; }
-.card-text h3 { font-size: 16px; color: white; margin-bottom: 4px; } .card-text p { font-size: 12px; color: #989694; }
+/* === INDEX & SETUP (Unchanged) === */
+.main-layout { display: flex; width: 100%; max-width: 1600px; height: 100%; } .sidebar { width: 180px; background-color: #262421; display: flex; flex-direction: column; padding: 15px; border-right: 1px solid #3c3a37; } .logo { font-size: 20px; font-weight: bold; color: #81b64c; margin-bottom: 20px; text-align: center; } .search-bar { background: #3c3a37; padding: 8px; border-radius: 5px; display: flex; align-items: center; margin-bottom: 20px; } .search-bar input { background: transparent; border: none; color: white; margin-left: 10px; width: 100%; outline: none; } .nav-links { list-style: none; } .nav-links li { padding: 12px 10px; color: #c3c3c3; font-size: 14px; cursor: default; } .auth-buttons { margin-top: auto; display: flex; flex-direction: column; gap: 10px; } .btn-signup { background-color: #81b64c; color: white; border: none; padding: 12px; border-radius: 5px; font-weight: bold; cursor: pointer; } .btn-login { background-color: #454341; color: #c3c3c3; border: none; padding: 12px; border-radius: 5px; font-weight: bold; cursor: pointer; } .center-stage { flex-grow: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; background-color: #302e2b; padding: 20px; } .game-preview { width: 600px; height: 600px; display: flex; justify-content: center; align-items: center; } .slaps-table-visual { width: 100%; height: 100%; background-color: #769656; border-radius: 10px; position: relative; box-shadow: 0 5px 15px rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; } .center-pile { width: 100px; height: 140px; background-color: white; border-radius: 8px; border: 2px solid #ddd; box-shadow: 2px 2px 5px rgba(0,0,0,0.3); } .action-panel { width: 350px; background-color: #211f1c; padding: 20px; display: flex; flex-direction: column; } .panel-header { font-size: 24px; font-weight: bold; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; } .card { background-color: #262421; border-radius: 8px; padding: 15px; display: flex; align-items: center; margin-bottom: 15px; transition: 0.2s; } .card.clickable:hover { background-color: #3c3a37; cursor: pointer; transform: translateY(-2px); } .card.disabled { opacity: 0.5; cursor: not-allowed; } .card-icon { font-size: 24px; margin-right: 15px; color: #c3c3c3; width: 30px; text-align: center; } .card-text h3 { font-size: 16px; color: white; margin-bottom: 4px; } .card-text p { font-size: 12px; color: #989694; } .setup-body { background-color: #1e1d1b; display: flex; justify-content: center; align-items: center; height: 100vh; position: relative; overflow: hidden; } .bg-gradient { position: absolute; width: 100%; height: 100%; background: radial-gradient(circle at center, #2b2926 0%, #161513 100%); z-index: -1; } .setup-card { background: rgba(38, 36, 33, 0.95); width: 450px; padding: 30px; border-radius: 16px; box-shadow: 0 20px 50px rgba(0,0,0,0.6); border: 1px solid #3c3a37; display: flex; flex-direction: column; gap: 25px; backdrop-filter: blur(10px); } .setup-header { display: flex; align-items: center; border-bottom: 1px solid #3c3a37; padding-bottom: 15px; } .setup-header h2 { flex-grow: 1; text-align: center; font-size: 16px; color: #989694; margin: 0; letter-spacing: 2px; } .back-btn { color: #989694; font-size: 18px; cursor: pointer; } .back-btn:hover { color: white; } .bot-profile-container { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 10px; } .avatar-ring { width: 100px; height: 100px; border-radius: 50%; border: 3px solid #81b64c; display: flex; justify-content: center; align-items: center; font-size: 50px; background-color: #1e1d1b; transition: 0.3s; } #difficulty-title { font-size: 28px; margin: 5px 0 0 0; color: white; letter-spacing: 1px; } .bot-desc { color: #989694; font-size: 14px; max-width: 80%; line-height: 1.4; } .controls-area { background-color: #1e1d1b; padding: 20px; border-radius: 12px; border: 1px solid #333; } .slider-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; font-size: 12px; font-weight: bold; color: #ccc; } .level-badge { background-color: #81b64c; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; } .custom-slider-wrapper { position: relative; width: 100%; height: 6px; background: #333; border-radius: 3px; margin-bottom: 10px; } .slider-track-fill { position: absolute; top: 0; left: 0; height: 100%; background-color: #81b64c; border-radius: 3px; width: 50%; pointer-events: none; } .pro-slider { position: absolute; top: -6px; width: 100%; height: 20px; opacity: 0; cursor: pointer; z-index: 2; } .slider-labels { display: flex; justify-content: space-between; color: #555; font-size: 10px; font-weight: bold; text-transform: uppercase; margin-top: 5px; } .btn-launch { background: linear-gradient(135deg, #81b64c, #6a9e3d); color: white; text-align: center; padding: 18px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 18px; letter-spacing: 1px; transition: transform 0.2s; } .btn-launch:hover { transform: translateY(-2px); }
 
-/* === SETUP === */
-.setup-body { background-color: #1e1d1b; display: flex; justify-content: center; align-items: center; height: 100vh; position: relative; overflow: hidden; }
-.bg-gradient { position: absolute; width: 100%; height: 100%; background: radial-gradient(circle at center, #2b2926 0%, #161513 100%); z-index: -1; }
-.setup-card { background: rgba(38, 36, 33, 0.95); width: 450px; padding: 30px; border-radius: 16px; box-shadow: 0 20px 50px rgba(0,0,0,0.6); border: 1px solid #3c3a37; display: flex; flex-direction: column; gap: 25px; backdrop-filter: blur(10px); }
-.setup-header { display: flex; align-items: center; border-bottom: 1px solid #3c3a37; padding-bottom: 15px; } .setup-header h2 { flex-grow: 1; text-align: center; font-size: 16px; color: #989694; margin: 0; letter-spacing: 2px; }
-.back-btn { color: #989694; font-size: 18px; cursor: pointer; } .back-btn:hover { color: white; }
-.bot-profile-container { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 10px; }
-.avatar-ring { width: 100px; height: 100px; border-radius: 50%; border: 3px solid #81b64c; display: flex; justify-content: center; align-items: center; font-size: 50px; background-color: #1e1d1b; transition: 0.3s; }
-#difficulty-title { font-size: 28px; margin: 5px 0 0 0; color: white; letter-spacing: 1px; }
-.bot-desc { color: #989694; font-size: 14px; max-width: 80%; line-height: 1.4; }
-.controls-area { background-color: #1e1d1b; padding: 20px; border-radius: 12px; border: 1px solid #333; }
-.slider-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; font-size: 12px; font-weight: bold; color: #ccc; }
-.level-badge { background-color: #81b64c; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; }
-.custom-slider-wrapper { position: relative; width: 100%; height: 6px; background: #333; border-radius: 3px; margin-bottom: 10px; }
-.slider-track-fill { position: absolute; top: 0; left: 0; height: 100%; background-color: #81b64c; border-radius: 3px; width: 50%; pointer-events: none; }
-.pro-slider { position: absolute; top: -6px; width: 100%; height: 20px; opacity: 0; cursor: pointer; z-index: 2; }
-.slider-labels { display: flex; justify-content: space-between; color: #555; font-size: 10px; font-weight: bold; text-transform: uppercase; margin-top: 5px; }
-.btn-launch { background: linear-gradient(135deg, #81b64c, #6a9e3d); color: white; text-align: center; padding: 18px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 18px; letter-spacing: 1px; transition: transform 0.2s; } .btn-launch:hover { transform: translateY(-2px); }
-
-/* === GAME === */
+/* === GAME STYLES === */
 .game-body { background-color: #1a4731; color: white; height: 100vh; overflow: hidden; display: flex; }
 .stats-widget { position: absolute; left: 20px; top: 50%; transform: translateY(-50%); width: 100px; background: rgba(0,0,0,0.5); border: 2px solid rgba(255,255,255,0.2); border-radius: 10px; padding: 15px; text-align: center; z-index: 100; }
 .stat-box { margin-bottom: 15px; } .stat-box span { font-size: 10px; color: #ccc; letter-spacing: 1px; } .stat-box h2 { font-size: 24px; color: gold; margin: 0; }
@@ -61,15 +23,14 @@ body { background-color: #302e2b; color: #ffffff; height: 100vh; overflow: hidde
 
 /* SLAP ALERT */
 #slap-alert {
-    display: none; /* Controlled via JS */
-    position: fixed;
-    top: 50%; left: 50%;
+    display: none;
+    position: fixed; top: 50%; left: 50%;
     transform: translate(-50%, -50%);
-    font-size: 64px; font-weight: 900;
+    font-size: 80px; font-weight: 900;
     color: white;
     -webkit-text-stroke: 2px #e74c3c;
     text-shadow: 0 10px 40px rgba(0,0,0,0.9);
-    z-index: 9999999;
+    z-index: 2147483647;
     pointer-events: none;
     animation: slapPop 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
@@ -80,13 +41,19 @@ body { background-color: #302e2b; color: #ffffff; height: 100vh; overflow: hidde
 .middle-zone { gap: 40px; }
 .foundation-box { width: 900px; height: 250px; border: 4px solid rgba(255,255,255,0.3); background-color: rgba(0,0,0,0.1); border-radius: 10px; position: relative; overflow: visible; }
 .pile-group { display: flex; flex-direction: column; align-items: center; gap: 5px; }
-.card-slot { width: 90px; height: 126px; background-color: rgba(0,0,0,0.2); border: 2px dashed rgba(255,255,255,0.3); border-radius: 6px; position: relative; display: flex; justify-content: center; align-items: center; }
+
+/* === BIGGER CARDS UPDATE === */
+.card-slot { 
+    width: 110px; height: 154px; /* Increased from 90x126 */
+    background-color: rgba(0,0,0,0.2); border: 2px dashed rgba(255,255,255,0.3); 
+    border-radius: 8px; position: relative; display: flex; justify-content: center; align-items: center; 
+}
 .deck-slot { border: 2px solid white; background-color: #222; transition: 0.3s; }
 .center-slot { border: 2px solid white; transform: scale(1.1); }
 .label-text { font-size: 12px; color: #ccc; text-transform: uppercase; letter-spacing: 1px; }
 .borrow-label { display: none; background: #e67e22; color: white; font-size: 10px; font-weight: bold; padding: 2px 6px; border-radius: 4px; margin-top: 5px; box-shadow: 0 2px 5px black; }
 .borrow-active { display: block !important; }
-.deck-text { position: absolute; z-index: 20; color: white; font-weight: 900; font-size: 14px; text-align: center; text-shadow: 0 2px 4px black; width: 100%; pointer-events: none; text-transform: uppercase; }
+.deck-text { position: absolute; z-index: 20; color: white; font-weight: 900; font-size: 18px; text-align: center; text-shadow: 0 2px 4px black; width: 100%; pointer-events: none; text-transform: uppercase; }
 .clickable-deck { cursor: pointer; }
 .clickable-deck:hover { box-shadow: 0 0 10px rgba(255,255,255,0.5); }
 .waiting.clickable-deck .card-back { border-color: #f1c40f !important; box-shadow: 0 0 15px #f1c40f !important; }
@@ -94,12 +61,24 @@ body { background-color: #302e2b; color: #ffffff; height: 100vh; overflow: hidde
 .counting .card-back { border-color: #2ecc71 !important; box-shadow: 0 0 20px #2ecc71 !important; }
 .counting .deck-text { font-size: 32px; color: #2ecc71; }
 
-.playing-card { width: 90px; height: 126px; background-color: white; border-radius: 6px; position: absolute; display: flex; justify-content: center; align-items: center; box-shadow: 2px 2px 5px rgba(0,0,0,0.4); font-weight: bold; cursor: grab; z-index: 10; font-family: sans-serif; color: black; transition: transform 0.1s; }
+.playing-card { 
+    width: 110px; height: 154px; /* Increased */
+    background-color: white; border-radius: 8px; 
+    position: absolute; display: flex; justify-content: center; align-items: center; 
+    box-shadow: 2px 2px 5px rgba(0,0,0,0.4); font-weight: bold; cursor: grab; z-index: 10; 
+    font-family: sans-serif; color: black; transition: transform 0.1s; 
+    display: flex !important; visibility: visible !important; opacity: 1 !important; /* Ghosting Fix */
+}
 .playing-card:active { cursor: grabbing; z-index: 100; }
 .playing-card.face-down { background: repeating-linear-gradient(45deg, #a32a2a, #a32a2a 5px, #800000 5px, #800000 10px); border: 2px solid white; color: transparent !important; }
 .playing-card.face-down div { display: none; }
-.card-top { position: absolute; top: 4px; left: 4px; font-size: 14px; } .card-mid { font-size: 40px; } .card-bot { position: absolute; bottom: 4px; right: 4px; font-size: 14px; transform: rotate(180deg); }
-.card-back { width: 100%; height: 100%; border-radius: 6px; border: 2px solid white; background: repeating-linear-gradient(45deg, #a32a2a, #a32a2a 5px, #800000 5px, #800000 10px); }
+
+/* BIGGER NUMBERS */
+.card-top { position: absolute; top: 6px; left: 6px; font-size: 24px; } 
+.card-mid { font-size: 64px; } 
+.card-bot { position: absolute; bottom: 6px; right: 6px; font-size: 24px; transform: rotate(180deg); }
+
+.card-back { width: 100%; height: 100%; border-radius: 8px; border: 2px solid white; background: repeating-linear-gradient(45deg, #a32a2a, #a32a2a 5px, #800000 5px, #800000 10px); }
 .flying-card { position: fixed; z-index: 9999 !important; transition: all 0.6s ease-in-out; pointer-events: none; box-shadow: 0 10px 40px rgba(0,0,0,0.6); }
 .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 200; display: flex; justify-content: center; align-items: center; } .hidden { display: none; } .overlay-content { text-align: center; color: white; }
 .btn-restart { background: #81b64c; color: white; padding: 10px 20px; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; }
