@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Slaps.GG - Match in Progress</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="game-body">
+
+    <div id="game-overlay" class="overlay hidden">
+        <div class="overlay-content">
+            <h1 id="overlay-title">VICTORY!</h1>
+            <p id="overlay-desc">You cleared your cards in 45 seconds.</p>
+            <div class="overlay-buttons">
+                <button onclick="location.reload()" class="btn-restart">REMATCH</button>
+                <a href="index.html" class="btn-quit">MAIN MENU</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="game-header">
+        <div class="player-badge opponent-badge">
+            <i class="fa-solid fa-robot"></i> 
+            <span id="bot-name-display">BOT</span>
+        </div>
+        
+        <div class="game-timer" id="game-timer">00:00</div>
+
+        <div class="player-badge">
+            <i class="fa-solid fa-user"></i> 
+            <span>YOU</span>
+        </div>
+    </div>
+
+    <div class="arena-container">
+        
+        <div class="player-zone opponent-zone">
+            <div class="deck-area">
+                <div class="card-slot deck-slot opponent-deck">
+                    <div class="card-back"></div>
+                    <div class="card-count-badge" id="bot-deck-count">16</div>
+                </div>
+            </div>
+            
+            <div class="foundation-area" id="bot-foundation">
+                </div>
+        </div>
+
+
+        <div class="battlefield-zone">
+            <div class="boundary-line"></div>
+            
+            <div class="center-piles">
+                <div class="card-slot center-slot" id="center-left"></div>
+                
+                <div class="card-slot center-slot" id="center-right"></div>
+            </div>
+        </div>
+
+
+        <div class="player-zone player-zone-bottom">
+            <div class="foundation-area" id="player-foundation">
+                </div>
+
+            <div class="deck-area">
+                <div class="card-slot deck-slot player-deck" id="player-draw-deck">
+                    <div class="card-back"></div>
+                    <div class="card-count-badge" id="player-deck-count">16</div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script src="game.js"></script>
+</body>
+</html>
