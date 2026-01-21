@@ -5,20 +5,21 @@ document.addEventListener('DOMContentLoaded', () => {
     const VALUES = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
     let difficulty = parseInt(localStorage.getItem('slapsDifficulty')) || 5;
 
-    // AI SPEED: Low levels much slower now
-    // Lvl 1: 8000ms base. Lvl 10: 800ms base.
+    // AI SPEED
     let botSpeedBase = 8000 - (difficulty * 720); 
     const getBotDelay = () => Math.max(800, botSpeedBase + (Math.random() * 500));
     let globalZ = 100;
 
+    // GAME STATE (Added sidePot)
     let gameState = {
-        player: { deck: [], cards: [], borrowing: false, borrowedAmount: 0 },
-        bot: { deck: [], cards: [], borrowing: false, borrowedAmount: 0 },
+        player: { deck: [], cards: [], borrowing: false, borrowedAmount: 0, sidePot: [] },
+        bot: { deck: [], cards: [], borrowing: false, borrowedAmount: 0, sidePot: [] },
         centerLeft: null, centerRight: null,
         centerStack: [], 
         gameOver: false,
         playerPass: false, botPass: false,
-        isCountDown: false
+        isCountDown: false,
+        slapActive: false // To prevent double slapping
     };
 
     const els = {
@@ -37,7 +38,8 @@ document.addEventListener('DOMContentLoaded', () => {
         bBorrow: document.getElementById('bot-borrow-label'),
         overlayTitle: document.getElementById('overlay-title'),
         overlayDesc: document.getElementById('overlay-desc'),
-        btnAction: document.getElementById('btn-action')
+        btnAction: document.getElementById('btn-action'),
+        slapMsg: document.getElementById('slap-message')
     };
 
     class Card {
@@ -84,6 +86,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         gameState.player.cards = []; gameState.bot.cards = [];
         gameState.centerStack = []; gameState.centerLeft = null; gameState.centerRight = null;
+        gameState.player.sidePot = []; gameState.bot.sidePot = []; // Reset Side Pots
         gameState.gameOver = false; gameState.playerPass = false; gameState.botPass = false;
         gameState.player.borrowing = false; gameState.bot.borrowing = false;
         gameState.player.borrowedAmount = 0; gameState.bot.borrowedAmount = 0;
@@ -97,16 +100,14 @@ document.addEventListener('DOMContentLoaded', () => {
         // BORROW LOGIC
         if(pDeck.length < 10) {
             let loan = Math.floor(bDeck.length / 2);
-            let borrowed = bDeck.splice(0, loan);
-            pDeck.push(...borrowed);
+            pDeck.push(...bDeck.splice(0, loan));
             gameState.player.borrowing = true;
             gameState.player.borrowedAmount = loan;
             els.pBorrow.classList.add('borrow-active');
         }
         if(bDeck.length < 10) {
             let loan = Math.floor(pDeck.length / 2);
-            let borrowed = pDeck.splice(0, loan);
-            bDeck.push(...borrowed);
+            bDeck.push(...pDeck.splice(0, loan));
             gameState.bot.borrowing = true;
             gameState.bot.borrowedAmount = loan;
             els.bBorrow.classList.add('borrow-active');
@@ -125,22 +126,22 @@ document.addEventListener('DOMContentLoaded', () => {
         runBotCycle();
         setInterval(updateStats, 200);
         setInterval(checkBotStalemate, 800);
-        setInterval(checkBotSort, 600); // Dedicated sorting loop
+        setInterval(checkBotSort, 600);
+        setInterval(checkSlapOpportunity, 100); // Check for slaps constantly
         
+        // Mid-Round Shortage
         setInterval(() => {
             if(gameState.gameOver) return;
             if(gameState.player.deck.length === 0 && !gameState.player.borrowing && gameState.bot.deck.length > 1) {
                 let loan = Math.floor(gameState.bot.deck.length / 2);
-                let borrowed = gameState.bot.deck.splice(0, loan);
-                gameState.player.deck.push(...borrowed);
+                gameState.player.deck.push(...gameState.bot.deck.splice(0, loan));
                 gameState.player.borrowing = true;
                 gameState.player.borrowedAmount = loan;
                 els.pBorrow.classList.add('borrow-active');
             }
             if(gameState.bot.deck.length === 0 && !gameState.bot.borrowing && gameState.player.deck.length > 1) {
                 let loan = Math.floor(gameState.player.deck.length / 2);
-                let borrowed = gameState.player.deck.splice(0, loan);
-                gameState.bot.deck.push(...borrowed);
+                gameState.bot.deck.push(...gameState.player.deck.splice(0, loan));
                 gameState.bot.borrowing = true;
                 gameState.bot.borrowedAmount = loan;
                 els.bBorrow.classList.add('borrow-active');
@@ -257,6 +258,65 @@ document.addEventListener('DOMContentLoaded', () => {
         resetStalemate(); renderAll(); checkWin();
     }
 
+    // === SLAP LOGIC ===
+    // 1. SPACEBAR LISTENER
+    document.addEventListener('keydown', (e) => {
+        if(e.code === 'Space' && !gameState.gameOver && !gameState.isCountDown) {
+            e.preventDefault(); // Stop scroll
+            performSlap('player');
+        }
+    });
+
+    // 2. CHECK FOR SLAP OPPORTUNITY
+    function checkSlapOpportunity() {
+        if(gameState.gameOver || gameState.isCountDown || gameState.slapActive) return;
+        if(!gameState.centerLeft || !gameState.centerRight) return;
+
+        if(gameState.centerLeft.rank === gameState.centerRight.rank) {
+            // Match found!
+            if(!gameState.slapActive) {
+                // AI Reaction Logic
+                let reaction = Math.max(400, 2000 - (difficulty * 150)); // Fast reaction at lvl 10
+                setTimeout(() => performSlap('bot'), reaction);
+            }
+        }
+    }
+
+    // 3. EXECUTE SLAP
+    function performSlap(who) {
+        if(gameState.slapActive) return; // Already slapped
+        if(!gameState.centerLeft || !gameState.centerRight) return;
+        if(gameState.centerLeft.rank !== gameState.centerRight.rank) return; // False slap ignored for now
+
+        gameState.slapActive = true;
+        let loser = (who === 'player') ? 'bot' : 'player';
+        
+        // VISUAL FEEDBACK
+        els.slapMsg.innerText = (who === 'player' ? "PLAYER" : "AI") + " SLAPS WON!";
+        els.slapMsg.classList.add('visible');
+        setTimeout(() => els.slapMsg.classList.remove('visible'), 1500);
+
+        // MOVE CARDS TO LOSER'S SIDE POT
+        let wonCards = [...gameState.centerStack, gameState.centerLeft, gameState.centerRight];
+        if(loser === 'player') gameState.player.sidePot.push(...wonCards);
+        else gameState.bot.sidePot.push(...wonCards);
+
+        // CLEAR CENTER
+        gameState.centerLeft = null;
+        gameState.centerRight = null;
+        gameState.centerStack = [];
+        
+        renderAll();
+        updateStats(); // Updates count immediately
+
+        // RESET TO REVEAL PHASE
+        setTimeout(() => {
+            gameState.slapActive = false;
+            resetStalemate(); // Force players to click decks again
+        }, 1000);
+    }
+
+    // === STALEMATE ===
     els.pDeck.addEventListener('click', () => {
         if(gameState.isCountDown || gameState.gameOver) return;
         if(!gameState.playerPass) {
@@ -268,7 +328,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     function checkBotStalemate() {
-        if(gameState.isCountDown || gameState.gameOver) return;
+        if(gameState.isCountDown || gameState.gameOver || gameState.slapActive) return;
         let bMoves = false;
         gameState.bot.cards.filter(c => c.isFaceUp).forEach(c => { if(isValid(c, gameState.centerLeft) || isValid(c, gameState.centerRight)) bMoves = true; });
         if(gameState.bot.cards.filter(c => c.isFaceUp).length < 4 && gameState.bot.cards.some(c => !c.isFaceUp)) bMoves = true;
@@ -277,7 +337,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if(!bMoves || isStart) {
             if(!gameState.botPass) {
                 gameState.botPass = true; 
-                // NO CSS CLASS ADDED FOR BOT (Poker Face)
                 if(gameState.playerPass) startCountdown();
             }
         } else {
@@ -320,48 +379,31 @@ document.addEventListener('DOMContentLoaded', () => {
         gameState.isCountDown = false; gameState.playerPass = false; gameState.botPass = false;
     }
 
-    // === FAST SORTING LOOP (Quickly organize foundation) ===
     function checkBotSort() {
         if(gameState.gameOver) return;
-        
-        // 1. FLIP HIDDEN CARDS IMMEDIATELY IF POSSIBLE
         if(gameState.bot.cards.filter(c => c.isFaceUp).length < 4) {
             const hidden = gameState.bot.cards.find(c => !c.isFaceUp);
-            if(hidden) { 
-                hidden.isFaceUp = true; 
-                resetStalemate(); 
-                renderZone('bot'); 
-                return; // One action per tick
-            }
+            if(hidden) { hidden.isFaceUp = true; resetStalemate(); renderZone('bot'); return; }
         }
-
-        // 2. ORGANIZE: If I have an empty column AND a messy column, fix it.
         let columns = [[],[],[],[]];
         gameState.bot.cards.forEach(c => columns[c.col].push(c));
-        
         let emptyColIndex = columns.findIndex(c => c.length === 0);
         if(emptyColIndex !== -1) {
-            // Find a column that has HIDDEN cards (so moving the top card helps)
             let messyColIndex = columns.findIndex(c => c.length > 1 && c.some(card => !card.isFaceUp));
             if(messyColIndex !== -1) {
-                // Move top card to empty slot
-                let cardToMove = columns[messyColIndex].sort((a,b)=>a.y-b.y).pop(); // Get top physically
+                let cardToMove = columns[messyColIndex].sort((a,b)=>a.y-b.y).pop();
                 if(cardToMove.isFaceUp) {
                     cardToMove.col = emptyColIndex;
                     cardToMove.x = [50, 250, 450, 650][emptyColIndex];
                     cardToMove.y = 20; 
-                    
-                    // Reveal the card underneath immediately
                     let newTop = columns[messyColIndex][columns[messyColIndex].length-1];
                     if(newTop && !newTop.isFaceUp) newTop.isFaceUp = true;
-                    
                     renderAll();
                 }
             }
         }
     }
 
-    // === MAIN BOT LOOP (Playing Cards) ===
     function runBotCycle() {
         if(gameState.gameOver) return;
         setTimeout(() => {
@@ -372,6 +414,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     if(isValid(c, gameState.centerRight)) { move = {card:c, side:'right'}; break; }
                 }
             }
+
+            // STUCK FIX: Force botPass off if we found a move
+            if(move && gameState.botPass) gameState.botPass = false;
 
             if(move) {
                 const botEls = Array.from(els.bBoundary.children);
@@ -390,19 +435,26 @@ document.addEventListener('DOMContentLoaded', () => {
                     if(move.side === 'left') gameState.centerLeft = move.card; else gameState.centerRight = move.card;
                     resetStalemate(); 
                     
-                    // Flip logic handled by Sorting Loop mainly, but double check here
+                    let colCards = gameState.bot.cards.filter(c => c.col === move.card.col);
+                    if(colCards.length > 0) {
+                        let newTop = colCards[colCards.length - 1]; 
+                        if(!newTop.isFaceUp && gameState.bot.cards.filter(c => c.isFaceUp).length < 4) newTop.isFaceUp = true;
+                    }
                     renderAll(); checkWin();
                 });
+            } else {
+                if(gameState.bot.cards.filter(c => c.isFaceUp).length < 4 && !gameState.botPass) {
+                    const hidden = gameState.bot.cards.find(c => !c.isFaceUp);
+                    if(hidden) { hidden.isFaceUp = true; resetStalemate(); renderZone('bot'); }
+                }
             }
             runBotCycle();
         }, getBotDelay());
     }
 
     function updateStats() {
-        // Calculate true "Owned" cards by subtracting borrowed amount
-        let pTotal = (gameState.player.deck.length + gameState.player.cards.length) - gameState.player.borrowedAmount;
-        let bTotal = (gameState.bot.deck.length + gameState.bot.cards.length) - gameState.bot.borrowedAmount;
-        
+        let pTotal = (gameState.player.deck.length + gameState.player.cards.length + gameState.player.sidePot.length) - gameState.player.borrowedAmount;
+        let bTotal = (gameState.bot.deck.length + gameState.bot.cards.length + gameState.bot.sidePot.length) - gameState.bot.borrowedAmount;
         els.pCount.innerText = Math.max(0, pTotal); 
         els.bCount.innerText = Math.max(0, bTotal);
     }
@@ -417,7 +469,6 @@ document.addEventListener('DOMContentLoaded', () => {
         gameState.gameOver = true;
         
         let winnerDeckSize = (winner === 'player') ? gameState.player.deck.length : gameState.bot.deck.length;
-        
         let pStat = parseInt(els.pCount.innerText);
         let bStat = parseInt(els.bCount.innerText);
 
@@ -425,6 +476,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (bStat === 0) { endMatch("BOT WINS THE MATCH!"); return; }
 
         let pNext, bNext;
+        // Winner gets their current deck. Loser gets 52 - winner's deck.
+        // Side pots are effectively "lost" to the loser in this calculation automatically because of 52 sum.
         if (winner === 'player') {
             pNext = winnerDeckSize; 
             bNext = 52 - pNext;
