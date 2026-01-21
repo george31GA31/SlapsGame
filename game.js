@@ -158,8 +158,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         renderAll();
         
-        // Single Master Loop
-        setInterval(botMasterLoop, 200); 
+       // Single Master Loop
+        // DELAY FIX: Set last action to future so bot waits 3 seconds before first move
+        lastActionTime = Date.now() + 3000; 
+        setInterval(botMasterLoop, 200);
         setInterval(updateStats, 100); // Frequent update for labels
         setInterval(checkSlapOpportunity, 100); 
         setInterval(checkStalemateConditions, 800); 
@@ -195,9 +197,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function renderZone(who) {
-        // FIX: Don't re-render player zone if dragging
+        // DROP BUG FIX: If player is holding a card, DO NOT update their DOM
         if(who === 'player' && isPlayerDragging) return;
-
+        
         const container = who === 'player' ? els.pBoundary : els.bBoundary;
         const cards = who === 'player' ? gameState.player.cards : gameState.bot.cards;
         container.innerHTML = ''; 
@@ -336,50 +338,62 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // 2. FLIP/SORT PRIORITY
+        
+        // STRICT 4-CARD LIMIT CHECK
+        let faceUpCount = gameState.bot.cards.filter(c => c.isFaceUp).length;
+        
+        // A. FLIP (Only if we have fewer than 4 open cards)
+        if(faceUpCount < 4) {
+            const hidden = gameState.bot.cards.find(c => !c.isFaceUp);
+            // Ensure we don't flip if it would exceed 4 (double check)
+            if(hidden) {
+                botBusy = true;
+                setTimeout(() => {
+                    hidden.isFaceUp = true;
+                    resetStalemate();
+                    renderZone('bot');
+                    botBusy = false; lastActionTime = now;
+                }, 300);
+                return;
+            }
+        }
+
+        // B. SORT (Move from big stack to empty stack)
         // Group columns
         let columns = [[],[],[],[]];
         gameState.bot.cards.forEach(c => columns[c.col].push(c));
-
-        // A. Flip if needed
-        let closedTop = gameState.bot.cards.find(c => {
-            let col = columns[c.col];
-            return col[col.length-1] === c && !c.isFaceUp;
-        });
         
-        if(closedTop && gameState.bot.cards.filter(c => c.isFaceUp).length < 4) {
-            botBusy = true;
-            setTimeout(() => {
-                closedTop.isFaceUp = true;
-                resetStalemate(); renderZone('bot');
-                botBusy = false; lastActionTime = now;
-            }, 300);
-            return;
-        }
-
-        // B. Sort: Move from big stack to empty stack
         let emptyIdx = columns.findIndex(c => c.length === 0);
+        
         if(emptyIdx !== -1) {
-            let messyIdx = columns.findIndex(c => c.length > 1 && !c[c.length-1].isFaceUp); // Actually this logic is complex. 
-            // Simplified: Find column with face-down cards
-            messyIdx = columns.findIndex(c => c.length > 1 && c.some(card => !card.isFaceUp));
+            let messyIdx = columns.findIndex(c => c.length > 1 && c.some(card => !card.isFaceUp));
             
             if(messyIdx !== -1) {
-                let cardToMove = columns[messyIdx][columns[messyIdx].length-1]; // Top card
+                let cardToMove = columns[messyIdx].sort((a,b)=>a.y-b.y).pop();
                 if(cardToMove.isFaceUp) {
                     botBusy = true;
                     setTimeout(() => {
                         cardToMove.col = emptyIdx;
+                        // Manual coordinate update to prevent visual glitches
                         cardToMove.x = [50, 250, 450, 650][emptyIdx];
                         cardToMove.y = 20;
-                        // Card under it becomes new top, but wait to flip
+                        
+                        // Reveal card below if it exists
+                        let newTop = columns[messyIdx][columns[messyIdx].length-1];
+                        if(newTop && !newTop.isFaceUp) {
+                            // ONLY reveal if we have < 4 (should be true since we just moved one)
+                            if(gameState.bot.cards.filter(c => c.isFaceUp).length < 4) {
+                                newTop.isFaceUp = true;
+                            }
+                        }
+                        
                         renderAll();
                         botBusy = false; lastActionTime = now;
-                    }, 400); // Travel time logic approximated
+                    }, 400);
                     return;
                 }
             }
         }
-    }
 
     function checkSlapOpportunity() {
         if(gameState.gameOver || gameState.isCountDown || gameState.slapActive) return;
@@ -457,6 +471,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function executeReveal() {
+        // DROP FIX: Force drop if holding card during reveal
+        if(isPlayerDragging) {
+            isPlayerDragging = false;
+            // This forces a re-render of the player zone immediately
+            renderZone('player'); 
+        }
+
         if(gameState.centerLeft) gameState.centerStack.push(gameState.centerLeft);
         if(gameState.centerRight) gameState.centerStack.push(gameState.centerRight);
 
@@ -502,9 +523,9 @@ document.addEventListener('DOMContentLoaded', () => {
         els.pCount.innerText = pTotal;
         els.bCount.innerText = bTotal;
 
-        // Update Borrow Labels based on DECK size only (Visual)
-        els.pBorrow.classList.toggle('borrow-active', gameState.player.deck.length === 0);
-        els.bBorrow.classList.toggle('borrow-active', gameState.bot.deck.length === 0);
+       // Update Borrow Labels: Show if 10 or fewer cards remaining in deck
+        els.pBorrow.classList.toggle('borrow-active', gameState.player.deck.length <= 10);
+        els.bBorrow.classList.toggle('borrow-active', gameState.bot.deck.length <= 10);
     }
     
     function updateScoreboard() {
