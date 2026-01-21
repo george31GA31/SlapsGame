@@ -12,104 +12,88 @@
     <div class="bg-gradient"></div>
 
     <div class="setup-card">
-        <div class="setup-header">
-            <a href="index.html" class="back-btn"><i class="fa-solid fa-chevron-left"></i></a>
-            <h2>MATCH CONFIGURATION</h2>
+        
+        <div class="top-navigation">
+            <a href="index.html" class="back-link"><i class="fa-solid fa-arrow-left"></i> BACK</a>
         </div>
 
-        <div class="bot-profile-container">
-            <div class="avatar-ring" id="avatar-ring">
+        <div class="central-avatar">
+            <div class="avatar-glow" id="avatar-glow">
                 <i class="fa-solid fa-robot" id="bot-icon"></i>
             </div>
+        </div>
+
+        <div class="info-display">
             <h1 id="difficulty-title">ROOKIE</h1>
-            <p class="bot-desc" id="difficulty-desc">Slow reaction time. Perfect for learning the ropes.</p>
+            <div class="difficulty-level-box" id="level-box">LEVEL 1</div>
+            <p id="difficulty-desc">Slow reaction time. Good for learning.</p>
         </div>
 
-        <div class="controls-area">
-            <div class="slider-header">
-                <span>DIFFICULTY LEVEL</span>
-                <span id="level-display" class="level-badge">LVL 1</span>
-            </div>
+        <div class="slider-section">
+            <input type="range" min="1" max="10" value="5" class="big-slider" id="difficulty-slider">
             
-            <div class="custom-slider-wrapper">
-                <input type="range" min="1" max="10" value="1" class="pro-slider" id="difficulty-slider">
-                <div class="slider-track-fill" id="track-fill"></div>
-            </div>
-
             <div class="slider-labels">
-                <span>Easy</span>
-                <span>Master</span>
+                <span>EASY</span>
+                <span>MASTER</span>
             </div>
         </div>
 
-        <a href="game.html" class="btn-launch" id="start-btn">
-            INITIALIZE MATCH <i class="fa-solid fa-play"></i>
+        <a href="game.html" class="btn-mega-start" id="start-btn">
+            START MATCH
         </a>
+
     </div>
 
     <script>
         const slider = document.getElementById('difficulty-slider');
-        const levelDisplay = document.getElementById('level-display');
         const title = document.getElementById('difficulty-title');
         const desc = document.getElementById('difficulty-desc');
+        const levelBox = document.getElementById('level-box');
         const botIcon = document.getElementById('bot-icon');
-        const avatarRing = document.getElementById('avatar-ring');
-        const trackFill = document.getElementById('track-fill');
+        const avatarGlow = document.getElementById('avatar-glow');
+        const startBtn = document.getElementById('start-btn');
 
-        const titles = {
-            low: ["ROOKIE", "NOVICE", "AMATEUR"],
-            mid: ["INTERMEDIATE", "GOOD", "SKILLED", "ADVANCED"],
-            high: ["PROVEN", "MASTER", "UNBEATABLE"]
-        };
+        // DIRECT MAPPING: 10 Levels = 10 Names. No math errors possible.
+        // Array index 0 matches Slider Value 1.
+        const difficultyData = [
+            { name: "ROOKIE",       color: "#81b64c", desc: "Very slow. Good for learning mechanics." }, // Level 1
+            { name: "NOVICE",       color: "#81b64c", desc: "Still learning. Reacts slowly." },          // Level 2
+            { name: "AMATEUR",      color: "#81b64c", desc: "Knows the rules, but hesitates." },         // Level 3
+            { name: "INTERMEDIATE", color: "#e6912c", desc: "A standard opponent. Pays attention." },    // Level 4
+            { name: "SKILLED",      color: "#e6912c", desc: "Reacts quickly to obvious moves." },        // Level 5
+            { name: "GOOD",         color: "#e6912c", desc: "Makes very few mistakes." },                // Level 6
+            { name: "ADVANCED",     color: "#e6912c", desc: "Competitive reaction times." },             // Level 7
+            { name: "PROVEN",       color: "#cc3333", desc: "Fast. Very fast." },                        // Level 8
+            { name: "MASTER",       color: "#cc3333", desc: "Near instant reactions." },                 // Level 9
+            { name: "UNBEATABLE",   color: "#cc3333", desc: "Good luck. You will need it." }             // Level 10
+        ];
 
-        const descriptions = {
-            low: "Slow reaction time. Perfect for learning the ropes.",
-            mid: "Balanced gameplay. Expect a fair fight.",
-            high: "Inhuman reflexes. Mistakes will be punished."
-        };
-
-        // Function to update the UI
         function updateUI(val) {
-            // Update Number
-            levelDisplay.innerText = "LVL " + val;
+            // Get data for this level (subtract 1 because arrays start at 0)
+            const data = difficultyData[val - 1];
 
-            // Update Track Fill (Visual Progress Bar)
-            let percentage = ((val - 1) / 9) * 100;
-            trackFill.style.width = percentage + "%";
+            // Update Text
+            title.innerText = data.name;
+            desc.innerText = data.desc;
+            levelBox.innerText = "LEVEL " + val;
+            
+            // Update Colors
+            title.style.color = data.color;
+            levelBox.style.backgroundColor = data.color;
+            botIcon.style.color = data.color;
+            
+            // Update Glow Intensity based on level
+            avatarGlow.style.boxShadow = `0 0 ${val * 5}px ${data.color}`;
+            avatarGlow.style.borderColor = data.color;
 
-            // Save to memory
+            // Save for next page
             localStorage.setItem('slapsDifficulty', val);
-
-            // Logic for Colors and Text
-            if (val <= 3) {
-                // EASY (Green Theme)
-                title.innerText = titles.low[val-1];
-                desc.innerText = descriptions.low;
-                setColorTheme("#81b64c", "0 0 20px rgba(129, 182, 76, 0.4)");
-            } else if (val <= 7) {
-                // MID (Orange Theme)
-                title.innerText = titles.mid[val-4];
-                desc.innerText = descriptions.mid;
-                setColorTheme("#e6912c", "0 0 25px rgba(230, 145, 44, 0.5)");
-            } else {
-                // HARD (Red Theme)
-                title.innerText = titles.high[val-8];
-                desc.innerText = descriptions.high;
-                setColorTheme("#ff4d4d", "0 0 35px rgba(255, 77, 77, 0.7)");
-            }
         }
 
-        function setColorTheme(color, shadow) {
-            botIcon.style.color = color;
-            avatarRing.style.borderColor = color;
-            avatarRing.style.boxShadow = shadow;
-            levelDisplay.style.backgroundColor = color;
-            trackFill.style.backgroundColor = color;
-        }
-
-        // Initialize
         slider.oninput = function() { updateUI(this.value); };
-        updateUI(1); // Start at 1
+        
+        // Initialize at Level 5
+        updateUI(5);
     </script>
 </body>
 </html>
