@@ -3,87 +3,72 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Slaps.GG - Match in Progress</title>
+    <title>Slaps.GG - Arena</title>
     <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body class="game-body">
+
+    <div class="stats-widget">
+        <div class="stat-box">
+            <span>YOU</span>
+            <h2 id="player-count">26</h2>
+        </div>
+        <div class="stat-box">
+            <span>BOT</span>
+            <h2 id="bot-count">26</h2>
+        </div>
+        <div class="divider"></div>
+        <div class="stat-small">
+            <span id="game-timer">00:00</span>
+        </div>
+        <a href="index.html" class="btn-quit-small">QUIT</a>
+    </div>
 
     <div id="game-overlay" class="overlay hidden">
         <div class="overlay-content">
             <h1 id="overlay-title">VICTORY!</h1>
-            <p id="overlay-desc">You cleared your cards.</p>
-            <div class="overlay-buttons">
-                <button onclick="location.reload()" class="btn-restart">REMATCH</button>
-                <a href="index.html" class="btn-quit">MAIN MENU</a>
-            </div>
+            <p id="overlay-desc">Board Cleared.</p>
+            <button onclick="location.reload()" class="btn-restart">REMATCH</button>
+            <a href="index.html" class="btn-quit">MENU</a>
         </div>
     </div>
 
     <div class="table-surface">
         
-        <div class="logo-watermark top-right">ISF</div>
-        <div class="logo-watermark bottom-left">ISF</div>
-
         <div class="zone top-zone">
-            <div class="pile-group">
-                <div class="card-slot" id="bot-slaps-pile"></div>
-                <div class="label-text rotated">Slaps Pile</div>
-            </div>
-
-            <div class="foundation-box">
-                <div class="card-slot" id="bot-found-4"></div>
-                <div class="card-slot" id="bot-found-3"></div>
-                <div class="card-slot" id="bot-found-2"></div>
-                <div class="card-slot" id="bot-found-1"></div>
-                <div class="label-text inside-label rotated">Foundation Pile</div>
-            </div>
+            <div class="foundation-box" id="bot-boundary">
+                </div>
         </div>
-
 
         <div class="zone middle-zone">
             
             <div class="pile-group">
                 <div class="card-slot deck-slot" id="bot-draw-deck">
                     <div class="card-back"></div>
-                    <div class="card-count-badge" id="bot-deck-count">16</div>
                 </div>
-                <div class="label-text rotated">Draw Deck</div>
+                <div class="label-text rotated">Bot Deck</div>
             </div>
 
-            <div class="center-box">
+            <div class="pile-group">
                 <div class="card-slot center-slot" id="center-left"></div>
+            </div>
+
+            <div class="pile-group">
                 <div class="card-slot center-slot" id="center-right"></div>
-                <div class="label-text inside-label top-label rotated">Centre Pile</div>
-                <div class="label-text inside-label bottom-label">Centre Pile</div>
             </div>
 
             <div class="pile-group">
                 <div class="card-slot deck-slot" id="player-draw-deck">
                     <div class="card-back"></div>
-                    <div class="card-count-badge" id="player-deck-count">16</div>
                 </div>
-                <div class="label-text">Draw Deck</div>
+                <div class="label-text">Your Deck</div>
             </div>
 
         </div>
 
-
         <div class="zone bottom-zone">
-            
-            <div class="foundation-box">
-                <div class="card-slot" id="player-found-4"></div>
-                <div class="card-slot" id="player-found-3"></div>
-                <div class="card-slot" id="player-found-2"></div>
-                <div class="card-slot" id="player-found-1"></div>
-                <div class="label-text inside-label">Foundation Pile</div>
-            </div>
-
-            <div class="pile-group">
-                <div class="card-slot" id="player-slaps-pile"></div>
-                <div class="label-text">Slaps Pile</div>
-            </div>
-
+            <div class="foundation-box" id="player-boundary">
+                </div>
         </div>
 
     </div>
