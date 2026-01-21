@@ -8,26 +8,87 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body class="setup-body">
+
+    <div class="bg-gradient"></div>
+
     <div class="setup-card">
-        <h2>MATCH CONFIGURATION</h2>
+        <div class="setup-header">
+            <a href="index.html" class="back-btn"><i class="fa-solid fa-chevron-left"></i></a>
+            <h2>MATCH CONFIGURATION</h2>
+        </div>
+
         <div class="bot-profile-container">
-            <i class="fa-solid fa-robot" id="bot-icon" style="font-size: 50px; color: #81b64c;"></i>
+            <div class="avatar-ring" id="avatar-ring">
+                <i class="fa-solid fa-robot" id="bot-icon"></i>
+            </div>
             <h1 id="difficulty-title">ROOKIE</h1>
+            <p class="bot-desc" id="difficulty-desc">Reaction Time: ~6.0s</p>
         </div>
+
         <div class="controls-area">
-            <input type="range" min="1" max="10" value="5" class="pro-slider" id="difficulty-slider">
+            <div class="slider-header">
+                <span>DIFFICULTY LEVEL</span>
+                <span id="level-display" class="level-badge">LVL 1</span>
+            </div>
+            
+            <div class="custom-slider-wrapper">
+                <input type="range" min="1" max="10" value="5" class="pro-slider" id="difficulty-slider">
+                <div class="slider-track-fill" id="track-fill"></div>
+            </div>
+
+            <div class="slider-labels">
+                <span>Easy</span>
+                <span>Master</span>
+            </div>
         </div>
-        <a href="game.html" class="btn-launch">START MATCH</a>
+
+        <a href="game.html" class="btn-launch" id="start-btn">
+            INITIALIZE MATCH <i class="fa-solid fa-play"></i>
+        </a>
     </div>
+
     <script>
         const slider = document.getElementById('difficulty-slider');
+        const levelDisplay = document.getElementById('level-display');
         const title = document.getElementById('difficulty-title');
-        const names = ["ROOKIE", "NOVICE", "AMATEUR", "INTERMEDIATE", "SKILLED", "GOOD", "ADVANCED", "PROVEN", "MASTER", "UNBEATABLE"];
-        slider.oninput = function() {
-            title.innerText = names[this.value - 1];
-            localStorage.setItem('slapsDifficulty', this.value);
-        };
-        localStorage.setItem('slapsDifficulty', 5);
+        const desc = document.getElementById('difficulty-desc');
+        const botIcon = document.getElementById('bot-icon');
+        const avatarRing = document.getElementById('avatar-ring');
+        const trackFill = document.getElementById('track-fill');
+
+        const difficultyData = [
+            { name: "ROOKIE",       color: "#81b64c", desc: "Reaction Time: ~6.0s" }, 
+            { name: "NOVICE",       color: "#81b64c", desc: "Reaction Time: ~5.5s" },          
+            { name: "AMATEUR",      color: "#81b64c", desc: "Reaction Time: ~5.0s" },         
+            { name: "INTERMEDIATE", color: "#e6912c", desc: "Reaction Time: ~4.0s" },    
+            { name: "SKILLED",      color: "#e6912c", desc: "Reaction Time: ~3.5s" },        
+            { name: "GOOD",         color: "#e6912c", desc: "Reaction Time: ~3.0s" },                
+            { name: "ADVANCED",     color: "#e6912c", desc: "Reaction Time: ~2.5s" },             
+            { name: "PROVEN",       color: "#cc3333", desc: "Reaction Time: ~2.0s" },                        
+            { name: "MASTER",       color: "#cc3333", desc: "Reaction Time: ~1.5s" },                 
+            { name: "UNBEATABLE",   color: "#cc3333", desc: "Reaction Time: ~0.5s" }             
+        ];
+
+        function updateUI(val) {
+            const data = difficultyData[val - 1];
+            title.innerText = data.name;
+            desc.innerText = data.desc;
+            levelDisplay.innerText = "LVL " + val;
+            
+            let percentage = ((val - 1) / 9) * 100;
+            trackFill.style.width = percentage + "%";
+            
+            botIcon.style.color = data.color;
+            avatarRing.style.borderColor = data.color;
+            avatarRing.style.boxShadow = `0 0 15px ${data.color}40`; 
+            levelDisplay.style.backgroundColor = data.color;
+            trackFill.style.backgroundColor = data.color;
+
+            localStorage.setItem('slapsDifficulty', val);
+        }
+
+        slider.oninput = function() { updateUI(this.value); };
+        updateUI(5);
     </script>
 </body>
 </html>
