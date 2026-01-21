@@ -35,13 +35,6 @@
     <div class="arena-container">
         
         <div class="player-zone opponent-zone">
-            <div class="deck-area">
-                <div class="card-slot deck-slot opponent-deck">
-                    <div class="card-back"></div>
-                    <div class="card-count-badge" id="bot-deck-count">16</div>
-                </div>
-            </div>
-            
             <div class="foundation-area" id="bot-foundation">
                 <div class="card-slot" id="bot-found-4"></div>
                 <div class="card-slot" id="bot-found-3"></div>
@@ -52,25 +45,31 @@
 
         <div class="battlefield-zone">
             <div class="boundary-line"></div>
-            <div class="center-piles">
-                <div class="card-slot center-slot" id="center-left"></div>
-                <div class="card-slot center-slot" id="center-right"></div>
+            
+            <div class="center-row">
+                <div class="card-slot deck-slot opponent-deck">
+                    <div class="card-back"></div>
+                    <div class="card-count-badge" id="bot-deck-count">16</div>
+                </div>
+
+                <div class="center-piles">
+                    <div class="card-slot center-slot" id="center-left"></div>
+                    <div class="card-slot center-slot" id="center-right"></div>
+                </div>
+
+                <div class="card-slot deck-slot player-deck" id="player-draw-deck">
+                    <div class="card-back"></div>
+                    <div class="card-count-badge" id="player-deck-count">16</div>
+                </div>
             </div>
         </div>
 
-        <div class="player-zone player-zone-bottom">
+        <div class="player-zone">
             <div class="foundation-area" id="player-foundation">
                 <div class="card-slot" id="player-found-4"></div>
                 <div class="card-slot" id="player-found-3"></div>
                 <div class="card-slot" id="player-found-2"></div>
                 <div class="card-slot" id="player-found-1"></div>
-            </div>
-
-            <div class="deck-area">
-                <div class="card-slot deck-slot player-deck" id="player-draw-deck">
-                    <div class="card-back"></div>
-                    <div class="card-count-badge" id="player-deck-count">16</div>
-                </div>
             </div>
         </div>
 
