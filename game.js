@@ -9,9 +9,10 @@ document.addEventListener('DOMContentLoaded', () => {
     let globalZ = 100;
 
     let gameState = {
-        player: { deck: [], cards: [] },
-        bot: { deck: [], cards: [] },
+        player: { deck: [], cards: [], borrowing: false },
+        bot: { deck: [], cards: [], borrowing: false },
         centerLeft: null, centerRight: null,
+        centerStack: [], // Tracks all cards played in center
         gameOver: false,
         playerPass: false, botPass: false,
         isCountDown: false
@@ -28,7 +29,12 @@ document.addEventListener('DOMContentLoaded', () => {
         pDeck: document.getElementById('player-draw-deck'),
         bDeck: document.getElementById('bot-draw-deck'),
         pDeckText: document.getElementById('player-deck-text'),
-        bDeckText: document.getElementById('bot-deck-text')
+        bDeckText: document.getElementById('bot-deck-text'),
+        pBorrow: document.getElementById('player-borrow-label'),
+        bBorrow: document.getElementById('bot-borrow-label'),
+        overlayTitle: document.getElementById('overlay-title'),
+        overlayDesc: document.getElementById('overlay-desc'),
+        btnAction: document.getElementById('btn-action')
     };
 
     class Card {
@@ -48,43 +54,83 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // === ANIMATION ENGINE (FIXED) ===
     function flyCard(cardEl, targetEl, callback) {
         if(!cardEl || !targetEl) { callback(); return; }
         const startRect = cardEl.getBoundingClientRect();
         const targetRect = targetEl.getBoundingClientRect();
-        
-        // Create the flying clone
         const clone = cardEl.cloneNode(true);
         if(clone.classList.contains('face-down')) clone.classList.remove('face-down');
         clone.classList.add('flying-card');
-        clone.style.left = startRect.left + 'px'; 
-        clone.style.top = startRect.top + 'px';
-        clone.style.width = '90px'; 
-        clone.style.height = '126px'; 
-        clone.style.zIndex = 99999;
-        
-        // HIDE ORIGINAL INSTANTLY TO PREVENT DUPLICATION
+        clone.style.left = startRect.left + 'px'; clone.style.top = startRect.top + 'px';
+        clone.style.width = '90px'; clone.style.height = '126px'; clone.style.zIndex = 99999;
         cardEl.style.visibility = 'hidden'; 
-
         document.body.appendChild(clone);
-        void clone.offsetWidth; // Force Reflow
-
-        // Animate
-        clone.style.left = targetRect.left + 'px'; 
-        clone.style.top = targetRect.top + 'px';
-
-        setTimeout(() => { 
-            clone.remove(); 
-            callback(); 
-        }, 600);
+        void clone.offsetWidth;
+        clone.style.left = targetRect.left + 'px'; clone.style.top = targetRect.top + 'px';
+        setTimeout(() => { clone.remove(); callback(); }, 600);
     }
 
+    // === START & ROUND LOGIC ===
     function init() {
         let deck = createDeck();
-        gameState.player.deck = deck.slice(0, 16); gameState.bot.deck = deck.slice(16, 32);
-        spawnFoundation(deck.slice(32, 42), 'player'); spawnFoundation(deck.slice(42, 52), 'bot');
-        renderAll(); runBotCycle(); setInterval(updateStats, 200); setInterval(checkBotStalemate, 800);
+        startGameWithDecks(deck.slice(0, 26), deck.slice(26, 52));
+    }
+
+    function startGameWithDecks(pDeck, bDeck) {
+        // Reset State
+        gameState.player.cards = []; gameState.bot.cards = [];
+        gameState.centerStack = []; gameState.centerLeft = null; gameState.centerRight = null;
+        gameState.gameOver = false; gameState.playerPass = false; gameState.botPass = false;
+        gameState.player.borrowing = false; gameState.bot.borrowing = false;
+        
+        // Reset Visuals
+        els.overlay.classList.add('hidden');
+        resetStalemateVisuals();
+        
+        // Deal Foundations (10 each)
+        // If deck < 10, handle shortage logic PRE-ROUND
+        if(pDeck.length < 10) {
+            let loan = Math.floor(bDeck.length / 2);
+            pDeck.push(...bDeck.splice(0, loan));
+            gameState.player.borrowing = true;
+        }
+        if(bDeck.length < 10) {
+            let loan = Math.floor(pDeck.length / 2);
+            bDeck.push(...pDeck.splice(0, loan));
+            gameState.bot.borrowing = true;
+        }
+
+        spawnFoundation(pDeck.splice(0, 10), 'player');
+        spawnFoundation(bDeck.splice(0, 10), 'bot');
+        
+        gameState.player.deck = pDeck;
+        gameState.bot.deck = bDeck;
+
+        // Visual Borrow Labels
+        els.pBorrow.classList.toggle('borrow-active', gameState.player.borrowing);
+        els.bBorrow.classList.toggle('borrow-active', gameState.bot.borrowing);
+
+        renderAll();
+        runBotCycle();
+        setInterval(updateStats, 200);
+        setInterval(checkBotStalemate, 800);
+        
+        // MID-ROUND SHORTAGE CHECKER
+        setInterval(() => {
+            if(gameState.gameOver) return;
+            if(gameState.player.deck.length === 0 && !gameState.player.borrowing && gameState.bot.deck.length > 1) {
+                let loan = Math.floor(gameState.bot.deck.length / 2);
+                gameState.player.deck.push(...gameState.bot.deck.splice(0, loan));
+                gameState.player.borrowing = true;
+                els.pBorrow.classList.add('borrow-active');
+            }
+            if(gameState.bot.deck.length === 0 && !gameState.bot.borrowing && gameState.player.deck.length > 1) {
+                let loan = Math.floor(gameState.player.deck.length / 2);
+                gameState.bot.deck.push(...gameState.player.deck.splice(0, loan));
+                gameState.bot.borrowing = true;
+                els.bBorrow.classList.add('borrow-active');
+            }
+        }, 1000);
     }
 
     function createDeck() { return SUITS.flatMap(s => VALUES.map(v => new Card(s, v))).sort(() => Math.random() - 0.5); }
@@ -130,12 +176,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // === PHYSICS ===
     function setupInteraction(el, card) {
-        el.addEventListener('mousedown', (e) => {
-            if(e.button !== 0) return; 
-            el.style.zIndex = ++globalZ; 
-            startDrag(e, el, card);
-        });
+        el.addEventListener('mousedown', (e) => { if(e.button !== 0) return; el.style.zIndex = ++globalZ; startDrag(e, el, card); });
     }
 
     function startDrag(e, el, card) {
@@ -151,7 +194,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         function move(e) {
             if(Math.abs(e.clientX - startX) > 15 || Math.abs(e.clientY - startY) > 15) dragged = true;
-            
             if(dragged) {
                 let dx = e.clientX - startX, dy = e.clientY - startY;
                 let newX = origX + dx, newY = origY + dy;
@@ -162,21 +204,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
         function drop(e) {
             document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', drop);
-            
             if(!dragged && !card.isFaceUp) {
-                if(gameState.player.cards.filter(c => c.isFaceUp).length < 4) { 
-                    card.isFaceUp = true; 
-                    resetStalemate(); 
-                    renderZone('player'); 
-                }
+                if(gameState.player.cards.filter(c => c.isFaceUp).length < 4) { card.isFaceUp = true; resetStalemate(); renderZone('player'); }
                 return;
             }
-
             if(dragged && card.isFaceUp) {
                 if(isOver(e, els.cLeft) && isValid(card, gameState.centerLeft)) { playCard(card, 'left'); return; }
                 if(isOver(e, els.cRight) && isValid(card, gameState.centerRight)) { playCard(card, 'right'); return; }
             }
-            
             card.x = parseInt(el.style.left); card.y = parseInt(el.style.top); el.style.zIndex = globalZ; 
         }
         document.addEventListener('mousemove', move); document.addEventListener('mouseup', drop);
@@ -195,12 +230,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function playCard(card, side) {
         gameState.player.cards = gameState.player.cards.filter(c => c.id !== card.id);
+        
+        // Track stack
+        if(side === 'left' && gameState.centerLeft) gameState.centerStack.push(gameState.centerLeft);
+        if(side === 'right' && gameState.centerRight) gameState.centerStack.push(gameState.centerRight);
+
         if(side === 'left') gameState.centerLeft = card; else gameState.centerRight = card;
         resetStalemate(); 
         renderAll(); checkWin();
     }
 
-    // === STALEMATE ===
+    // === STALEMATE & BORROWING ===
     els.pDeck.addEventListener('click', () => {
         if(gameState.isCountDown || gameState.gameOver) return;
         if(!gameState.playerPass) {
@@ -214,25 +254,17 @@ document.addEventListener('DOMContentLoaded', () => {
     function checkBotStalemate() {
         if(gameState.isCountDown || gameState.gameOver) return;
         let bMoves = false;
-        gameState.bot.cards.filter(c => c.isFaceUp).forEach(c => {
-            if(isValid(c, gameState.centerLeft) || isValid(c, gameState.centerRight)) bMoves = true;
-        });
+        gameState.bot.cards.filter(c => c.isFaceUp).forEach(c => { if(isValid(c, gameState.centerLeft) || isValid(c, gameState.centerRight)) bMoves = true; });
         if(gameState.bot.cards.filter(c => c.isFaceUp).length < 4 && gameState.bot.cards.some(c => !c.isFaceUp)) bMoves = true;
         const isStart = !gameState.centerLeft && !gameState.centerRight;
 
         if(!bMoves || isStart) {
             if(!gameState.botPass) {
-                gameState.botPass = true;
-                els.bDeck.classList.add('waiting');
-                els.bDeckText.innerText = "WAIT";
+                gameState.botPass = true; els.bDeck.classList.add('waiting'); els.bDeckText.innerText = "WAIT";
                 if(gameState.playerPass) startCountdown();
             }
         } else {
-            if(gameState.botPass && !isStart) {
-                gameState.botPass = false;
-                els.bDeck.classList.remove('waiting');
-                els.bDeckText.innerText = "";
-            }
+            if(gameState.botPass && !isStart) { gameState.botPass = false; els.bDeck.classList.remove('waiting'); els.bDeckText.innerText = ""; }
         }
     }
 
@@ -249,10 +281,30 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function executeReveal() {
-        if(gameState.player.deck.length > 0) gameState.centerRight = gameState.player.deck.pop();
-        if(gameState.bot.deck.length > 0) gameState.centerLeft = gameState.bot.deck.pop();
-        resetStalemateVisuals();
-        renderAll();
+        // PUSH OLD CENTER TO STACK
+        if(gameState.centerLeft) gameState.centerStack.push(gameState.centerLeft);
+        if(gameState.centerRight) gameState.centerStack.push(gameState.centerRight);
+
+        // FLIP LOGIC
+        if(gameState.player.borrowing) {
+            // Player has no cards to give (technically). Bot gives both.
+            if(gameState.bot.deck.length > 1) {
+                gameState.centerLeft = gameState.bot.deck.pop();
+                gameState.centerRight = gameState.bot.deck.pop();
+            }
+        } else if(gameState.bot.borrowing) {
+            // Bot has no cards. Player gives both.
+            if(gameState.player.deck.length > 1) {
+                gameState.centerLeft = gameState.player.deck.pop();
+                gameState.centerRight = gameState.player.deck.pop();
+            }
+        } else {
+            // Normal
+            if(gameState.player.deck.length > 0) gameState.centerRight = gameState.player.deck.pop();
+            if(gameState.bot.deck.length > 0) gameState.centerLeft = gameState.bot.deck.pop();
+        }
+        
+        resetStalemateVisuals(); renderAll();
     }
 
     function resetStalemate() { gameState.playerPass = false; resetStalemateVisuals(); }
@@ -285,6 +337,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (!isValid(move.card, currentCenter)) { renderZone('bot'); return; }
 
                     gameState.bot.cards = gameState.bot.cards.filter(c => c.id !== move.card.id);
+                    // Push to stack
+                    if(move.side === 'left' && gameState.centerLeft) gameState.centerStack.push(gameState.centerLeft);
+                    if(move.side === 'right' && gameState.centerRight) gameState.centerStack.push(gameState.centerRight);
+
                     if(move.side === 'left') gameState.centerLeft = move.card; else gameState.centerRight = move.card;
                     resetStalemate(); 
                     
@@ -306,16 +362,80 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updateStats() {
-        els.pCount.innerText = gameState.player.deck.length + gameState.player.cards.length;
-        els.bCount.innerText = gameState.bot.deck.length + gameState.bot.cards.length;
+        let pTotal = gameState.player.deck.length + gameState.player.cards.length;
+        let bTotal = gameState.bot.deck.length + gameState.bot.cards.length;
+        els.pCount.innerText = pTotal; els.bCount.innerText = bTotal;
     }
 
     function checkWin() {
-        if(gameState.player.cards.length === 0 && gameState.player.deck.length === 0) endGame("YOU WIN!");
-        if(gameState.bot.cards.length === 0 && gameState.bot.deck.length === 0) endGame("BOT WINS!");
+        if(gameState.player.cards.length === 0) endRound('player');
+        if(gameState.bot.cards.length === 0) endRound('bot');
     }
 
-    function endGame(msg) { gameState.gameOver = true; document.querySelector('#overlay-title').innerText = msg; els.overlay.classList.remove('hidden'); }
+    function endRound(winner) {
+        if(gameState.gameOver) return;
+        gameState.gameOver = true;
+        
+        let pDeckNext = [], bDeckNext = [];
+        
+        // --- BORROWING VICTORY CHECK ---
+        if(winner === 'player' && gameState.player.borrowing) {
+            endMatch("YOU WIN THE MATCH!"); return;
+        }
+        if(winner === 'bot' && gameState.bot.borrowing) {
+            endMatch("BOT WINS THE MATCH!"); return;
+        }
+
+        // --- NORMAL ROUND RECALCULATION ---
+        // Collect everything on board
+        let centerCards = [...gameState.centerStack];
+        if(gameState.centerLeft) centerCards.push(gameState.centerLeft);
+        if(gameState.centerRight) centerCards.push(gameState.centerRight);
+        // Collect loser's foundation
+        let loserFoundation = winner === 'player' ? gameState.bot.cards : gameState.player.cards;
+        
+        // LOGIC: Winner keeps their draw deck. Loser gets EVERYTHING else.
+        if(winner === 'player') {
+            // Player won. 
+            if(gameState.bot.borrowing) {
+                // Special case: Player won, but Bot was borrowing from Player.
+                // Player gets BOTH draw decks back (as they owned them).
+                // Bot gets foundation + center.
+                pDeckNext = [...gameState.player.deck, ...gameState.bot.deck]; 
+                bDeckNext = [...loserFoundation, ...centerCards];
+            } else {
+                // Normal
+                pDeckNext = [...gameState.player.deck];
+                bDeckNext = [...gameState.bot.deck, ...loserFoundation, ...centerCards];
+            }
+            els.overlayTitle.innerText = "ROUND WON!";
+            els.overlayDesc.innerText = "You keep your deck. Bot takes the pile.";
+        } else {
+            // Bot won.
+            if(gameState.player.borrowing) {
+                bDeckNext = [...gameState.bot.deck, ...gameState.player.deck];
+                pDeckNext = [...loserFoundation, ...centerCards];
+            } else {
+                bDeckNext = [...gameState.bot.deck];
+                pDeckNext = [...gameState.player.deck, ...loserFoundation, ...centerCards];
+            }
+            els.overlayTitle.innerText = "ROUND LOST";
+            els.overlayDesc.innerText = "Bot keeps its deck. You take the pile.";
+        }
+
+        els.overlay.classList.remove('hidden');
+        els.btnAction.onclick = () => {
+            startGameWithDecks(pDeckNext, bDeckNext);
+        };
+    }
+
+    function endMatch(msg) {
+        els.overlayTitle.innerText = msg;
+        els.overlayDesc.innerText = "GAME OVER";
+        els.btnAction.innerText = "PLAY AGAIN";
+        els.btnAction.onclick = () => location.reload();
+        els.overlay.classList.remove('hidden');
+    }
 
     init();
 });
