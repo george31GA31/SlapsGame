@@ -1,15 +1,18 @@
 document.addEventListener('DOMContentLoaded', () => {
     
+    // === CONFIG ===
     const SUITS = ["♠", "♥", "♣", "♦"];
     const VALUES = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
     let difficulty = parseInt(localStorage.getItem('slapsDifficulty')) || 5;
+
+    // AI SPEED: Lvl 1 (~8s) -> Lvl 10 (~0.8s)
     let botSpeedBase = 8000 - (difficulty * 720); 
     const getBotDelay = () => Math.max(800, botSpeedBase + (Math.random() * 500));
     let globalZ = 100;
 
     let gameState = {
-        player: { deck: [], cards: [], sidePot: [] },
-        bot: { deck: [], cards: [], sidePot: [] },
+        player: { deck: [], cards: [], sidePot: [], borrowing: false, borrowedAmount: 0 },
+        bot: { deck: [], cards: [], sidePot: [], borrowing: false, borrowedAmount: 0 },
         centerLeft: null, centerRight: null,
         centerStack: [], 
         gameOver: false,
@@ -84,6 +87,8 @@ document.addEventListener('DOMContentLoaded', () => {
         gameState.centerStack = []; gameState.centerLeft = null; gameState.centerRight = null;
         gameState.player.sidePot = []; gameState.bot.sidePot = [];
         gameState.gameOver = false; gameState.playerPass = false; gameState.botPass = false;
+        gameState.player.borrowing = false; gameState.bot.borrowing = false;
+        gameState.player.borrowedAmount = 0; gameState.bot.borrowedAmount = 0;
         
         els.overlay.classList.add('hidden');
         resetStalemateVisuals();
@@ -98,6 +103,24 @@ document.addEventListener('DOMContentLoaded', () => {
         let pFoundSize = pPattern.reduce((a,b)=>a+b, 0);
         let bFoundSize = bPattern.reduce((a,b)=>a+b, 0);
 
+        // Borrow Check
+        if((pDeck.length - pFoundSize) <= 0 && bDeck.length > 10) {
+             let loan = Math.floor((bDeck.length - bFoundSize) / 2);
+             let borrowed = bDeck.splice(bFoundSize, loan);
+             pDeck.push(...borrowed);
+             gameState.player.borrowing = true;
+             gameState.player.borrowedAmount = loan;
+             els.pBorrow.classList.add('borrow-active');
+        }
+        if((bDeck.length - bFoundSize) <= 0 && pDeck.length > 10) {
+             let loan = Math.floor((pDeck.length - pFoundSize) / 2);
+             let borrowed = pDeck.splice(pFoundSize, loan);
+             bDeck.push(...borrowed);
+             gameState.bot.borrowing = true;
+             gameState.bot.borrowedAmount = loan;
+             els.bBorrow.classList.add('borrow-active');
+        }
+
         spawnFoundation(pDeck.splice(0, pFoundSize), 'player', pPattern);
         spawnFoundation(bDeck.splice(0, bFoundSize), 'bot', bPattern);
         
@@ -110,15 +133,30 @@ document.addEventListener('DOMContentLoaded', () => {
         setInterval(checkBotStalemate, 800);
         setInterval(checkBotSort, 600);
         setInterval(checkSlapOpportunity, 100);
+        
+        // Mid-Round Shortage Check
+        setInterval(() => {
+            if(gameState.gameOver) return;
+            if(gameState.player.deck.length === 0 && !gameState.player.borrowing && gameState.bot.deck.length > 1) {
+                let loan = Math.floor(gameState.bot.deck.length / 2);
+                gameState.player.deck.push(...gameState.bot.deck.splice(0, loan));
+                gameState.player.borrowing = true;
+                gameState.player.borrowedAmount = loan;
+                els.pBorrow.classList.add('borrow-active');
+            }
+            if(gameState.bot.deck.length === 0 && !gameState.bot.borrowing && gameState.player.deck.length > 1) {
+                let loan = Math.floor(gameState.player.deck.length / 2);
+                gameState.bot.deck.push(...gameState.player.deck.splice(0, loan));
+                gameState.bot.borrowing = true;
+                gameState.bot.borrowedAmount = loan;
+                els.bBorrow.classList.add('borrow-active');
+            }
+        }, 1000);
     }
 
     function getPattern(count) {
         if(count >= 10) return [4,3,2,1];
-        const patterns = {
-            9: [3,3,2,1], 8: [3,2,2,1], 7: [3,2,1,1],
-            6: [2,2,1,1], 5: [2,1,1,1], 4: [1,1,1,1],
-            3: [1,1,1], 2: [1,1], 1: [1]
-        };
+        const patterns = { 9:[3,3,2,1], 8:[3,2,2,1], 7:[3,2,1,1], 6:[2,2,1,1], 5:[2,1,1,1], 4:[1,1,1,1], 3:[1,1,1], 2:[1,1], 1:[1] };
         return patterns[count] || [count];
     }
 
@@ -143,8 +181,8 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderAll() {
         renderZone('player'); renderZone('bot');
         renderCenter(els.cLeft, gameState.centerLeft); renderCenter(els.cRight, gameState.centerRight);
-        els.pBorrow.classList.toggle('borrow-active', gameState.player.deck.length === 0);
-        els.bBorrow.classList.toggle('borrow-active', gameState.bot.deck.length === 0);
+        els.pBorrow.classList.toggle('borrow-active', gameState.player.borrowing);
+        els.bBorrow.classList.toggle('borrow-active', gameState.bot.borrowing);
     }
 
     function renderZone(who) {
@@ -225,9 +263,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if(side === 'left' && gameState.centerLeft) gameState.centerStack.push(gameState.centerLeft);
         if(side === 'right' && gameState.centerRight) gameState.centerStack.push(gameState.centerRight);
         if(side === 'left') gameState.centerLeft = card; else gameState.centerRight = card;
+        updateStats(); // Force update so checkWin sees new count
         resetStalemate(); renderAll(); checkWin();
     }
 
+    // === SLAP LOGIC ===
     document.addEventListener('keydown', (e) => {
         if(e.code === 'Space' && !gameState.gameOver && !gameState.isCountDown) {
             e.preventDefault(); performSlap('player');
@@ -239,6 +279,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if(!gameState.centerLeft || !gameState.centerRight) return;
         if(gameState.centerLeft.rank === gameState.centerRight.rank) {
             if(!gameState.slapActive) {
+                // NORMAL REACTION
                 let reaction = Math.max(400, 2000 - (difficulty * 150));
                 setTimeout(() => performSlap('bot'), reaction);
             }
@@ -246,24 +287,21 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function performSlap(who) {
-        if(gameState.slapActive) return;
-        if(!gameState.centerLeft || !gameState.centerRight) return;
-        if(gameState.centerLeft.rank !== gameState.centerRight.rank) return;
-
+        if(gameState.slapActive || !gameState.centerLeft || !gameState.centerRight || gameState.centerLeft.rank !== gameState.centerRight.rank) return;
+        
         gameState.slapActive = true;
         let loser = (who === 'player') ? 'bot' : 'player';
         
+        // ANNOUNCE WINNER
         els.slapMsg.innerText = (who === 'player' ? "PLAYER" : "AI") + " SLAPS WON!";
         els.slapMsg.classList.add('visible');
         setTimeout(() => els.slapMsg.classList.remove('visible'), 1500);
 
         let wonCards = [...gameState.centerStack, gameState.centerLeft, gameState.centerRight];
-        if(loser === 'player') gameState.player.sidePot.push(...wonCards);
-        else gameState.bot.sidePot.push(...wonCards);
-
+        (loser === 'player' ? gameState.player.sidePot : gameState.bot.sidePot).push(...wonCards);
         gameState.centerLeft = null; gameState.centerRight = null; gameState.centerStack = [];
+        
         renderAll(); updateStats();
-
         setTimeout(() => { gameState.slapActive = false; resetStalemate(); }, 1000);
     }
 
@@ -309,27 +347,21 @@ document.addEventListener('DOMContentLoaded', () => {
         if(gameState.centerLeft) gameState.centerStack.push(gameState.centerLeft);
         if(gameState.centerRight) gameState.centerStack.push(gameState.centerRight);
 
-        let pCard, bCard;
-        if(gameState.player.deck.length === 0) {
-            if(gameState.bot.deck.length > 0) pCard = gameState.bot.deck.pop();
-            if(gameState.bot.deck.length > 0) bCard = gameState.bot.deck.pop();
-        } else if(gameState.bot.deck.length === 0) {
-            if(gameState.player.deck.length > 0) bCard = gameState.player.deck.pop();
-            if(gameState.player.deck.length > 0) pCard = gameState.player.deck.pop();
-        } else {
-            pCard = gameState.player.deck.pop();
-            bCard = gameState.bot.deck.pop();
-        }
+        let pDeckPop = gameState.player.deck.pop();
+        let bDeckPop = gameState.bot.deck.pop();
 
-        if(pCard) gameState.centerRight = pCard;
-        if(bCard) gameState.centerLeft = bCard;
+        if(gameState.player.borrowing && pDeckPop) gameState.player.borrowedAmount = Math.max(0, gameState.player.borrowedAmount - 1);
+        if(gameState.bot.borrowing && bDeckPop) gameState.bot.borrowedAmount = Math.max(0, gameState.bot.borrowedAmount - 1);
+
+        if(pDeckPop) gameState.centerRight = pDeckPop;
+        if(bDeckPop) gameState.centerLeft = bDeckPop;
 
         resetStalemateVisuals(); renderAll(); updateStats();
     }
 
     function resetStalemate() { gameState.playerPass = false; resetStalemateVisuals(); }
     function resetStalemateVisuals() {
-        els.pDeck.classList.remove('waiting', 'counting'); els.bDeck.classList.remove('waiting', 'counting');
+        els.pDeck.classList.remove('waiting', 'counting'); els.bDeck.classList.remove('counting');
         els.pDeckText.innerText = "Start"; els.bDeckText.innerText = "";
         gameState.isCountDown = false; gameState.playerPass = false; gameState.botPass = false;
     }
@@ -374,13 +406,28 @@ document.addEventListener('DOMContentLoaded', () => {
                 const idx = gameState.bot.cards.indexOf(move.card);
                 const cardEl = botEls[idx];
                 const targetEl = move.side === 'left' ? els.cLeft : els.cRight;
+                
+                // AI REFLEX BOOST CHECK
+                let isCreatingSlap = false;
+                let centerTarget = (move.side === 'left' ? gameState.centerLeft : gameState.centerRight);
+                // If the OTHER center card matches the one being played -> SLAP CREATED
+                let otherCenter = (move.side === 'left' ? gameState.centerRight : gameState.centerLeft);
+                if(otherCenter && otherCenter.rank === move.card.rank) isCreatingSlap = true;
+
                 flyCard(cardEl, targetEl, () => {
-                    let currentCenter = move.side === 'left' ? gameState.centerLeft : gameState.centerRight;
-                    if (!isValid(move.card, currentCenter)) { renderZone('bot'); return; }
+                    if (!isValid(move.card, (move.side==='left'?gameState.centerLeft:gameState.centerRight))) { renderZone('bot'); return; }
                     gameState.bot.cards = gameState.bot.cards.filter(c => c.id !== move.card.id);
                     if(move.side === 'left') gameState.centerStack.push(gameState.centerLeft);
                     if(move.side === 'right') gameState.centerStack.push(gameState.centerRight);
                     if(move.side === 'left') gameState.centerLeft = move.card; else gameState.centerRight = move.card;
+                    
+                    updateStats(); // Instant update
+                    
+                    // REFLEX BOOST SLAP
+                    if(isCreatingSlap) {
+                        setTimeout(() => performSlap('bot'), 50); // 50ms (Instant)
+                    }
+
                     resetStalemate(); 
                     let colCards = gameState.bot.cards.filter(c => c.col === move.card.col);
                     if(colCards.length > 0) {
@@ -395,9 +442,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updateStats() {
-        let pTotal = gameState.player.deck.length + gameState.player.cards.length + gameState.player.sidePot.length;
-        let bTotal = gameState.bot.deck.length + gameState.bot.cards.length + gameState.bot.sidePot.length;
-        els.pCount.innerText = pTotal; els.bCount.innerText = bTotal;
+        let pTotal = gameState.player.deck.length + gameState.player.cards.length + gameState.player.sidePot.length - gameState.player.borrowedAmount;
+        let bTotal = gameState.bot.deck.length + gameState.bot.cards.length + gameState.bot.sidePot.length - gameState.bot.borrowedAmount;
+        els.pCount.innerText = Math.max(0, pTotal); 
+        els.bCount.innerText = Math.max(0, bTotal);
     }
 
     function checkWin() {
@@ -409,13 +457,15 @@ document.addEventListener('DOMContentLoaded', () => {
         if(gameState.gameOver) return;
         gameState.gameOver = true;
         
-        let pTotal = parseInt(els.pCount.innerText);
-        let bTotal = parseInt(els.bCount.innerText);
+        // RECALCULATE TOTALS DIRECTLY FROM DATA (Fixes lag bug)
+        let pTotalReal = gameState.player.deck.length + gameState.player.cards.length + gameState.player.sidePot.length - gameState.player.borrowedAmount;
+        let bTotalReal = gameState.bot.deck.length + gameState.bot.cards.length + gameState.bot.sidePot.length - gameState.bot.borrowedAmount;
 
-        if(pTotal === 0) { endMatch("YOU WIN THE MATCH!"); return; }
-        if(bTotal === 0) { endMatch("BOT WINS THE MATCH!"); return; }
+        // CHECK MATCH WIN (Total Cards = 0)
+        if (pTotalReal <= 0) { endMatch("YOU WIN THE MATCH!"); return; }
+        if (bTotalReal <= 0) { endMatch("BOT WINS THE MATCH!"); return; }
 
-        let winnerDeckSize = (winner === 'player') ? pTotal : bTotal;
+        let winnerDeckSize = (winner === 'player') ? pTotalReal : bTotalReal;
         let pNext, bNext;
 
         if (winner === 'player') {
