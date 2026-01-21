@@ -17,7 +17,7 @@
         <div class="bot-profile-container">
             <div class="avatar-ring" id="avatar-ring"><i class="fa-solid fa-robot" id="bot-icon"></i></div>
             <h1 id="difficulty-title">ROOKIE</h1>
-            <p class="bot-desc" id="difficulty-desc">Reaction Time: ~6.0s</p>
+            <p class="bot-desc" id="difficulty-desc">Reaction Time: ~3.0s</p>
         </div>
         <div class="controls-area">
             <div class="slider-header"><span>DIFFICULTY</span><span id="level-display" class="level-badge">LVL 1</span></div>
@@ -38,9 +38,9 @@
         const avatarRing = document.getElementById('avatar-ring');
         const trackFill = document.getElementById('track-fill');
         const data = [
-            {n:"ROOKIE",c:"#81b64c",d:"~6.0s"},{n:"NOVICE",c:"#81b64c",d:"~5.5s"},{n:"AMATEUR",c:"#81b64c",d:"~5.0s"},
-            {n:"INTERMEDIATE",c:"#e6912c",d:"~4.0s"},{n:"SKILLED",c:"#e6912c",d:"~3.5s"},{n:"GOOD",c:"#e6912c",d:"~3.0s"},
-            {n:"ADVANCED",c:"#e6912c",d:"~2.5s"},{n:"PROVEN",c:"#cc3333",d:"~2.0s"},{n:"MASTER",c:"#cc3333",d:"~1.5s"},{n:"UNBEATABLE",c:"#cc3333",d:"~0.5s"}
+            {n:"ROOKIE",c:"#81b64c",d:"~3.0s"},{n:"NOVICE",c:"#81b64c",d:"~2.5s"},{n:"AMATEUR",c:"#81b64c",d:"~2.0s"},
+            {n:"INTERMEDIATE",c:"#e6912c",d:"~1.5s"},{n:"SKILLED",c:"#e6912c",d:"~1.2s"},{n:"GOOD",c:"#e6912c",d:"~1.0s"},
+            {n:"ADVANCED",c:"#e6912c",d:"~0.8s"},{n:"PROVEN",c:"#cc3333",d:"~0.6s"},{n:"MASTER",c:"#cc3333",d:"~0.4s"},{n:"UNBEATABLE",c:"#cc3333",d:"~0.2s"}
         ];
         function update(v) {
             const d = data[v-1];
