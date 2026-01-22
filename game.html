@@ -3,68 +3,88 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Slaps.GG - Arena</title>
+    <title>SLAPS - Official Match</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body class="game-body">
 
-    <div class="stats-widget">
-        <div class="stat-box">
-            <span>AI</span>
-            <h2 id="bot-count">26</h2>
+    <div class="scoreboard">
+        <div class="score-row">
+            <span class="score-label">ROUNDS</span>
+            <div class="score-values">
+                <span class="p-score">YOU: <b id="score-p-rounds">0</b></span>
+                <span class="b-score">AI: <b id="score-b-rounds">0</b></span>
+            </div>
         </div>
-        <div class="stat-box">
-            <span>YOU</span>
-            <h2 id="player-count">26</h2>
+        <div class="score-row">
+            <span class="score-label">SLAPS</span>
+            <div class="score-values">
+                <span class="p-score">YOU: <b id="score-p-slaps">0</b></span>
+                <span class="b-score">AI: <b id="score-b-slaps">0</b></span>
+            </div>
         </div>
-        <div class="divider"></div>
-        <a href="index.html" class="btn-quit-small">QUIT</a>
     </div>
 
-    <div id="slap-message" class="slap-msg hidden">PLAYER SLAPS WON!</div>
+    <div class="stats-widget">
+        <div class="stat-box">
+            <span>AI CARDS</span>
+            <h2 id="count-bot">26</h2>
+        </div>
+        <div class="stat-box">
+            <span>YOUR CARDS</span>
+            <h2 id="count-player">26</h2>
+        </div>
+        <div class="divider"></div>
+        <a href="index.html" class="btn-quit-small">QUIT MATCH</a>
+    </div>
+
+    <div id="slap-alert">SLAP!</div>
 
     <div id="game-overlay" class="overlay hidden">
         <div class="overlay-content">
-            <h1 id="overlay-title">VICTORY!</h1>
-            <p id="overlay-desc">Board Cleared.</p>
-            <button id="btn-action" class="btn-restart">NEXT ROUND</button>
-            <a href="index.html" class="btn-quit">MENU</a>
+            <h1 id="overlay-title">GAME OVER</h1>
+            <p id="overlay-desc">Result description here.</p>
+            <button id="btn-next-round" class="btn-restart">NEXT ROUND</button>
+            <a href="index.html" class="btn-quit">MAIN MENU</a>
         </div>
     </div>
 
     <div class="table-surface">
-        <div class="zone top-zone">
-            <div class="foundation-box" id="bot-boundary"></div>
-        </div>
+        
+        <div class="zone top-zone" id="bot-zone">
+            </div>
 
         <div class="zone middle-zone">
+            
             <div class="pile-group">
-                <div class="card-slot deck-slot" id="bot-draw-deck">
+                <div class="card-slot deck-slot" id="bot-deck">
                     <div class="card-back"></div>
-                    <span class="deck-text" id="bot-deck-text"></span>
+                    <span class="deck-text" id="bot-deck-text">AI</span>
                 </div>
-                <div class="label-text">AI Deck</div>
                 <div class="borrow-label" id="bot-borrow-label">BORROWED</div>
             </div>
 
-            <div class="pile-group"><div class="card-slot center-slot" id="center-left"></div></div>
-            <div class="pile-group"><div class="card-slot center-slot" id="center-right"></div></div>
+            <div class="center-area">
+                <div class="card-slot center-slot" id="center-left"></div>
+                <div class="card-slot center-slot" id="center-right"></div>
+            </div>
 
             <div class="pile-group">
-                <div class="card-slot deck-slot clickable-deck" id="player-draw-deck">
+                <div class="card-slot deck-slot clickable-deck" id="player-deck">
                     <div class="card-back"></div>
-                    <span class="deck-text" id="player-deck-text">Start</span>
+                    <span class="deck-text" id="player-deck-text">START</span>
                 </div>
-                <div class="label-text">Your Deck</div>
                 <div class="borrow-label" id="player-borrow-label">BORROWED</div>
             </div>
+
         </div>
 
-        <div class="zone bottom-zone">
-            <div class="foundation-box" id="player-boundary"></div>
-        </div>
+        <div class="zone bottom-zone" id="player-zone">
+            </div>
+
     </div>
+
     <script src="game.js"></script>
 </body>
 </html>
