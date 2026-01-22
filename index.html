@@ -3,62 +3,90 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Slaps.GG</title>
+    <title>Match Setup</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
-<body>
-    <div class="main-layout">
-        <nav class="sidebar">
-            <div class="logo">SLAPS.GG</div>
-            <div class="search-bar">
-                <i class="fa-solid fa-magnifying-glass"></i>
-                <input type="text" placeholder="Search">
-            </div>
-            <ul class="nav-links">
-                <li><i class="fa-solid fa-play"></i> Play</li>
-                <li><i class="fa-solid fa-puzzle-piece"></i> Puzzles</li>
-                <li><i class="fa-solid fa-graduation-cap"></i> Learn</li>
-                <li><i class="fa-solid fa-tv"></i> Watch</li>
-                <li><i class="fa-solid fa-newspaper"></i> News</li>
-                <li><i class="fa-solid fa-users"></i> Social</li>
-            </ul>
-            <div class="auth-buttons">
-                <button class="btn-signup">Sign Up</button>
-                <button class="btn-login">Log In</button>
-            </div>
-        </nav>
+<body class="setup-body">
+    <div class="bg-gradient"></div>
+    
+    <div class="setup-card">
+        <div class="setup-header">
+            <a href="index.html" class="back-btn"><i class="fa-solid fa-chevron-left"></i></a>
+            <h2>MATCH CONFIGURATION</h2>
+        </div>
 
-        <main class="center-stage">
-            <div class="game-preview">
-                <div class="slaps-table-visual">
-                    <div class="center-pile"></div>
-                </div>
+        <div class="bot-profile-container">
+            <div class="avatar-ring" id="avatar-ring">
+                <i class="fa-solid fa-robot" id="bot-icon"></i>
             </div>
-        </main>
+            <h1 id="difficulty-title">ROOKIE</h1>
+            <p class="bot-desc" id="difficulty-desc">Reaction Time: ~3.0s</p>
+        </div>
 
-        <aside class="action-panel">
-            <div class="panel-header"><i class="fa-solid fa-hand-paper"></i> Play Slaps</div>
-            <div class="action-cards">
-                <a href="setup.html" style="text-decoration: none; color: inherit;">
-                    <div class="card clickable" id="play-bot-btn">
-                        <div class="card-icon"><i class="fa-solid fa-robot"></i></div>
-                        <div class="card-text">
-                            <h3>Play Bots</h3>
-                            <p>Challenge a bot from Easy to Master</p>
-                        </div>
-                    </div>
-                </a>
-                
-                <div class="card disabled">
-                    <div class="card-icon"><i class="fa-solid fa-bolt"></i></div>
-                    <div class="card-text">
-                        <h3>Play Online</h3>
-                        <p>Play vs a person of similar skill</p>
-                    </div>
-                </div>
+        <div class="controls-area">
+            <div class="slider-header">
+                <span>DIFFICULTY</span>
+                <span id="level-display" class="level-badge">LVL 1</span>
             </div>
-        </aside>
+            <div class="custom-slider-wrapper">
+                <input type="range" min="1" max="10" value="5" class="pro-slider" id="difficulty-slider">
+                <div class="slider-track-fill" id="track-fill"></div>
+            </div>
+            <div class="slider-labels">
+                <span>Easy</span>
+                <span>Master</span>
+            </div>
+        </div>
+
+        <a href="game.html" class="btn-launch" id="start-btn">
+            INITIALIZE MATCH <i class="fa-solid fa-play"></i>
+        </a>
     </div>
+
+    <script>
+        const slider = document.getElementById('difficulty-slider');
+        const levelDisplay = document.getElementById('level-display');
+        const title = document.getElementById('difficulty-title');
+        const desc = document.getElementById('difficulty-desc');
+        const botIcon = document.getElementById('bot-icon');
+        const avatarRing = document.getElementById('avatar-ring');
+        const trackFill = document.getElementById('track-fill');
+
+        const data = [
+            {n:"ROOKIE",c:"#81b64c",d:"~3.0s"},
+            {n:"NOVICE",c:"#81b64c",d:"~2.5s"},
+            {n:"AMATEUR",c:"#81b64c",d:"~2.0s"},
+            {n:"INTERMEDIATE",c:"#e6912c",d:"~1.5s"},
+            {n:"SKILLED",c:"#e6912c",d:"~1.2s"},
+            {n:"GOOD",c:"#e6912c",d:"~1.0s"},
+            {n:"ADVANCED",c:"#e6912c",d:"~0.8s"},
+            {n:"PROVEN",c:"#cc3333",d:"~0.6s"},
+            {n:"MASTER",c:"#cc3333",d:"~0.4s"},
+            {n:"UNBEATABLE",c:"#cc3333",d:"~0.2s"}
+        ];
+
+        function update(v) {
+            const d = data[v-1];
+            title.innerText = d.n; 
+            desc.innerText = "Reaction Time: " + d.d; 
+            levelDisplay.innerText = "LVL "+v;
+            
+            // Visual Updates
+            trackFill.style.width = ((v-1)/9)*100 + "%";
+            botIcon.style.color = d.c; 
+            avatarRing.style.borderColor = d.c; 
+            levelDisplay.style.backgroundColor = d.c; 
+            trackFill.style.backgroundColor = d.c;
+            
+            // Save logic for game.js to read
+            localStorage.setItem('slapsDifficulty', v);
+        }
+
+        slider.oninput = function(){update(this.value)}; 
+        // Init with stored value or default 5
+        update(localStorage.getItem('slapsDifficulty') || 5);
+        slider.value = localStorage.getItem('slapsDifficulty') || 5;
+    </script>
 </body>
 </html>
