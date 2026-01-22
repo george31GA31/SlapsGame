@@ -1,377 +1,252 @@
 document.addEventListener('DOMContentLoaded', () => {
     
-    // === CONFIGURATION ===
+    // === CONFIG & CONSTANTS ===
     const SUITS = ["♠", "♥", "♣", "♦"];
     const VALUES = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
+    
+    // Difficulty Settings (Reaction Time in ms)
     let difficulty = parseInt(localStorage.getItem('slapsDifficulty')) || 5;
-
-    // AI TUNING: "Spirit of SLAPS" (A.1.4) - Reflex-based but fair
-    const getAiDelay = () => {
-        let base = 3000 - (difficulty * 250); 
-        return Math.max(600, base + Math.random() * 500);
+    const getAiSpeed = () => {
+        let baseSpeed = 3000 - (difficulty * 250); // Lvl 5 = 1750ms
+        return Math.max(600, baseSpeed + Math.random() * 500);
     };
 
-    let globalZ = 100;
-    let botBusy = false; 
-    let lastActionTime = 0;
-    let draggedCardId = null; // Track ID instead of boolean for safety
-
-    // GAME STATE
+    // Global State
     let gameState = {
-        player: { deck: [], cards: [], sidePot: [] },
-        bot: { deck: [], cards: [], sidePot: [] },
+        player: { deck: [], foundation: [[],[],[],[]], sidePot: [] }, // 4 Columns (Rule D.2.2)
+        bot: { deck: [], foundation: [[],[],[],[]], sidePot: [] },
         centerLeft: null, centerRight: null,
-        centerStack: [], 
-        gameOver: false,
-        playerPass: false, botPass: false,
-        isCountDown: false,
-        slapActive: false,
+        centerStack: [],
+        gameActive: false,
+        countdownActive: false,
+        slapLocked: false,
         scores: { pRounds: 0, bRounds: 0, pSlaps: 0, bSlaps: 0 }
     };
 
+    let lastBotMove = 0;
+    let draggedCard = null; // For physics engine
+
+    // DOM Elements
     const els = {
-        pBoundary: document.getElementById('player-boundary'),
-        bBoundary: document.getElementById('bot-boundary'),
+        pZone: document.getElementById('player-zone'),
+        bZone: document.getElementById('bot-zone'),
         cLeft: document.getElementById('center-left'),
         cRight: document.getElementById('center-right'),
-        pCount: document.getElementById('player-count'),
-        bCount: document.getElementById('bot-count'),
-        overlay: document.getElementById('game-overlay'),
-        pDeck: document.getElementById('player-draw-deck'),
-        bDeck: document.getElementById('bot-draw-deck'),
+        pDeck: document.getElementById('player-deck'),
+        bDeck: document.getElementById('bot-deck'),
         pDeckText: document.getElementById('player-deck-text'),
         bDeckText: document.getElementById('bot-deck-text'),
-        pBorrow: document.getElementById('player-borrow-label'),
-        bBorrow: document.getElementById('bot-borrow-label'),
-        overlayTitle: document.getElementById('overlay-title'),
-        overlayDesc: document.getElementById('overlay-desc'),
-        btnAction: document.getElementById('btn-action'),
+        overlay: document.getElementById('game-overlay'),
         slapAlert: document.getElementById('slap-alert'),
-        sPRounds: document.getElementById('p-rounds'),
-        sBRounds: document.getElementById('b-rounds'),
-        sPSlaps: document.getElementById('p-slaps'),
-        sBSlaps: document.getElementById('b-slaps')
+        countP: document.getElementById('count-player'),
+        countB: document.getElementById('count-bot')
     };
 
-    // --- SOUND & UI HELPERS ---
-    window.addEventListener('keydown', (e) => {
-        if(e.code === 'Space' && !gameState.gameOver && !gameState.isCountDown) {
-            e.preventDefault(); 
-            performSlap('player');
-        }
-    });
+    // === INITIALIZATION ===
+    function initGame() {
+        // 1. Create & Deal 52 Cards
+        let deck = createDeck();
+        // Give 26 to each
+        let pHand = deck.slice(0, 26);
+        let bHand = deck.slice(26, 52);
+        
+        // Tag Owners (Critical for Counter)
+        pHand.forEach(c => c.owner = 'player');
+        bHand.forEach(c => c.owner = 'bot');
 
-    // --- CARD CLASS ---
-    class Card {
-        constructor(suit, value, owner) {
-            this.suit = suit; this.value = value;
-            this.rank = VALUES.indexOf(value) + 1; // 1-13
-            this.color = (suit === "♥" || suit === "♦") ? "red" : "black";
-            this.id = Math.random().toString(36).substr(2, 9);
-            this.owner = owner; 
-            this.isFaceUp = false;
-            this.x = 0; this.y = 0; this.col = -1;
+        // 2. Build Foundations (4 Piles: 1, 2, 3, 4 cards) [Rule D.2.2]
+        buildFoundation(gameState.player, pHand);
+        buildFoundation(gameState.bot, bHand);
+
+        gameState.gameActive = false; // Waiting for start
+        gameState.slapLocked = false;
+        
+        renderAll();
+        updateStats();
+        
+        // Reset Visuals
+        els.overlay.classList.add('hidden');
+        els.pDeckText.innerText = "START";
+        els.bDeckText.innerText = "AI";
+    }
+
+    function createDeck() {
+        return SUITS.flatMap(s => VALUES.map(v => ({
+            suit: s, value: v, 
+            rank: VALUES.indexOf(v) + 1,
+            color: (s === "♥" || s === "♦") ? "red" : "black",
+            id: Math.random().toString(36).substr(2, 9),
+            isFaceUp: false
+        }))).sort(() => Math.random() - 0.5);
+    }
+
+    function buildFoundation(playerObj, cards) {
+        // Pattern: 4 piles of 4, 3, 2, 1
+        let pattern = [4, 3, 2, 1]; 
+        let cardIdx = 0;
+        
+        playerObj.foundation = [[], [], [], []]; // Clear
+        playerObj.deck = []; // Clear
+
+        // Fill Foundations
+        pattern.forEach((count, colIdx) => {
+            for(let i=0; i<count; i++) {
+                if(cardIdx < cards.length) {
+                    let card = cards[cardIdx++];
+                    card.isFaceUp = (i === count - 1); // Only top face up [Rule D.2.3]
+                    playerObj.foundation[colIdx].push(card);
+                }
+            }
+        });
+
+        // Remainder goes to Deck [Rule D.4.1]
+        while(cardIdx < cards.length) {
+            let c = cards[cardIdx++];
+            c.isFaceUp = false;
+            playerObj.deck.push(c);
         }
     }
 
-    // --- SMART RENDERING ENGINE ---
-    // Instead of deleting everything, we find cards and move them.
-    // This creates the "CardGames.io" smooth feel.
+    // === RENDER ENGINE (Smart DOM) ===
     function renderAll() {
-        renderZone('player'); 
-        renderZone('bot');
-        renderCenter(els.cLeft, gameState.centerLeft); 
+        renderFoundation('player');
+        renderFoundation('bot');
+        renderCenter(els.cLeft, gameState.centerLeft);
         renderCenter(els.cRight, gameState.centerRight);
     }
 
-    function renderZone(who) {
-        const container = who === 'player' ? els.pBoundary : els.bBoundary;
-        const cards = who === 'player' ? gameState.player.cards : gameState.bot.cards;
+    function renderFoundation(who) {
+        let container = who === 'player' ? els.pZone : els.bZone;
+        let foundation = who === 'player' ? gameState.player.foundation : gameState.bot.foundation;
         
-        // 1. Remove cards that are no longer in this zone
-        Array.from(container.children).forEach(el => {
-            if (!cards.find(c => c.id === el.id)) el.remove();
-        });
-
-        // 2. Update or Create cards
-        cards.forEach(c => {
-            // SKIP update if player is dragging THIS SPECIFIC card
-            if (draggedCardId === c.id) return;
-
-            let el = document.getElementById(c.id);
-            const faceClass = c.isFaceUp ? '' : 'face-down';
-
-            if (!el) {
-                el = document.createElement('div');
-                el.id = c.id;
-                setupInteraction(el, c); // Add drag listeners
-                container.appendChild(el);
+        // Ensure 4 columns exist
+        if(container.children.length === 0) {
+            for(let i=0; i<4; i++) {
+                let col = document.createElement('div');
+                col.className = 'pile-group';
+                col.style.width = '110px'; 
+                container.appendChild(col);
             }
-
-            // Update Class/Visuals
-            el.className = `playing-card ${faceClass}`;
-            el.style.color = c.color === 'red' ? '#d9534f' : '#292b2c';
-            el.style.left = `${c.x}px`;
-            el.style.top = `${c.y}px`;
-            el.style.zIndex = c.isFaceUp ? 10 : 1; 
-            
-            // Only set HTML if needed (Performance)
-            if(el.innerHTML === "") {
-                el.innerHTML = `<div class="card-top">${c.value}</div><div class="card-mid">${c.suit}</div><div class="card-bot">${c.value}</div>`;
-            }
-        });
-    }
-
-    function renderCenter(el, card) {
-        el.innerHTML = '';
-        if(card) {
-            // Create a temporary visual card for the center
-            const centerEl = document.createElement('div');
-            centerEl.className = 'playing-card';
-            centerEl.style.color = card.color === 'red' ? '#d9534f' : '#292b2c';
-            centerEl.innerHTML = `<div class="card-top">${card.value}</div><div class="card-mid">${card.suit}</div><div class="card-bot">${card.value}</div>`;
-            centerEl.style.position = 'relative'; centerEl.style.left = '0'; centerEl.style.top = '0';
-            el.appendChild(centerEl);
-        }
-    }
-
-    // --- ANIMATION ---
-    function flyCard(card, targetEl, callback) {
-        if(!card || !targetEl) { callback(); return; }
-        
-        let startRect, cardEl = document.getElementById(card.id);
-        
-        if (cardEl) {
-            startRect = cardEl.getBoundingClientRect();
-            // Don't hide original yet, let the clone cover it for smoothness
-        } else {
-            // Fallback: Start from deck
-            const boundary = card.owner === 'player' ? els.pDeck : els.bDeck;
-            startRect = boundary.getBoundingClientRect();
         }
 
-        const targetRect = targetEl.getBoundingClientRect();
-        
-        const clone = document.createElement('div');
-        clone.className = `playing-card flying-card`;
-        clone.style.width = '110px'; clone.style.height = '154px';
-        clone.style.left = startRect.left + 'px'; clone.style.top = startRect.top + 'px';
-        clone.style.color = card.color === 'red' ? '#d9534f' : '#292b2c';
-        clone.innerHTML = `<div class="card-top">${card.value}</div><div class="card-mid">${card.suit}</div><div class="card-bot">${card.value}</div>`;
-        clone.style.zIndex = 9999;
-        
-        document.body.appendChild(clone);
-        void clone.offsetWidth; // Force Reflow
-
-        // Hide original now that clone exists
-        if(cardEl) cardEl.style.opacity = '0';
-
-        // Calculate travel time based on distance (Rule of thumb: 1ms per pixel)
-        let dist = Math.hypot(targetRect.left - startRect.left, targetRect.top - startRect.top);
-        let duration = Math.max(250, dist * 0.7); 
-
-        clone.style.transition = `all ${duration}ms ease-out`;
-        clone.style.left = targetRect.left + 'px'; 
-        clone.style.top = targetRect.top + 'px';
-
-        setTimeout(() => { 
-            clone.remove(); 
-            callback(); 
-        }, duration); 
-    }
-
-    // --- DRAG PHYSICS (Unrestricted) ---
-    function setupInteraction(el, card) {
-        el.onmousedown = (e) => {
-            if(e.button !== 0 || !card.isFaceUp || card.owner !== 'player') return;
+        // Render Cards in Columns
+        Array.from(container.children).forEach((colEl, colIdx) => {
+            let pile = foundation[colIdx];
+            colEl.innerHTML = ''; // Clear column
             
-            e.preventDefault();
-            draggedCardId = card.id;
-            el.style.zIndex = 1000;
-            
-            let startX = e.clientX, startY = e.clientY;
-            let origLeft = parseFloat(el.style.left);
-            let origTop = parseFloat(el.style.top);
-
-            function onMouseMove(e) {
-                let dx = e.clientX - startX;
-                let dy = e.clientY - startY;
-                el.style.left = `${origLeft + dx}px`;
-                el.style.top = `${origTop + dy}px`;
-            }
-
-            function onMouseUp(e) {
-                document.removeEventListener('mousemove', onMouseMove);
-                document.removeEventListener('mouseup', onMouseUp);
-                draggedCardId = null;
-
-                // Check Drop
-                if(isOver(e, els.cLeft) && isValid(card, gameState.centerLeft)) {
-                    playCard(card, 'left');
-                } else if(isOver(e, els.cRight) && isValid(card, gameState.centerRight)) {
-                    playCard(card, 'right');
-                } else {
-                    // Snap Back
-                    renderZone('player'); 
+            pile.forEach((card, i) => {
+                let el = createCardEl(card);
+                // Stagger vertically
+                el.style.top = (i * 25) + 'px'; 
+                // Z-Index for stacking
+                el.style.zIndex = i;
+                
+                // Add Drag Logic ONLY for Player's Top Face-Up Cards
+                if(who === 'player' && card.isFaceUp && i === pile.length - 1) {
+                    enableDrag(el, card, colIdx);
                 }
-            }
+                
+                colEl.appendChild(el);
+            });
+        });
+    }
 
-            document.addEventListener('mousemove', onMouseMove);
-            document.addEventListener('mouseup', onMouseUp);
+    function renderCenter(slotEl, card) {
+        slotEl.innerHTML = '';
+        if(card) {
+            card.isFaceUp = true;
+            let el = createCardEl(card);
+            el.style.top = '0'; 
+            slotEl.appendChild(el);
+        }
+    }
+
+    function createCardEl(card) {
+        let el = document.createElement('div');
+        el.className = `playing-card ${card.isFaceUp ? '' : 'face-down'}`;
+        el.id = card.id;
+        if(card.isFaceUp) {
+            el.style.color = card.color === 'red' ? '#d9534f' : '#292b2c';
+            el.innerHTML = `
+                <div class="card-top">${card.value}</div>
+                <div class="card-mid">${card.suit}</div>
+                <div class="card-bot">${card.value}</div>
+            `;
+        }
+        return el;
+    }
+
+    // === INTERACTION (Physics) ===
+    function enableDrag(el, card, sourceColIdx) {
+        el.onmousedown = (e) => {
+            if(!gameState.gameActive) return; // Cant play before start
+            e.preventDefault();
+            
+            draggedCard = card;
+            let startX = e.clientX; 
+            let startY = e.clientY;
+            let rect = el.getBoundingClientRect();
+            
+            // Create specific dragging clone (smooth visual)
+            let clone = el.cloneNode(true);
+            clone.style.position = 'fixed';
+            clone.style.zIndex = 9999;
+            clone.style.left = rect.left + 'px';
+            clone.style.top = rect.top + 'px';
+            clone.style.pointerEvents = 'none'; // Let clicks pass through
+            document.body.appendChild(clone);
+            
+            // Hide original
+            el.style.opacity = '0';
+
+            const onMove = (em) => {
+                let dx = em.clientX - startX;
+                let dy = em.clientY - startY;
+                clone.style.left = (rect.left + dx) + 'px';
+                clone.style.top = (rect.top + dy) + 'px';
+            };
+
+            const onUp = (eu) => {
+                document.removeEventListener('mousemove', onMove);
+                document.removeEventListener('mouseup', onUp);
+                clone.remove();
+                
+                // Hit Detection
+                if(isOver(eu, els.cLeft) && isValidPlay(card, gameState.centerLeft)) {
+                    playCard('player', sourceColIdx, 'left');
+                } else if(isOver(eu, els.cRight) && isValidPlay(card, gameState.centerRight)) {
+                    playCard('player', sourceColIdx, 'right');
+                } else {
+                    // Invalid drop -> Reset
+                    el.style.opacity = '1';
+                }
+                draggedCard = null;
+            };
+
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onUp);
         };
     }
 
-    // --- GAME LOGIC ---
-    function init() {
-        startRoundWithCounts(26, 26);
+    function isOver(e, targetEl) {
+        let r = targetEl.getBoundingClientRect();
+        return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
     }
 
-    function startRoundWithCounts(pCount, bCount) {
-        // Init Cards with Owners
-        let fullCards = SUITS.flatMap(s => VALUES.map(v => new Card(s, v, ""))).sort(() => Math.random() - 0.5);
-        fullCards.forEach((c, i) => { c.owner = (i < pCount) ? 'player' : 'bot'; });
-
-        let pDeck = fullCards.slice(0, pCount);
-        let bDeck = fullCards.slice(pCount);
-
-        gameState.player.cards = []; gameState.bot.cards = [];
-        gameState.centerStack = []; gameState.centerLeft = null; gameState.centerRight = null;
-        gameState.player.sidePot = []; gameState.bot.sidePot = [];
-        gameState.gameOver = false; gameState.playerPass = false; gameState.botPass = false;
-        gameState.slapActive = false; gameState.isCountDown = false; botBusy = false;
-
-        els.overlay.classList.add('hidden');
-        resetStalemateVisuals();
-
-        // Foundation Setup (Rule D.2.2 - 4 piles)
-        let pPattern = [4,3,2,1];
-        let bPattern = [4,3,2,1];
-        
-        // Handle low card counts (Rule D.2.4)
-        if(pDeck.length < 10) pPattern = [pDeck.length]; 
-        if(bDeck.length < 10) bPattern = [bDeck.length];
-
-        const pFoundCards = pDeck.splice(0, pPattern.reduce((a,b)=>a+b, 0));
-        const bFoundCards = bDeck.splice(0, bPattern.reduce((a,b)=>a+b, 0));
-
-        spawnFoundation(pFoundCards, 'player', pPattern);
-        spawnFoundation(bFoundCards, 'bot', bPattern);
-        
-        gameState.player.deck = pDeck;
-        gameState.bot.deck = bDeck;
-
-        renderAll();
-        lastActionTime = Date.now() + 2000; // 2s pause before bot starts
-
-        // Start Loop if not running
-        if (!window.masterLoopSet) {
-            setInterval(gameLoop, 100); // High frequency check
-            window.masterLoopSet = true;
-        }
+    // === GAMEPLAY RULES ===
+    function isValidPlay(card, centerCard) {
+        if(!centerCard) return false;
+        let diff = Math.abs(card.rank - centerCard.rank);
+        // Rule D.6.2: +/- 1 or Ace(1) <-> King(13)
+        return diff === 1 || diff === 12;
     }
 
-    function spawnFoundation(cards, owner, pattern) {
-        let cardIdx = 0;
-        let xOffsets = [50, 200, 350, 500]; // Spaced out for big cards
-        pattern.forEach((pileSize, colIndex) => {
-            for(let i=0; i<pileSize; i++) {
-                if(cardIdx < cards.length) {
-                    let c = cards[cardIdx++];
-                    c.owner = owner; c.col = colIndex;
-                    c.x = xOffsets[colIndex]; c.y = 20 + (i * 25);
-                    c.isFaceUp = (i === pileSize - 1); // Only top card face up (D.2.3)
-                    if(owner === 'player') gameState.player.cards.push(c); else gameState.bot.cards.push(c);
-                }
-            }
-        });
-    }
+    function playCard(who, colIdx, side) {
+        let foundation = who === 'player' ? gameState.player.foundation : gameState.bot.foundation;
+        let pile = foundation[colIdx];
+        let card = pile.pop(); // Remove from foundation
 
-    function gameLoop() {
-        if(gameState.gameOver) return;
-        
-        // Bot Logic
-        if(!gameState.isCountDown && !botBusy) {
-            let now = Date.now();
-            if(now - lastActionTime > getAiDelay()) {
-                runBotLogic();
-            }
-        }
-
-        // Stats & Checks
-        updateStats();
-        checkSlapOpportunity();
-        checkStalemateConditions();
-    }
-
-    function runBotLogic() {
-        // 1. Play Card (Priority)
-        let move = null;
-        for(let c of gameState.bot.cards.filter(c => c.isFaceUp)) {
-            if(isValid(c, gameState.centerLeft)) { move = {card:c, side:'left'}; break; }
-            if(isValid(c, gameState.centerRight)) { move = {card:c, side:'right'}; break; }
-        }
-
-        if(move) {
-            botBusy = true; lastActionTime = Date.now();
-            
-            // Reflex Boost if playing a card (simulating speed)
-            // If the card matches the OTHER pile, it's a Slap setup. Bot plays instantly.
-            let other = (move.side === 'left' ? gameState.centerRight : gameState.centerLeft);
-            let reactionMod = (other && other.rank === move.card.rank) ? 0.1 : 1.0;
-
-            setTimeout(() => {
-                flyCard(move.card, (move.side==='left'?els.cLeft:els.cRight), () => {
-                    playBotCard(move);
-                    botBusy = false; 
-                });
-            }, 50 * reactionMod);
-            return;
-        }
-
-        // 2. Flip Hidden Card (Rule D.3)
-        // If < 4 piles have face up cards, flip the one underneath
-        // We need to check columns.
-        let columns = [[],[],[],[]];
-        gameState.bot.cards.forEach(c => columns[c.col].push(c));
-        
-        for(let col of columns) {
-            if(col.length > 0) {
-                let top = col[col.length-1];
-                if(!top.isFaceUp && gameState.bot.cards.filter(c => c.isFaceUp).length < 4) {
-                    botBusy = true;
-                    setTimeout(() => {
-                        top.isFaceUp = true;
-                        renderAll();
-                        botBusy = false; lastActionTime = Date.now();
-                    }, 300);
-                    return;
-                }
-            }
-        }
-    }
-
-    function playBotCard(move) {
-        // Double check validity (Player might have moved)
-        let current = move.side === 'left' ? gameState.centerLeft : gameState.centerRight;
-        if(!isValid(move.card, current)) { 
-            renderAll(); return; 
-        }
-
-        gameState.bot.cards = gameState.bot.cards.filter(c => c.id !== move.card.id);
-        if(move.side === 'left') {
-            if(gameState.centerLeft) gameState.centerStack.push(gameState.centerLeft);
-            gameState.centerLeft = move.card;
-        } else {
-            if(gameState.centerRight) gameState.centerStack.push(gameState.centerRight);
-            gameState.centerRight = move.card;
-        }
-        
-        renderAll(); checkWin();
-    }
-
-    function playCard(card, side) {
-        gameState.player.cards = gameState.player.cards.filter(c => c.id !== card.id);
-        
+        // Add to Center
         if(side === 'left') {
             if(gameState.centerLeft) gameState.centerStack.push(gameState.centerLeft);
             gameState.centerLeft = card;
@@ -379,196 +254,226 @@ document.addEventListener('DOMContentLoaded', () => {
             if(gameState.centerRight) gameState.centerStack.push(gameState.centerRight);
             gameState.centerRight = card;
         }
+
+        // Reveal card underneath [Rule D.2.7]
+        if(pile.length > 0) {
+            // Count total live cards (Rule D.3.1: Max 4 live)
+            // Since we just played one, we can definitely flip the new top one
+            pile[pile.length-1].isFaceUp = true;
+        }
+
+        updateStats();
+        renderAll();
         
-        // Auto-flip underneath (D.2.7)
-        let colCards = gameState.player.cards.filter(c => c.col === card.col);
-        if(colCards.length > 0) {
-            let newTop = colCards[colCards.length-1];
-            if(gameState.player.cards.filter(c => c.isFaceUp).length < 4) {
-                newTop.isFaceUp = true;
+        // Check for Slaps & Win
+        checkSlapCondition();
+        checkWinCondition();
+    }
+
+    // === BOT LOGIC ===
+    setInterval(() => {
+        if(!gameState.gameActive || gameState.countdownActive || gameState.gameOver) return;
+        
+        let now = Date.now();
+        if(now - lastBotMove < getAiSpeed()) return;
+
+        // 1. Check for Moves
+        let botFound = gameState.bot.foundation;
+        let moveMade = false;
+
+        for(let colIdx=0; colIdx<4; colIdx++) {
+            let pile = botFound[colIdx];
+            if(pile.length === 0) continue;
+            
+            let card = pile[pile.length-1];
+            if(!card.isFaceUp) {
+                // Flip if allowed (Rule D.3.1)
+                // Simply: if it's the top card and hidden, flip it
+                card.isFaceUp = true;
+                moveMade = true;
+                renderAll();
+                break;
+            }
+
+            // Try to play
+            if(isValidPlay(card, gameState.centerLeft)) {
+                playCard('bot', colIdx, 'left');
+                moveMade = true;
+                break;
+            }
+            if(isValidPlay(card, gameState.centerRight)) {
+                playCard('bot', colIdx, 'right');
+                moveMade = true;
+                break;
             }
         }
 
-        renderAll(); checkWin();
-    }
-
-    function isValid(card, center) {
-        if(!center) return false;
-        let diff = Math.abs(card.rank - center.rank);
-        return (diff === 1 || diff === 12); // Loop A-K (D.6.2)
-    }
-
-    function isOver(e, target) {
-        const r = target.getBoundingClientRect();
-        return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
-    }
-
-    // --- SLAP LOGIC (Rule F) ---
-    function checkSlapOpportunity() {
-        if(gameState.gameOver || gameState.isCountDown || gameState.slapActive) return;
-        if(!gameState.centerLeft || !gameState.centerRight) return;
+        if(moveMade) lastBotMove = now;
         
-        // F.2.1: Matching Ranks trigger slap
-        if(gameState.centerLeft.rank === gameState.centerRight.rank) {
-            if(!gameState.slapActive) {
-                let reactionBase = 2000 - (difficulty * 180);
-                setTimeout(() => performSlap('bot'), Math.max(100, reactionBase + Math.random()*200));
-            }
+        // 2. Check for Slap (Bot reflexes)
+        if(isSlapCondition()) {
+            let reflex = 1000 + Math.random()*500; // Bot reaction
+            setTimeout(() => performSlap('bot'), reflex);
+        }
+
+        // 3. Check for Stalemate
+        // (Simplified: if bot hasn't moved in a while and player isn't moving, try to signal wait)
+        // ... handled by player click ...
+
+    }, 200);
+
+    // === SLAPS (Rule F) ===
+    function isSlapCondition() {
+        if(!gameState.centerLeft || !gameState.centerRight) return false;
+        // Rule F.2.1: Same Rank
+        return gameState.centerLeft.rank === gameState.centerRight.rank;
+    }
+
+    function checkSlapCondition() {
+        if(isSlapCondition() && !gameState.slapLocked) {
+            // Wait for input
         }
     }
 
     function performSlap(who) {
-        // F.9.1 Misslap check
-        if(!gameState.centerLeft || !gameState.centerRight || gameState.centerLeft.rank !== gameState.centerRight.rank) {
-            if(who === 'player') { /* Optional: Add misslap penalty here (Law I) */ }
-            return;
-        }
+        if(!isSlapCondition() || gameState.slapLocked) return;
+        gameState.slapLocked = true;
 
-        gameState.slapActive = true;
-        let loser = (who === 'player') ? 'bot' : 'player';
-        
         // Visuals
-        els.slapAlert.innerText = (who === 'player' ? "PLAYER 1 SLAPS WON!" : "AI SLAPS WON!");
+        els.slapAlert.innerText = who === 'player' ? "YOU SLAPPED!" : "AI SLAPPED!";
         els.slapAlert.style.display = 'block';
-        setTimeout(() => { els.slapAlert.style.display = 'none'; }, 1500);
+        setTimeout(() => els.slapAlert.style.display = 'none', 1500);
 
-        if(who === 'player') gameState.scores.pSlaps++; else gameState.scores.bSlaps++;
-        updateScoreboard();
-
-        // F.7: Loser takes cards
+        // Logic [Rule F.7]
+        let loser = who === 'player' ? 'bot' : 'player';
         let wonCards = [...gameState.centerStack, gameState.centerLeft, gameState.centerRight];
-        wonCards.forEach(c => c.owner = loser);
         
+        // Transfer ownership
+        wonCards.forEach(c => c.owner = loser); 
+        
+        // Add to side pot
         if(loser === 'player') gameState.player.sidePot.push(...wonCards);
         else gameState.bot.sidePot.push(...wonCards);
 
-        gameState.centerLeft = null; gameState.centerRight = null; gameState.centerStack = [];
-        
+        // Clear center
+        gameState.centerLeft = null; 
+        gameState.centerRight = null;
+        gameState.centerStack = [];
+
         renderAll();
-        setTimeout(() => { gameState.slapActive = false; resetStalemate(); }, 1000);
+        updateStats();
+        
+        // Resume game (Need new reveal)
+        setTimeout(() => startCountdown(), 1500);
     }
 
-    // --- STALEMATE & REVEAL (Rule G) ---
+    // === START / RESTART / BORROW ===
     els.pDeck.addEventListener('click', () => {
-        if(gameState.isCountDown || gameState.gameOver) return;
-        // Start Game Force
-        if(!gameState.centerLeft && !gameState.centerRight) { startCountdown(); return; }
+        if(gameState.gameOver) return;
         
-        if(!gameState.playerPass) {
-            gameState.playerPass = true;
+        // 1. Start of Game
+        if(!gameState.gameActive && !gameState.centerLeft) {
+            startCountdown();
+            return;
+        }
+
+        // 2. Stalemate Restart
+        if(gameState.gameActive) {
+            // Toggle visual state
             els.pDeck.classList.add('waiting');
-            els.pDeckText.innerText = "WAIT";
-            if(gameState.botPass) startCountdown();
-        } 
+            els.pDeckText.innerText = "WAITING...";
+            
+            // Sim bot agreement delay
+            setTimeout(() => startCountdown(), 1000);
+        }
     });
 
-    function checkStalemateConditions() {
-        if(gameState.isCountDown || gameState.gameOver || gameState.slapActive || botBusy) return;
-        
-        let bMoves = gameState.bot.cards.some(c => c.isFaceUp && (isValid(c, gameState.centerLeft) || isValid(c, gameState.centerRight)));
-        let bFlips = gameState.bot.cards.filter(c => c.isFaceUp).length < 4 && gameState.bot.cards.some(c => !c.isFaceUp);
-        
-        if(!bMoves && !bFlips) { 
-            if(!gameState.botPass) { 
-                gameState.botPass = true; 
-                if(gameState.playerPass) startCountdown(); 
-            } 
-        } else { 
-            gameState.botPass = false; 
-        }
-    }
-
     function startCountdown() {
-        gameState.isCountDown = true;
+        gameState.countdownActive = true;
+        gameState.slapLocked = false;
+        els.pDeck.classList.remove('waiting');
+        
         let count = 3;
-        els.pDeck.classList.remove('waiting'); els.pDeck.classList.add('counting'); els.bDeck.classList.add('counting');
-        const timer = setInterval(() => {
-            els.pDeckText.innerText = count; els.bDeckText.innerText = count;
-            if(count-- <= 0) { clearInterval(timer); executeReveal(); }
-        }, 800);
+        let timer = setInterval(() => {
+            els.pDeckText.innerText = count;
+            els.bDeckText.innerText = count;
+            count--;
+            
+            if(count < 0) {
+                clearInterval(timer);
+                els.pDeckText.innerText = "";
+                els.bDeckText.innerText = "";
+                executeReveal();
+                gameState.gameActive = true;
+                gameState.countdownActive = false;
+            }
+        }, 600);
     }
 
     function executeReveal() {
-        if(gameState.centerLeft) gameState.centerStack.push(gameState.centerLeft);
-        if(gameState.centerRight) gameState.centerStack.push(gameState.centerRight);
-        
-        // BORROW LOGIC (Rule G.3)
-        let pPop = gameState.player.deck.pop();
-        let bPop = gameState.bot.deck.pop();
+        // [Rule G] Borrowing Logic
+        let pDeck = gameState.player.deck;
+        let bDeck = gameState.bot.deck;
 
-        // If deck empty, take from opponent (G.3.2)
-        if(!pPop && gameState.bot.deck.length > 0) pPop = gameState.bot.deck.pop();
-        if(!bPop && gameState.player.deck.length > 0) bPop = gameState.player.deck.pop();
+        // Handle Shortage: If empty, steal from opponent [Rule G.3.2]
+        if(pDeck.length === 0 && bDeck.length > 0) pDeck.push(bDeck.pop());
+        if(bDeck.length === 0 && pDeck.length > 0) bDeck.push(pDeck.pop());
 
-        if(pPop) gameState.centerRight = pPop; 
-        if(bPop) gameState.centerLeft = bPop;
-        
-        resetStalemateVisuals(); renderAll(); 
-    }
+        // Play cards
+        let pCard = pDeck.pop();
+        let bCard = bDeck.pop();
 
-    function resetStalemateVisuals() {
-        els.pDeck.classList.remove('waiting', 'counting'); els.bDeck.classList.remove('counting');
-        els.pDeckText.innerText = "Start"; els.bDeckText.innerText = "";
-        gameState.isCountDown = false; gameState.playerPass = false; gameState.botPass = false;
-    }
+        if(pCard) gameState.centerRight = pCard; // Player plays to Right
+        if(bCard) gameState.centerLeft = bCard;  // Bot plays to Left
 
-    // --- MATH & SCORING (Rule H) ---
-    function updateStats() {
-        // H.4.1: Win match = No cards in Foundation, Deck, or Penalty
-        // We count ALL cards currently owned (Deck + Foundation + SidePot)
-        // Center cards are "in play" and don't count towards the goal until won/lost.
-        
-        let pTotal = gameState.player.cards.length + gameState.player.deck.length + gameState.player.sidePot.length;
-        let bTotal = gameState.bot.cards.length + gameState.bot.deck.length + gameState.bot.sidePot.length;
-
-        els.pCount.innerText = pTotal;
-        els.bCount.innerText = bTotal;
-
-        // Visual Borrow Label
-        els.pBorrow.classList.toggle('borrow-active', gameState.player.deck.length === 0 && pTotal <= 10);
-        els.bBorrow.classList.toggle('borrow-active', gameState.bot.deck.length === 0 && bTotal <= 10);
-    }
-    
-    function updateScoreboard() {
-        els.sPRounds.innerText = gameState.scores.pRounds; els.sBRounds.innerText = gameState.scores.bRounds;
-        els.sPSlaps.innerText = gameState.scores.pSlaps; els.sBSlaps.innerText = gameState.scores.bSlaps;
-    }
-
-    function checkWin() { 
-        if(gameState.player.cards.length === 0) endRound('player'); 
-        if(gameState.bot.cards.length === 0) endRound('bot'); 
-    }
-
-    function endRound(winner) {
-        if(gameState.gameOver) return; gameState.gameOver = true;
+        renderAll();
         updateStats();
-        
-        let pT = parseInt(els.pCount.innerText);
-        let bT = parseInt(els.bCount.innerText);
-
-        // H.4.1 Win Match Check
-        if (pT <= 0) { endMatch("YOU WIN THE MATCH!"); return; }
-        if (bT <= 0) { endMatch("BOT WINS THE MATCH!"); return; }
-
-        if(winner === 'player') gameState.scores.pRounds++; else gameState.scores.bRounds++;
-        updateScoreboard();
-
-        // Setup next round (Winner keeps their stack)
-        let pNext = (winner === 'player') ? pT : 52 - bT;
-        
-        els.overlayTitle.innerText = (winner === 'player') ? "ROUND WON!" : "ROUND LOST";
-        els.overlay.classList.remove('hidden');
-        els.btnAction.innerText = "NEXT ROUND";
-        els.btnAction.onclick = () => startRoundWithCounts(pNext, 52 - pNext);
+        checkSlapCondition();
     }
 
-    function endMatch(msg) {
-        els.overlayTitle.innerText = msg; 
-        els.overlayDesc.innerText = "GAME OVER";
-        els.btnAction.innerText = "PLAY AGAIN"; 
-        els.btnAction.onclick = () => location.reload();
-        els.overlay.classList.remove('hidden');
+    // === SCORING & END ===
+    function updateStats() {
+        // Count Logic: Foundation + Deck + SidePot
+        const count = (pObj) => {
+            let fCount = pObj.foundation.flat().length;
+            let dCount = pObj.deck.length;
+            let sCount = pObj.sidePot.length;
+            return fCount + dCount + sCount;
+        };
+
+        let pTotal = count(gameState.player);
+        let bTotal = count(gameState.bot);
+
+        els.countP.innerText = pTotal;
+        els.countB.innerText = bTotal;
+
+        // Borrow Labels [Rule G.3.4]
+        els.pBorrow.classList.toggle('borrow-active', gameState.player.deck.length === 0);
+        els.bBorrow.classList.toggle('borrow-active', gameState.bot.deck.length === 0);
     }
 
-    init();
+    function checkWinCondition() {
+        // Rule H.2.1: Game ends when Foundation is empty
+        let pEmpty = gameState.player.foundation.flat().length === 0;
+        let bEmpty = gameState.bot.foundation.flat().length === 0;
+
+        if(pEmpty || bEmpty) {
+            endGame(pEmpty ? 'player' : 'bot');
+        }
+    }
+
+    function endGame(winner) {
+        gameState.gameOver = true;
+        gameState.gameActive = false;
+        
+        let msg = winner === 'player' ? "YOU WON THE ROUND!" : "AI WON THE ROUND!";
+        els.overlay.querySelector('h1').innerText = msg;
+        els.overlay.classList.remove('hidden');
+
+        // Logic for next round (Combine sidepot into deck) would go here
+        document.getElementById('btn-next-round').onclick = () => location.reload(); // Simple reload for now
+    }
+
+    // BOOT
+    initGame();
 });
