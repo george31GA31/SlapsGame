@@ -3,90 +3,117 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Match Setup</title>
+    <title>ISF - International Slaps Federation</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Montagu+Slab:wght@500;700&family=Segoe+UI:wght@400;600;700&display=swap" rel="stylesheet">
 </head>
-<body class="setup-body">
-    <div class="bg-gradient"></div>
-    
-    <div class="setup-card">
-        <div class="setup-header">
-            <a href="index.html" class="back-btn"><i class="fa-solid fa-chevron-left"></i></a>
-            <h2>MATCH CONFIGURATION</h2>
-        </div>
+<body>
 
-        <div class="bot-profile-container">
-            <div class="avatar-ring" id="avatar-ring">
-                <i class="fa-solid fa-robot" id="bot-icon"></i>
+    <div class="app-container">
+        
+        <nav class="sidebar-left">
+            <div class="logo-area">
+                <img src="https://placehold.co/150x60/21201d/ff7575?text=ISF+Logo" alt="ISF Logo" class="isf-logo">
             </div>
-            <h1 id="difficulty-title">ROOKIE</h1>
-            <p class="bot-desc" id="difficulty-desc">Reaction Time: ~3.0s</p>
-        </div>
 
-        <div class="controls-area">
-            <div class="slider-header">
-                <span>DIFFICULTY</span>
-                <span id="level-display" class="level-badge">LVL 1</span>
-            </div>
-            <div class="custom-slider-wrapper">
-                <input type="range" min="1" max="10" value="5" class="pro-slider" id="difficulty-slider">
-                <div class="slider-track-fill" id="track-fill"></div>
-            </div>
-            <div class="slider-labels">
-                <span>Easy</span>
-                <span>Master</span>
-            </div>
-        </div>
+            <ul class="nav-links">
+                <li><a href="#" class="disabled"><i class="fa-solid fa-hand-paper"></i> Play</a></li>
+                <li><a href="#" class="disabled"><i class="fa-solid fa-puzzle-piece"></i> Puzzles</a></li>
+                <li><a href="#" class="disabled"><i class="fa-solid fa-graduation-cap"></i> Learn</a></li>
+                <li><a href="#" class="disabled"><i class="fa-solid fa-binoculars"></i> Watch</a></li>
+                <li><a href="#" class="disabled"><i class="fa-regular fa-newspaper"></i> News</a></li>
+                <li><a href="#" class="disabled"><i class="fa-solid fa-users"></i> Social</a></li>
+                <li><a href="#" class="disabled"><i class="fa-solid fa-ellipsis"></i> More</a></li>
+            </ul>
 
-        <a href="game.html" class="btn-launch" id="start-btn">
-            INITIALIZE MATCH <i class="fa-solid fa-play"></i>
-        </a>
+            <div class="nav-search">
+                <input type="text" placeholder="Search" disabled>
+                <i class="fa-solid fa-magnifying-glass search-icon"></i>
+            </div>
+
+            <div class="auth-buttons">
+                <button class="btn-signup disabled">Sign Up</button>
+                <button class="btn-login disabled">Log In</button>
+            </div>
+
+            <div class="sidebar-footer">
+                <div class="footer-item"><i class="fa-solid fa-globe"></i> English</div>
+                <div class="footer-item"><i class="fa-solid fa-circle-half-stroke"></i> Light UI</div>
+                <div class="footer-item"><i class="fa-solid fa-circle-question"></i> Support</div>
+            </div>
+        </nav>
+
+        <main class="game-board-area">
+            
+            <div class="player-profile opponent">
+                <div class="avatar"></div>
+                <span class="username">Opponent</span>
+            </div>
+
+            <div class="board-center">
+                <img src="https://placehold.co/500x500/142819/ff7575?text=Place+Ace+Cards+Here" alt="Slaps Table" class="hero-cards">
+            </div>
+
+            <div class="player-profile player">
+                <div class="avatar"></div>
+                <span class="username">Player</span>
+            </div>
+
+        </main>
+
+        <aside class="sidebar-right">
+            
+            <div class="menu-header">
+                <i class="fa-solid fa-hand-back-fist icon-slap"></i>
+                <h1>Play Slaps</h1>
+            </div>
+
+            <div class="menu-options">
+                
+                <div class="menu-card disabled">
+                    <div class="card-icon"><i class="fa-solid fa-bolt"></i></div>
+                    <div class="card-text">
+                        <h3>Play Online</h3>
+                        <p>Play vs a person of similar skill</p>
+                    </div>
+                </div>
+
+                <div class="menu-card disabled">
+                    <div class="card-icon"><i class="fa-solid fa-robot"></i></div>
+                    <div class="card-text">
+                        <h3>Play Bots</h3>
+                        <p>Challenge a bot from Easy to Master</p>
+                    </div>
+                </div>
+
+                <div class="menu-card disabled">
+                    <div class="card-icon"><i class="fa-solid fa-handshake-simple"></i></div>
+                    <div class="card-text">
+                        <h3>Play a Friend</h3>
+                        <p>Invite a friend to a game of Slaps</p>
+                    </div>
+                </div>
+
+                <div class="menu-card disabled">
+                    <div class="card-icon"><i class="fa-solid fa-medal"></i></div>
+                    <div class="card-text">
+                        <h3>Tournaments</h3>
+                        <p>Join an Arena where anyone can win</p>
+                    </div>
+                </div>
+
+            </div>
+
+            <div class="menu-footer">
+                <div class="footer-btn disabled"><i class="fa-solid fa-box-archive"></i> Game History</div>
+                <div class="footer-btn disabled"><i class="fa-solid fa-chart-simple"></i> Leaderboard</div>
+            </div>
+
+        </aside>
+
     </div>
 
-    <script>
-        const slider = document.getElementById('difficulty-slider');
-        const levelDisplay = document.getElementById('level-display');
-        const title = document.getElementById('difficulty-title');
-        const desc = document.getElementById('difficulty-desc');
-        const botIcon = document.getElementById('bot-icon');
-        const avatarRing = document.getElementById('avatar-ring');
-        const trackFill = document.getElementById('track-fill');
-
-        const data = [
-            {n:"ROOKIE",c:"#81b64c",d:"~3.0s"},
-            {n:"NOVICE",c:"#81b64c",d:"~2.5s"},
-            {n:"AMATEUR",c:"#81b64c",d:"~2.0s"},
-            {n:"INTERMEDIATE",c:"#e6912c",d:"~1.5s"},
-            {n:"SKILLED",c:"#e6912c",d:"~1.2s"},
-            {n:"GOOD",c:"#e6912c",d:"~1.0s"},
-            {n:"ADVANCED",c:"#e6912c",d:"~0.8s"},
-            {n:"PROVEN",c:"#cc3333",d:"~0.6s"},
-            {n:"MASTER",c:"#cc3333",d:"~0.4s"},
-            {n:"UNBEATABLE",c:"#cc3333",d:"~0.2s"}
-        ];
-
-        function update(v) {
-            const d = data[v-1];
-            title.innerText = d.n; 
-            desc.innerText = "Reaction Time: " + d.d; 
-            levelDisplay.innerText = "LVL "+v;
-            
-            // Visual Updates
-            trackFill.style.width = ((v-1)/9)*100 + "%";
-            botIcon.style.color = d.c; 
-            avatarRing.style.borderColor = d.c; 
-            levelDisplay.style.backgroundColor = d.c; 
-            trackFill.style.backgroundColor = d.c;
-            
-            // Save logic for game.js to read
-            localStorage.setItem('slapsDifficulty', v);
-        }
-
-        slider.oninput = function(){update(this.value)}; 
-        // Init with stored value or default 5
-        update(localStorage.getItem('slapsDifficulty') || 5);
-        slider.value = localStorage.getItem('slapsDifficulty') || 5;
-    </script>
+    <script src="script.js"></script> 
 </body>
 </html>
