@@ -100,8 +100,17 @@ body {
     background: radial-gradient(circle at center, #3a5e45 0%, #1e3324 100%);
 }
 .game-board {
-    width: 95%; height: 95%; max-width: 1400px;
-    display: flex; flex-direction: column; justify-content: space-between;
+    width: 95%; 
+    height: 95%; 
+    max-width: 1200px;
+    display: flex; 
+    flex-direction: column; 
+    justify-content: space-between;
+    
+    /* THE FIX: Force it to the center horizontally */
+    margin: 0 auto; 
+    position: relative;
+    left: 0; right: 0;
 }
 
 .foundation-box {
