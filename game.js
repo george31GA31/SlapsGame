@@ -1,5 +1,5 @@
 /* =========================================
-   SLAPS ENGINE v7.1 - COMPLETE & FIXED
+   SLAPS ENGINE v8.0 - SMART AI & LOGIC FIXES
    ========================================= */
 
 const gameState = {
@@ -13,11 +13,11 @@ const gameState = {
     gameActive: false,
     playerReady: false,
     aiReady: false,
+    aiLoopRunning: false,
     
     draggedCard: null,
     globalZ: 100,
     
-    // AI State
     difficulty: 1, 
     aiProcessing: false 
 };
@@ -25,6 +25,9 @@ const gameState = {
 const SUITS = ['hearts', 'diamonds', 'clubs', 'spades'];
 const RANKS = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'jack', 'queen', 'king', 'ace'];
 const CARD_BACK_SRC = 'assets/cards/back_of_card.png'; 
+
+// "Lanes" for AI to organize its cards (Percent positions)
+const AI_LANES = [5, 29, 53, 77]; 
 
 class Card {
     constructor(suit, rank, value) {
@@ -35,15 +38,14 @@ class Card {
         this.isFaceUp = false;
         this.owner = null;
         this.element = null; 
+        this.laneIndex = 0; // Track which lane (0-3) the card is in
     }
 }
 
 // --- INITIALIZATION ---
 window.onload = function() {
-    // 1. Get Difficulty from Setup Page (Defaults to 1 if missing)
     const storedDiff = localStorage.getItem('slapsDifficulty');
     if (storedDiff) gameState.difficulty = parseInt(storedDiff);
-    
     console.log("AI Difficulty Loaded:", gameState.difficulty);
     initGame();
 };
@@ -87,13 +89,14 @@ function dealFoundation(deck, owner) {
     const pileSizes = [4, 3, 2, 1]; 
     let currentLeftPercent = 5; 
 
-    pileSizes.forEach(size => {
+    pileSizes.forEach((size, laneIdx) => {
         let pileCards = deck.splice(0, size);
         
         pileCards.forEach((card, index) => {
             const img = document.createElement('img');
             img.className = 'game-card'; 
             card.owner = owner; 
+            card.laneIndex = laneIdx; // Assign Lane
 
             const isTopCard = (index === size - 1);
 
@@ -103,7 +106,6 @@ function dealFoundation(deck, owner) {
                 setCardFaceDown(img, card, owner);
             }
 
-            // Position
             img.style.left = `${currentLeftPercent}%`;
             
             let stackOffset = index * 5; 
@@ -154,8 +156,9 @@ function tryFlipCard(img, card) {
     }
 }
 
-// --- GAME FLOW ---
+// --- GAME FLOW (FIXED COUNTDOWN) ---
 function handlePlayerDeckClick() {
+    // 1. If Game Not Active -> Start First Countdown
     if (!gameState.gameActive) {
         if (gameState.playerReady) return;
         
@@ -170,18 +173,23 @@ function handlePlayerDeckClick() {
         return;
     }
 
-    // In-Game Draw Request
+    // 2. In-Game Draw Request
     if (gameState.gameActive) {
-        gameState.playerReady = true; 
-        document.getElementById('player-draw-deck').classList.add('deck-ready');
-        checkDrawCondition();
+        // Only allow click if NOT already ready
+        if (!gameState.playerReady) {
+            gameState.playerReady = true; 
+            document.getElementById('player-draw-deck').classList.add('deck-ready');
+            checkDrawCondition();
+        }
     }
 }
 
 function checkDrawCondition() {
+    // Only proceed if BOTH are ready
     if (gameState.playerReady && gameState.aiReady) {
         setTimeout(() => {
-            performReveal();
+            // FIX: Always run the countdown for draws
+            startCountdown();
         }, 500);
     }
 }
@@ -248,10 +256,9 @@ function renderCenterPile(side, card) {
     container.appendChild(img);
 }
 
-// --- INTELLIGENT AI SYSTEM ---
+// --- SMART AI BRAIN (SORT & MOVE) ---
 function startAILoop() {
     gameState.aiLoopRunning = true;
-    
     setInterval(() => {
         if (!gameState.gameActive || gameState.aiProcessing) return;
         attemptAIMove();
@@ -259,54 +266,100 @@ function startAILoop() {
 }
 
 function attemptAIMove() {
-    // 1. CALCULATE REACTION SPEED
     const diff = gameState.difficulty;
     const minTime = 4000 - ((diff - 1) * 388); 
     const maxTime = 6000 - ((diff - 1) * 500); 
     const reactionDelay = Math.random() * (maxTime - minTime) + minTime;
 
-    // 1. PRIORITY: CAN I PLAY A CARD?
     const activeCards = gameState.aiHand.filter(c => c.isFaceUp);
-    let bestMove = null;
 
+    // 1. PRIORITY: PLAY A CARD (Win condition)
+    let bestMove = null;
     for (let card of activeCards) {
-        if (checkPileLogic(card, gameState.centerPileLeft)) {
-            bestMove = { card: card, target: 'left' };
-            break; 
-        }
-        if (checkPileLogic(card, gameState.centerPileRight)) {
-            bestMove = { card: card, target: 'right' };
-            break;
-        }
+        if (checkPileLogic(card, gameState.centerPileLeft)) { bestMove = { c: card, t: 'left' }; break; }
+        if (checkPileLogic(card, gameState.centerPileRight)) { bestMove = { c: card, t: 'right' }; break; }
     }
 
     if (bestMove) {
         gameState.aiProcessing = true; 
-        console.log(`AI Reacting in ${Math.round(reactionDelay)}ms`);
-        
         setTimeout(() => {
-            animateAIMove(bestMove.card, bestMove.target, () => {
-                playCardToCenter(bestMove.card, bestMove.card.element);
+            animateAIMove(bestMove.c, bestMove.t, () => {
+                playCardToCenter(bestMove.c, bestMove.c.element);
                 gameState.aiProcessing = false; 
             });
         }, reactionDelay);
         return; 
     }
 
-    // 2. PRIORITY: FLIP A CARD
+    // 2. PRIORITY: SORT & FLIP (The Human Logic)
+    // Does AI have a face-down card that is blocked by a face-up card?
+    // And does it have an empty lane to move the blocker to?
     if (activeCards.length < 4) {
-        const hiddenCard = gameState.aiHand.find(c => !c.isFaceUp);
-        if (hiddenCard) {
+        
+        // Group cards by Lane
+        let lanes = [[], [], [], []];
+        gameState.aiHand.forEach(c => lanes[c.laneIndex].push(c));
+
+        // Find a "Blocker" (Face Up card sitting on Face Down cards)
+        let blockerInfo = null;
+        let emptyLaneIndex = -1;
+
+        // Check for empty lanes
+        for (let i = 0; i < 4; i++) {
+            if (lanes[i].length === 0) emptyLaneIndex = i;
+        }
+
+        if (emptyLaneIndex !== -1) {
+            // Look for a pile to unblock
+            for (let i = 0; i < 4; i++) {
+                let pile = lanes[i];
+                if (pile.length > 1) {
+                    let top = pile[pile.length - 1];
+                    let below = pile[pile.length - 2];
+                    
+                    // If Top is Up AND Below is Down -> We should move Top!
+                    if (top.isFaceUp && !below.isFaceUp) {
+                        blockerInfo = { card: top, oldLane: i };
+                        break;
+                    }
+                }
+            }
+        }
+
+        // EXECUTE SORT MOVE
+        if (blockerInfo) {
+            gameState.aiProcessing = true;
+            console.log("AI Sorting Board...");
+            setTimeout(() => {
+                // 1. Move the card to the empty lane
+                animateAIMoveToLane(blockerInfo.card, emptyLaneIndex, () => {
+                    // 2. Update Data
+                    blockerInfo.card.laneIndex = emptyLaneIndex;
+                    
+                    // 3. Flip the card that was revealed
+                    let pile = lanes[blockerInfo.oldLane];
+                    let revealedCard = pile[pile.length - 2]; // It's now the top
+                    setCardFaceUp(revealedCard.element, revealedCard, 'ai');
+                    
+                    gameState.aiProcessing = false;
+                });
+            }, reactionDelay * 0.8);
+            return;
+        }
+
+        // 3. PRIORITY: SIMPLE FLIP (If just a stack of face-downs)
+        const simpleHidden = gameState.aiHand.find(c => !c.isFaceUp && isTopOffPile(c));
+        if (simpleHidden) {
             gameState.aiProcessing = true;
             setTimeout(() => {
-                setCardFaceUp(hiddenCard.element, hiddenCard, 'ai');
+                setCardFaceUp(simpleHidden.element, simpleHidden, 'ai');
                 gameState.aiProcessing = false;
             }, reactionDelay * 0.5); 
             return;
         }
     }
 
-    // 3. PRIORITY: STUCK? CLICK DRAW DECK
+    // 4. PRIORITY: DRAW (Only if stuck)
     if (!bestMove && activeCards.length === 4) {
         if (!gameState.aiReady) {
             gameState.aiProcessing = true;
@@ -316,12 +369,18 @@ function attemptAIMove() {
                 document.getElementById('ai-draw-deck').classList.add('deck-ready');
                 gameState.aiProcessing = false;
                 checkDrawCondition();
-            }, 2000 + reactionDelay);
+            }, 1000 + reactionDelay);
         }
     }
 }
 
-// --- AI ANIMATION ---
+// Helper: Check if card is physically on top of its pile
+function isTopOffPile(card) {
+    let cardsInLane = gameState.aiHand.filter(c => c.laneIndex === card.laneIndex);
+    return cardsInLane[cardsInLane.length - 1] === card;
+}
+
+// --- AI ANIMATIONS ---
 function animateAIMove(card, targetSide, callback) {
     const el = card.element;
     const targetId = targetSide === 'left' ? 'center-pile-left' : 'center-pile-right';
@@ -339,7 +398,6 @@ function animateAIMove(card, targetSide, callback) {
     requestAnimationFrame(() => {
         const destX = targetRect.left + (targetRect.width / 2) - (startRect.width / 2);
         const destY = targetRect.top + (targetRect.height / 2) - (startRect.height / 2);
-        
         el.style.left = destX + 'px';
         el.style.top = destY + 'px';
         el.style.transform = 'rotate(0deg)'; 
@@ -348,10 +406,27 @@ function animateAIMove(card, targetSide, callback) {
     setTimeout(() => { callback(); }, 600); 
 }
 
-// --- HYBRID PHYSICS ENGINE (Player) ---
+// NEW: Animation for sorting cards between lanes
+function animateAIMoveToLane(card, laneIdx, callback) {
+    const el = card.element;
+    // Calculate destination based on Lane Percent
+    // Lane 0 = 5%, Lane 1 = 29%, etc.
+    const leftPercent = AI_LANES[laneIdx];
+    
+    // We need to move it in the DOM or absolute positioning
+    // Easiest way: Transition 'left' and 'top'
+    el.style.transition = 'all 0.5s ease';
+    el.style.left = `${leftPercent}%`;
+    el.style.top = '10px'; // Reset to top of pile position
+    el.style.zIndex = 10;  // Reset Z
+
+    setTimeout(() => { callback(); }, 500);
+}
+
+// --- PLAYER PHYSICS (UNLOCKED) ---
 function makeDraggable(img, cardData) {
     img.onmousedown = (e) => {
-        if (!gameState.gameActive) return; 
+        // REMOVED check for 'gameActive' -> You can move anytime now!
         e.preventDefault();
 
         gameState.globalZ++;
@@ -367,8 +442,9 @@ function makeDraggable(img, cardData) {
             let newLeft = pageX - shiftX - boxRect.left;
             let newTop = pageY - shiftY - boxRect.top;
 
+            // Boundary: Can't leave box unless Game is Active
             if (newTop < 0) { 
-                if (!checkLegalPlay(cardData)) newTop = 0; 
+                if (!gameState.gameActive || !checkLegalPlay(cardData)) newTop = 0; 
             }
 
             img.style.left = newLeft + 'px';
@@ -385,7 +461,7 @@ function makeDraggable(img, cardData) {
 
             img.style.transition = 'all 0.1s ease-out'; 
 
-            if (parseInt(img.style.top) < -10 && checkLegalPlay(cardData)) {
+            if (gameState.gameActive && parseInt(img.style.top) < -10 && checkLegalPlay(cardData)) {
                 playCardToCenter(cardData, img);
             }
         }
@@ -397,6 +473,7 @@ function makeDraggable(img, cardData) {
 
 // --- RULES & LOGIC ---
 function checkLegalPlay(card) {
+    if (!gameState.gameActive) return false;
     return checkPileLogic(card, gameState.centerPileLeft) || 
            checkPileLogic(card, gameState.centerPileRight);
 }
