@@ -123,7 +123,7 @@
     text-align: center;
     box-shadow: 0 10px 30px rgba(0,0,0,0.5);
     border: 1px solid #333;
-    z-index: 200; /* Ensure it sits on top */
+    z-index: 200; /* Ensure it sits on top of everything */
 }
 
 .setup-header {
@@ -135,24 +135,31 @@
 
 .setup-header i {
     font-size: 40px;
-    color: #ff7575; /* Default Pink */
+    /* The JS will change this color, but we set a default */
+    color: #66ff66; 
     display: block;
     margin-bottom: 10px;
     transition: color 0.3s ease, text-shadow 0.3s ease;
 }
 
-.difficulty-display h2 {
-    font-size: 42px;
-    font-weight: 900;
-    color: #f1c40f; 
-    margin-bottom: 5px;
+.difficulty-display {
+    margin-bottom: 30px;
 }
 
+/* The Big Number (1-10) */
 .diff-number {
     font-size: 80px;
     font-weight: 900;
     line-height: 1;
-    margin-bottom: 10px;
+    margin-bottom: 5px;
+    transition: color 0.2s ease;
+}
+
+/* The Label (Rookie, Master, etc.) */
+.difficulty-display h2 {
+    font-size: 24px;
+    font-weight: 700;
+    margin: 0;
     transition: color 0.2s ease;
 }
 
@@ -161,6 +168,7 @@
     padding: 0 10px;
 }
 
+/* The Bar */
 .slider {
     -webkit-appearance: none;
     width: 100%;
@@ -171,13 +179,14 @@
     border: 1px solid #444;
 }
 
+/* The Draggable Circle */
 .slider::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
     width: 25px;
     height: 25px;
     border-radius: 50%;
-    background: #ff7575;
+    background: #ff7575; /* Always Pink for visibility */
     cursor: pointer;
     box-shadow: 0 0 10px rgba(255, 117, 117, 0.5);
     margin-top: -8px; 
