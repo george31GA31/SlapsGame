@@ -281,7 +281,7 @@ body {
 }
 
 /* =========================================
-   4. GAME BOARD STYLES
+   4. GAME BOARD STYLES (Symmetrical Layout)
    ========================================= */
 
 .game-body {
@@ -289,102 +289,94 @@ body {
     background: radial-gradient(circle at center, #3a5e45 0%, #1e3324 100%);
     height: 100vh; width: 100vw; overflow: hidden; 
     display: flex; justify-content: center; align-items: center;
-    position: relative; font-family: 'Montserrat', sans-serif;
+    font-family: 'Montserrat', sans-serif;
 }
 
 .game-board {
-    width: 95%; height: 100vh; max-width: 1400px;
-    display: flex; flex-direction: column; justify-content: space-between;
+    width: 95%;
+    height: 95%;
+    max-width: 1200px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
 }
 
-.zone { width: 100%; position: relative; }
-
-/* Foundation Zones */
-.foundation-zone {
-    height: 25%; display: flex; justify-content: center; align-items: center;
-    background-color: rgba(0,0,0,0.2); z-index: 10;
+/* --- THE FOUNDATION BOXES (Physical Boundaries) --- */
+.foundation-box {
+    height: 30%; /* AI and Player get 30% of screen each */
+    width: 100%;
+    border: 4px solid white; /* The "Physical Boundary" */
+    border-radius: 8px;
+    background-color: rgba(0,0,0,0.2);
+    position: relative; /* Allows cards to be moved freely inside */
 }
 
-.opponent-zone {
-    border-bottom: 4px solid white; margin-top: -20px; 
-    padding-top: 20px; align-items: flex-end; padding-bottom: 20px;
+/* --- THE CENTER ZONE --- */
+.center-zone {
+    height: 30%; /* Middle gets 30% too (Symmetrical) */
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 50px;
 }
 
-.player-zone {
-    border-top: 4px solid white; margin-bottom: -20px;
-    padding-bottom: 20px; align-items: flex-start; padding-top: 20px;
+/* Draw Deck Areas */
+.deck-area {
+    width: 120px;
+    height: 160px;
+    border: 2px dashed rgba(255,255,255,0.3);
+    border-radius: 8px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative;
 }
 
-.foundation-piles {
-    display: flex; gap: 20px; width: 60%; justify-content: center;
+.card-back { width: 100%; height: auto; border-radius: 5px; }
+
+.deck-count {
+    position: absolute;
+    font-size: 24px; font-weight: 900; color: #ff7575;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+    z-index: 10;
 }
 
-.fp-slot {
-    width: 12vh; max-width: 100px; aspect-ratio: 2.5 / 3.5;
-    display: flex; justify-content: center; align-items: center; position: relative;
+/* Battlefield (The Center Piles) */
+.battlefield {
+    width: 50%;
+    height: 100%;
+    border: 4px solid rgba(255,255,255,0.5); /* Lighter border for center */
+    border-radius: 12px;
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
 }
 
-/* Middle Zone */
-.middle-zone {
-    flex-grow: 1; display: flex; justify-content: center; align-items: center; gap: 5vw;
+.center-pile {
+    width: 110px; height: 150px;
+    border: 2px solid rgba(255,255,255,0.1);
+    border-radius: 6px;
 }
 
-/* Card Sizing */
+/* --- CARD STYLING --- */
+/* Important: Absolute position allows free dragging */
 .game-card {
-    width: 100% !important; height: auto !important; display: block;
-    border-radius: 5px; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.5));
+    width: 100px;
+    height: auto;
+    position: absolute; 
+    cursor: grab;
+    filter: drop-shadow(0 4px 6px rgba(0,0,0,0.5));
+    transition: transform 0.1s; /* Smooth pickup */
 }
+
+.game-card:active {
+    cursor: grabbing;
+    transform: scale(1.1); /* Slight grow when holding */
+    z-index: 1000; /* Ensure held card is on top */
+}
+
 .opponent-card { transform: rotate(180deg); }
-.player-card { cursor: pointer; transition: transform 0.1s; }
-.player-card:hover { transform: translateY(-10px); }
-
-/* Center & Decks */
-.center-pile-area {
-    width: 40%; height: 70%; border: 4px solid white;
-    display: flex; justify-content: space-around; align-items: center;
-    background-color: rgba(255,255,255,0.05);
-}
-.pile-slot {
-    width: 14vh; max-width: 120px; aspect-ratio: 2.5 / 3.5;
-    display: flex; justify-content: center; align-items: center;
-}
-.deck-slot {
-    width: 14vh; max-width: 120px; aspect-ratio: 2.5 / 3.5;
-    border: 3px dashed rgba(255,255,255,0.3); border-radius: 8px;
-    display: flex; justify-content: center; align-items: center;
-}
-.top-deck { align-self: flex-start; margin-top: 20px;}
-.bottom-deck { align-self: flex-end; margin-bottom: 20px;}
-
-/* Widgets */
-.ui-widget-left {
-    position: absolute; left: 20px; top: 50%; transform: translateY(-50%);
-    background-color: #1a1a1a; padding: 20px; border-radius: 8px;
-    display: flex; flex-direction: column; gap: 15px;
-    box-shadow: 0 5px 15px rgba(0,0,0,0.5); width: 140px; text-align: center; z-index: 100; 
-}
-.ui-widget-right {
-    position: absolute; top: 20px; right: 20px; background-color: #1a1a1a;
-    padding: 15px 25px; border-radius: 8px; border-bottom: 3px solid #4a8a5a;
-    box-shadow: 0 5px 15px rgba(0,0,0,0.5); display: flex; flex-direction: column;
-    gap: 8px; z-index: 100;
-}
-.stat-box { display: flex; flex-direction: column; gap: 2px; }
-.stat-label { font-size: 10px; color: #888; font-weight: 700; letter-spacing: 1px; }
-.stat-value { font-size: 32px; font-weight: 900; line-height: 1; }
-.text-red { color: #ff7575; }
-.btn-quit {
-    background: transparent; border: 1px solid #444; color: #888;
-    padding: 8px; font-size: 10px; font-weight: 700; border-radius: 4px;
-    cursor: pointer; margin-top: 10px; transition: all 0.2s;
-}
-.btn-quit:hover { border-color: #ff7575; color: #ff7575; }
-.score-row {
-    font-size: 12px; font-weight: 700; color: #fff;
-    display: flex; justify-content: space-between; gap: 15px;
-}
-.score-label { color: #888; width: 60px; }
-.score-data { color: #ff7575; }
 
 /* =========================================
    5. SETUP PAGE & SLIDER STYLES (BOLD EDITION)
