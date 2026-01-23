@@ -331,3 +331,200 @@ body {
     align-items: center;
     gap: 5px;
 }
+/* =========================================
+   GAME BOARD STYLES
+   ========================================= */
+
+/* Specific Body style for game page to ensure full screen */
+.game-body {
+    background-color: #2e4d38; /* Matches the lighter green in your layout image */
+    background: radial-gradient(circle at center, #3a5e45 0%, #1e3324 100%);
+    height: 100vh;
+    width: 100vw;
+    overflow: hidden;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+    font-family: 'Montserrat', sans-serif;
+}
+
+/* --- THE BOARD CONTAINER --- */
+.game-board {
+    width: 90%;
+    height: 90%;
+    max-width: 1200px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+/* --- ZONES (The White Outlines) --- */
+.zone {
+    border: 4px solid white;
+    width: 100%;
+    box-shadow: 0 0 15px rgba(0,0,0,0.2);
+}
+
+/* Top and Bottom Foundation Zones */
+.foundation-zone {
+    height: 25%; /* Takes up top and bottom quarters */
+    position: relative;
+    /* Flex to center cards inside */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+}
+
+/* Middle Battlefield Zone */
+.middle-zone {
+    height: 35%; /* The middle area is slightly taller */
+    border: none; /* We don't want a border around the whole middle, just the parts */
+    box-shadow: none;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 40px; /* Space between center box and side decks */
+}
+
+/* --- MIDDLE COMPONENTS --- */
+
+/* The Center Rectangle */
+.center-pile-area {
+    width: 50%;
+    height: 100%;
+    border: 4px solid white;
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    background-color: rgba(255,255,255,0.05); /* Slight highlight */
+}
+
+/* The Side Deck Shapes */
+/* Using pseudo-elements to mimic the "notched" shape in your image roughly */
+.deck-slot {
+    width: 15%;
+    height: 70%;
+    border: 4px solid white;
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* Card Styling within slots */
+.card-back {
+    width: 80%;
+    height: auto;
+    border-radius: 5px;
+    box-shadow: 2px 2px 5px rgba(0,0,0,0.5);
+}
+
+/* --- UI WIDGETS (Floating) --- */
+
+/* Left Widget (Counts & Quit) */
+.ui-widget-left {
+    position: absolute;
+    left: 30px;
+    top: 50%;
+    transform: translateY(-50%);
+    background-color: #1a1a1a;
+    padding: 20px;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+    width: 140px;
+    text-align: center;
+}
+
+.stat-box {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.stat-label {
+    font-size: 10px;
+    color: #888;
+    font-weight: 700;
+    letter-spacing: 1px;
+}
+
+.stat-value {
+    font-size: 32px;
+    font-weight: 900;
+    line-height: 1;
+}
+
+.text-red {
+    color: #ff7575; /* Your pink/red accent */
+}
+
+.btn-quit {
+    background: transparent;
+    border: 1px solid #444;
+    color: #888;
+    padding: 8px;
+    font-size: 10px;
+    font-weight: 700;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-top: 10px;
+    transition: all 0.2s;
+}
+
+.btn-quit:hover {
+    border-color: #ff7575;
+    color: #ff7575;
+}
+
+/* Right Widget (Scoreboard) */
+.ui-widget-right {
+    position: absolute;
+    top: 30px;
+    right: 30px;
+    background-color: #1a1a1a;
+    padding: 15px 25px;
+    border-radius: 8px;
+    border-bottom: 3px solid #4a8a5a; /* Green accent line */
+    box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.score-row {
+    font-size: 12px;
+    font-weight: 700;
+    color: #fff;
+    display: flex;
+    justify-content: space-between;
+    gap: 15px;
+}
+
+.score-label {
+    color: #888;
+    width: 60px;
+}
+
+.score-data {
+    color: #ff7575;
+}
+
+/* Responsive Tweak for smaller screens */
+@media (max-width: 1000px) {
+    .ui-widget-left {
+        left: 10px;
+        scale: 0.8;
+        transform-origin: left center;
+    }
+    .ui-widget-right {
+        right: 10px;
+        top: 10px;
+        scale: 0.8;
+        transform-origin: top right;
+    }
+}
