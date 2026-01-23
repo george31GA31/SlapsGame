@@ -46,10 +46,10 @@ body {
 
 /* UPDATED: Real Image Logo Styling */
 .isf-logo {
-    max-width: 100%;    /* Ensures it doesn't overflow the sidebar */
-    height: auto;       /* Maintains aspect ratio */
-    max-height: 80px;   /* Prevents it from being too tall */
-    display: block;     /* Removes weird spacing */
+    max-width: 100%;
+    height: auto;
+    max-height: 80px; /* Adjust this number to make the logo bigger/smaller */
+    display: block;
 }
 
 .nav-links {
