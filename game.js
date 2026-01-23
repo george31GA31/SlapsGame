@@ -1,5 +1,5 @@
 /* =========================================
-   SLAPS ENGINE v3.1 - FIXED SIZES
+   SLAPS ENGINE v4.0 - PILES & BOUNDARY FIX
    ========================================= */
 
 const gameState = {
@@ -7,13 +7,9 @@ const gameState = {
     aiDeck: [],
     centerPileLeft: [],
     centerPileRight: [],
-    
-    // State Flags
     gameActive: false,
     playerReady: false,
     aiReady: false,
-    
-    // Dragging
     draggedCard: null,
     originalPos: { left: 0, top: 0 }
 };
@@ -45,6 +41,7 @@ function initGame() {
     gameState.playerDeck = fullDeck.slice(0, 26);
     gameState.aiDeck = fullDeck.slice(26, 52);
 
+    // Deal exact 4-3-2-1 piles for both
     dealFoundation(gameState.playerDeck, 'player');
     dealFoundation(gameState.aiDeck, 'ai');
 }
@@ -66,21 +63,24 @@ function shuffle(array) {
     }
 }
 
-// --- DEALING LOGIC (4-3-2-1) ---
+// --- DEALING LOGIC (STRICT 4-3-2-1) ---
 function dealFoundation(deck, owner) {
     const container = document.getElementById(`${owner}-foundation-area`);
     container.innerHTML = ''; 
 
+    // The Official Pile Counts
     const pileSizes = [4, 3, 2, 1]; 
-    let currentLeftPercent = 10;    
+    let currentLeftPercent = 5; // Start slightly more to the left to fit everything
 
     pileSizes.forEach(size => {
+        // Take cards for this specific pile
         let pileCards = deck.splice(0, size);
         
         pileCards.forEach((card, index) => {
             const img = document.createElement('img');
-            img.className = 'game-card'; // This uses the CSS size (12vh), NOT 100%
+            img.className = 'game-card'; // CSS size is 12vh
             
+            // The last card in the pile is the TOP card (Face Up)
             const isTopCard = (index === size - 1);
 
             if (isTopCard) {
@@ -89,22 +89,28 @@ function dealFoundation(deck, owner) {
                 setCardFaceDown(img, card, owner);
             }
 
-            // POSITIONING
+            // HORIZONTAL POSITION (Spread piles out)
             img.style.left = `${currentLeftPercent}%`;
             
+            // VERTICAL STACKING
+            // AI stacks downwards, Player stacks upwards
             let stackOffset = index * 5; 
             if (owner === 'ai') {
-                 img.style.top = `${20 + stackOffset}px`;
+                 img.style.top = `${10 + stackOffset}px`;
             } else {
-                 img.style.top = `${50 - stackOffset}px`;
+                 // Push player cards down so the pile grows "up" towards the camera
+                 img.style.top = `${60 - stackOffset}px`;
             }
-            img.style.zIndex = index;
+            
+            // Z-Index: Ensure top card is always clickable and visible
+            img.style.zIndex = index + 10; 
 
             card.element = img;
             container.appendChild(img);
         });
 
-        currentLeftPercent += 20; 
+        // Move to next pile position (Wider gap)
+        currentLeftPercent += 24; 
     });
 }
 
@@ -116,6 +122,7 @@ function setCardFaceUp(img, card, owner) {
     if (owner === 'player') {
         img.classList.add('player-card');
         img.onclick = null; 
+        // THIS IS CRITICAL: Every face-up card gets drag logic
         makeDraggable(img, card); 
     } else {
         img.classList.add('opponent-card');
@@ -143,7 +150,7 @@ function tryFlipCard(img, card) {
     }
 }
 
-// --- THE REVEAL SEQUENCE ---
+// --- REVEAL SEQUENCE ---
 function handlePlayerDeckClick() {
     if (gameState.gameActive || gameState.playerReady) return;
 
@@ -200,29 +207,29 @@ function performReveal() {
     gameState.aiReady = false;
 }
 
-// --- THIS IS THE FIX FOR THE GIANT CARDS ---
 function renderCenterPile(side, card) {
     const id = side === 'left' ? 'center-pile-left' : 'center-pile-right';
     const container = document.getElementById(id);
     
     const img = document.createElement('img');
     img.src = card.imgSrc;
-    img.className = 'game-card'; // Uses the fixed 12vh CSS size
+    img.className = 'game-card'; // CSS size 12vh
     
-    // Center it
     img.style.left = '50%';
     img.style.top = '50%';
-    // Random rotation
     const rot = Math.random() * 20 - 10;
     img.style.transform = `translate(-50%, -50%) rotate(${rot}deg)`;
     
     container.appendChild(img);
 }
 
-// --- DRAG ENGINE ---
+// --- THE FIXED WALL LOGIC ---
 function makeDraggable(img, cardData) {
     let isDragging = false;
     let startX, startY, initialLeft, initialTop;
+    
+    // We get the box so we know where the "Wall" is
+    const box = document.getElementById('player-foundation-area');
 
     img.onmousedown = (e) => {
         e.preventDefault();
@@ -249,11 +256,17 @@ function makeDraggable(img, cardData) {
         let newTop = initialTop + dy;
         let newLeft = initialLeft + dx;
 
-        // BOUNDARY WALL LOGIC
-        if (newTop < -40) {
+        // BOUNDARY CHECK (THE FIX)
+        // 0 is exactly the top white line of the player box.
+        // If we go higher than 0 (negative numbers), we are trying to leave.
+        if (newTop < 0) {
+            
+            // If it is NOT a legal move...
             if (!checkLegalPlay(cardData)) {
-                newTop = -40; // Hit the wall
+                // STOP AT THE WALL (0px)
+                newTop = 0; 
             }
+            // If it IS legal, we allow it to pass (newTop stays negative)
         }
 
         img.style.left = `${newLeft}px`;
@@ -267,10 +280,18 @@ function makeDraggable(img, cardData) {
         img.style.cursor = 'grab';
         img.style.zIndex = 10; 
 
-        if (img.offsetTop < -50 && checkLegalPlay(cardData)) {
+        // DROP LOGIC
+        // If we crossed the line (-10 buffer) AND it's legal
+        if (img.offsetTop < -10 && checkLegalPlay(cardData)) {
             playCardToCenter(cardData, img);
         } else {
-            if (img.offsetTop <= -40 && !checkLegalPlay(cardData)) snapBack(img);
+            // If we are stuck at the wall (0) or inside positive space
+            // If it was an illegal attempt (stuck at 0), snap back for tidiness
+            // If it was a normal move inside the box, stay there.
+            if (img.offsetTop <= 0 && !checkLegalPlay(cardData)) {
+                 // Optional: Snap back if they slammed the wall
+                 // snapBack(img); 
+            }
         }
     };
 }
