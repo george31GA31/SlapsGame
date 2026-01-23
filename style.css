@@ -7,6 +7,7 @@
     --text-white: #ffffff;
     --text-grey: #b0b0b0;
     --font-main: 'Segoe UI', Helvetica, Arial, sans-serif;
+    --font-logo: 'Montagu Slab', serif;
 }
 
 * {
@@ -40,13 +41,22 @@ body {
 }
 
 .logo-area {
-    padding: 10px 0 20px 10px;
+    padding: 15px 0 25px 15px;
 }
 
-.isf-logo {
-    max-width: 100%;
-    height: auto;
-    display: block;
+/* NEW: Placeholder Logo Styling */
+.isf-logo-placeholder {
+    font-family: var(--font-logo);
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--text-white);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.isf-logo-placeholder i {
+    color: var(--accent-pink);
+    font-size: 28px;
 }
 
 .nav-links {
@@ -58,16 +68,18 @@ body {
     margin-bottom: 5px;
 }
 
+/* UPDATED: Bolder, larger links with hover state */
 .nav-links a {
     display: flex;
     align-items: center;
-    color: var(--text-grey);
+    color: #999; 
     text-decoration: none;
     padding: 12px 10px;
-    font-size: 15px;
+    font-size: 16px; 
     border-radius: 5px;
-    transition: background 0.2s;
-    font-weight: 600;
+    transition: background 0.2s, color 0.2s;
+    font-weight: 700;
+    letter-spacing: 0.5px;
 }
 
 .nav-links a i {
@@ -76,7 +88,7 @@ body {
 }
 
 .nav-links a:hover {
-    background-color: var(--bg-light);
+    background-color: #2a2926;
     color: var(--text-white);
 }
 
@@ -89,7 +101,7 @@ body {
 
 .nav-search input {
     width: 100%;
-    background-color: #1a1917; /* Slightly darker than sidebar */
+    background-color: #1a1917; 
     border: 1px solid #333;
     padding: 8px 10px 8px 35px;
     border-radius: 4px;
@@ -171,11 +183,15 @@ body {
     align-items: center;
 }
 
+/* UPDATED: Cards look more grounded and professional */
 .hero-cards {
-    max-width: 100%;
-    max-height: 100%;
-    transform: rotate(-5deg); /* Slight tilt like the image */
-    filter: drop-shadow(0 10px 20px rgba(0,0,0,0.5));
+    max-width: 80%;
+    height: auto;
+    transform: rotate(-5deg);
+    /* Better shadow for depth */
+    box-shadow: 0 20px 40px rgba(0,0,0,0.6); 
+    border-radius: 12px; 
+    border: 4px solid #1a3320; 
 }
 
 .player-profile {
@@ -200,7 +216,7 @@ body {
 .avatar {
     width: 40px;
     height: 40px;
-    background-color: #ccc; /* Placeholder grey */
+    background-color: #ccc; 
     border-radius: 4px;
 }
 
@@ -240,17 +256,42 @@ body {
     gap: 12px;
 }
 
+/* UPDATED: Highly polished menu cards with gradients and side-borders */
 .menu-card {
     background-color: var(--bg-light);
+    /* Subtle gradient background like the reference */
+    background-image: linear-gradient(to bottom, #2d2c29, #262522);
     border-radius: 8px;
-    padding: 15px;
+    padding: 12px 15px;
     display: flex;
     align-items: center;
     gap: 15px;
-    cursor: default; /* Disabled */
+    cursor: default;
+    /* Sharper shadow for a "button" feel */
+    box-shadow: 0 2px 5px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.05);
+    border: 1px solid #1e1e1c;
+    position: relative;
+    overflow: hidden;
     transition: transform 0.1s;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
 }
+
+/* Add a subtle highlight line on the left */
+.menu-card::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    height: 100%;
+    width: 4px;
+    background-color: transparent; 
+    transition: background-color 0.2s;
+}
+
+/* Specific highlights based on the icon color */
+.menu-card:nth-child(1)::before { background-color: #f1c40f; } /* Play Online - Yellow */
+.menu-card:nth-child(2)::before { background-color: #3498db; } /* Bots - Blue */
+.menu-card:nth-child(3)::before { background-color: #95a5a6; } /* Friend - Grey */
+.menu-card:nth-child(4)::before { background-color: #e67e22; } /* Tournaments - Orange */
 
 .card-icon {
     font-size: 24px;
@@ -264,20 +305,22 @@ body {
 .card-icon .fa-medal { color: #e67e22; } /* Orange */
 
 .card-text h3 {
-    font-size: 18px;
-    margin-bottom: 4px;
+    font-size: 17px;
+    margin-bottom: 3px;
     color: var(--text-white);
+    font-weight: 700;
 }
 
 .card-text p {
     font-size: 13px;
-    color: var(--text-grey);
+    color: #888; /* slightly darker grey for subtitles */
+    font-weight: 500;
 }
 
 /* Disabled State Logic */
 .disabled {
     pointer-events: none;
-    opacity: 0.9; /* Slight fade to show not interactive yet */
+    opacity: 0.9;
 }
 
 .menu-footer {
