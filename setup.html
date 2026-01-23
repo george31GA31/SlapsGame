@@ -71,7 +71,6 @@
         };
 
         // Smooth Color Gradient: Light Green -> Deep Red
-        // We use specific Hex codes to ensure it looks good at every step
         const colors = {
             1: "#66ff66", // Light Green
             2: "#88ff66",
@@ -85,138 +84,22 @@
             10: "#8b0000" // Deep Red
         };
 
-        // Function to update everything
         function updateUI(val) {
-            // Update Text
             label.innerText = levels[val];
             numberDisplay.innerText = val;
             
-            // Update Colors
             const color = colors[val];
             label.style.color = color;
             numberDisplay.style.color = color;
             icon.style.color = color;
-            
-            // Add a subtle glow to the icon matching the color
             icon.style.textShadow = `0 0 15px ${color}`;
         }
 
-        // Initialize on load
         updateUI(slider.value);
 
-        // Update on slide
         slider.oninput = function() {
             updateUI(this.value);
         }
     </script>
 </body>
 </html>
-/* =========================================
-   SETUP PAGE & SLIDER STYLES (RESTORED)
-   ========================================= */
-
-.setup-card {
-    background-color: #21201d; /* Dark Sidebar Grey */
-    padding: 40px;
-    border-radius: 12px;
-    width: 450px;
-    text-align: center;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-    border: 1px solid #333;
-    z-index: 200; /* Ensure it sits on top of everything */
-}
-
-.setup-header {
-    color: #b0b0b0;
-    margin-bottom: 30px;
-    font-size: 14px;
-    letter-spacing: 2px;
-}
-
-.setup-header i {
-    font-size: 40px;
-    /* The JS will change this color, but we set a default */
-    color: #66ff66; 
-    display: block;
-    margin-bottom: 10px;
-    transition: color 0.3s ease, text-shadow 0.3s ease;
-}
-
-.difficulty-display {
-    margin-bottom: 30px;
-}
-
-/* The Big Number (1-10) */
-.diff-number {
-    font-size: 80px;
-    font-weight: 900;
-    line-height: 1;
-    margin-bottom: 5px;
-    transition: color 0.2s ease;
-}
-
-/* The Label (Rookie, Master, etc.) */
-.difficulty-display h2 {
-    font-size: 24px;
-    font-weight: 700;
-    margin: 0;
-    transition: color 0.2s ease;
-}
-
-.slider-container {
-    margin-bottom: 40px;
-    padding: 0 10px;
-}
-
-/* The Bar */
-.slider {
-    -webkit-appearance: none;
-    width: 100%;
-    height: 10px;
-    background: #1a1917;
-    border-radius: 5px;
-    outline: none;
-    border: 1px solid #444;
-}
-
-/* The Draggable Circle */
-.slider::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 25px;
-    height: 25px;
-    border-radius: 50%;
-    background: #ff7575; /* Always Pink for visibility */
-    cursor: pointer;
-    box-shadow: 0 0 10px rgba(255, 117, 117, 0.5);
-    margin-top: -8px; 
-    border: 2px solid white;
-}
-
-.slider-steps {
-    display: flex;
-    justify-content: space-between;
-    margin-top: 10px;
-    color: #888;
-    font-size: 12px;
-    font-weight: 700;
-}
-
-.btn-start {
-    width: 100%;
-    padding: 15px;
-    background-color: #142819;
-    color: white;
-    border: none;
-    border-radius: 6px;
-    font-size: 18px;
-    font-weight: 700;
-    cursor: pointer;
-    transition: background 0.2s;
-    border: 1px solid rgba(255,255,255,0.1);
-}
-
-.btn-start:hover {
-    background-color: #1e3a24;
-    border-color: #ff7575;
-}
