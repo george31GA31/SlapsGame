@@ -1,18 +1,25 @@
 /* =========================================
-   SLAPS ENGINE v5.0 - HYBRID PHYSICS
+   SLAPS ENGINE v7.0 - INTELLIGENT AI & ANIMATIONS
    ========================================= */
 
 const gameState = {
     playerDeck: [],
     aiDeck: [],
+    playerHand: [],
+    aiHand: [],
     centerPileLeft: [],
     centerPileRight: [],
+    
     gameActive: false,
     playerReady: false,
     aiReady: false,
-    // Physics State
+    
     draggedCard: null,
-    globalZ: 100 // Ensures dragged card is always on top
+    globalZ: 100,
+    
+    // AI State
+    difficulty: 1, // Default to Rookie
+    aiProcessing: false // Prevents AI from trying to do 2 things at once
 };
 
 const SUITS = ['hearts', 'diamonds', 'clubs', 'spades'];
@@ -26,12 +33,18 @@ class Card {
         this.value = value; 
         this.imgSrc = `assets/cards/${rank}_of_${suit}.png`;
         this.isFaceUp = false;
+        this.owner = null;
         this.element = null; 
     }
 }
 
 // --- INITIALIZATION ---
 window.onload = function() {
+    // 1. Get Difficulty from Setup Page (Defaults to 1 if missing)
+    const storedDiff = localStorage.getItem('slapsDifficulty');
+    if (storedDiff) gameState.difficulty = parseInt(storedDiff);
+    
+    console.log("AI Difficulty Loaded:", gameState.difficulty);
     initGame();
 };
 
@@ -42,7 +55,6 @@ function initGame() {
     gameState.playerDeck = fullDeck.slice(0, 26);
     gameState.aiDeck = fullDeck.slice(26, 52);
 
-    // Deal exact 4-3-2-1 piles
     dealFoundation(gameState.playerDeck, 'player');
     dealFoundation(gameState.aiDeck, 'ai');
 }
@@ -64,10 +76,13 @@ function shuffle(array) {
     }
 }
 
-// --- DEALING LOGIC (STRICT 4-3-2-1) ---
+// --- DEALING ---
 function dealFoundation(deck, owner) {
     const container = document.getElementById(`${owner}-foundation-area`);
     container.innerHTML = ''; 
+
+    if (owner === 'player') gameState.playerHand = [];
+    else gameState.aiHand = [];
 
     const pileSizes = [4, 3, 2, 1]; 
     let currentLeftPercent = 5; 
@@ -77,9 +92,9 @@ function dealFoundation(deck, owner) {
         
         pileCards.forEach((card, index) => {
             const img = document.createElement('img');
-            img.className = 'game-card'; // CSS size is 12vh
-            
-            // LOGIC: Top card is Face Up
+            img.className = 'game-card'; 
+            card.owner = owner; 
+
             const isTopCard = (index === size - 1);
 
             if (isTopCard) {
@@ -88,23 +103,22 @@ function dealFoundation(deck, owner) {
                 setCardFaceDown(img, card, owner);
             }
 
-            // POSITIONING
             img.style.left = `${currentLeftPercent}%`;
             
             let stackOffset = index * 5; 
-            if (owner === 'ai') {
-                 img.style.top = `${10 + stackOffset}px`;
-            } else {
-                 img.style.top = `${60 - stackOffset}px`;
-            }
+            if (owner === 'ai') img.style.top = `${10 + stackOffset}px`;
+            else img.style.top = `${60 - stackOffset}px`;
             
             img.style.zIndex = index + 10; 
 
             card.element = img;
             container.appendChild(img);
+            
+            if (owner === 'player') gameState.playerHand.push(card);
+            else gameState.aiHand.push(card);
         });
 
-        currentLeftPercent += 24; // Spacing
+        currentLeftPercent += 24; 
     });
 }
 
@@ -116,7 +130,7 @@ function setCardFaceUp(img, card, owner) {
     if (owner === 'player') {
         img.classList.add('player-card');
         img.onclick = null; 
-        makeDraggable(img, card); // Enable Physics
+        makeDraggable(img, card); 
     } else {
         img.classList.add('opponent-card');
     }
@@ -133,34 +147,51 @@ function setCardFaceDown(img, card, owner) {
 }
 
 function tryFlipCard(img, card) {
-    const container = document.getElementById('player-foundation-area');
-    const liveCards = container.querySelectorAll('.player-card').length;
-
+    const liveCards = gameState.playerHand.filter(c => c.isFaceUp).length;
     if (liveCards < 4) {
         setCardFaceUp(img, card, 'player');
-    } else {
-        console.log("Cannot flip: Max 4 cards active!");
     }
 }
 
-// --- REVEAL SEQUENCE ---
+// --- GAME FLOW ---
 function handlePlayerDeckClick() {
-    if (gameState.gameActive || gameState.playerReady) return;
+    // If game hasn't started, this triggers the countdown
+    if (!gameState.gameActive) {
+        if (gameState.playerReady) return;
+        
+        gameState.playerReady = true;
+        document.getElementById('player-draw-deck').classList.add('deck-ready');
 
-    gameState.playerReady = true;
-    document.getElementById('player-draw-deck').classList.add('deck-ready');
+        // AI "Reaction" to Ready
+        setTimeout(() => {
+            gameState.aiReady = true;
+            document.getElementById('ai-draw-deck').classList.add('deck-ready');
+            startCountdown();
+        }, 800);
+        return;
+    }
 
-    setTimeout(() => {
-        gameState.aiReady = true;
-        document.getElementById('ai-draw-deck').classList.add('deck-ready');
-        startCountdown();
-    }, 500);
+    // IN-GAME: Player wants to draw new cards (Stuck)
+    if (gameState.gameActive) {
+        gameState.playerReady = true; // Mark player as wanting to draw
+        document.getElementById('player-draw-deck').classList.add('deck-ready');
+        checkDrawCondition();
+    }
+}
+
+function checkDrawCondition() {
+    // If BOTH are ready, trigger reveal
+    if (gameState.playerReady && gameState.aiReady) {
+        // Short delay for visual clarity
+        setTimeout(() => {
+            performReveal();
+        }, 500);
+    }
 }
 
 function startCountdown() {
     const overlay = document.getElementById('countdown-overlay');
     overlay.classList.remove('hidden');
-
     let count = 3;
     overlay.innerText = count;
 
@@ -198,6 +229,11 @@ function performReveal() {
     gameState.gameActive = true;
     gameState.playerReady = false;
     gameState.aiReady = false;
+    
+    // Start or Reset AI Brain
+    if (!gameState.aiLoopRunning) {
+        startAILoop();
+    }
 }
 
 function renderCenterPile(side, card) {
@@ -206,7 +242,7 @@ function renderCenterPile(side, card) {
     
     const img = document.createElement('img');
     img.src = card.imgSrc;
-    img.className = 'game-card'; // Uses the fixed CSS size
+    img.className = 'game-card'; 
     
     img.style.left = '50%';
     img.style.top = '50%';
@@ -216,75 +252,165 @@ function renderCenterPile(side, card) {
     container.appendChild(img);
 }
 
-// --- NEW PHYSICS ENGINE (FROM YOUR OLD CODE) ---
-function makeDraggable(img, cardData) {
+// --- INTELLIGENT AI SYSTEM ---
+function startAILoop() {
+    gameState.aiLoopRunning = true;
     
-    img.onmousedown = (e) => {
-        // 1. Checks: Must be active game, must be player card
-        if (!gameState.gameActive) return; 
+    // The "Thinking" Loop
+    // We check frequently (every 500ms), but we only act if the "Reaction Timer" allows
+    setInterval(() => {
+        if (!gameState.gameActive || gameState.aiProcessing) return;
+
+        attemptAIMove();
+
+    }, 500);
+}
+
+function attemptAIMove() {
+    // 1. calculate reaction time based on difficulty (1-10)
+    // Level 1: 4000-6000ms
+    // Level 10: 500-1500ms
+    const diff = gameState.difficulty;
+    const minTime = 4000 - ((diff - 1) * 350); // scales down
+    const maxTime = 6000 - ((diff - 1) * 450); 
+    const reactionDelay = Math.random() * (maxTime - minTime) + minTime;
+
+    // 1. PRIORITY: CAN I PLAY A CARD?
+    const activeCards = gameState.aiHand.filter(c => c.isFaceUp);
+    let bestMove = null;
+
+    for (let card of activeCards) {
+        if (checkPileLogic(card, gameState.centerPileLeft)) {
+            bestMove = { card: card, target: 'left' };
+            break; 
+        }
+        if (checkPileLogic(card, gameState.centerPileRight)) {
+            bestMove = { card: card, target: 'right' };
+            break;
+        }
+    }
+
+    if (bestMove) {
+        gameState.aiProcessing = true; // Busy thinking...
         
-        // Prevent default browser drag (Ghost Image)
+        console.log(`AI found move. Waiting ${Math.round(reactionDelay)}ms`);
+        
+        setTimeout(() => {
+            // VISUAL ANIMATION: Drag and Drop
+            animateAIMove(bestMove.card, bestMove.target, () => {
+                // Logic AFTER animation finishes
+                playCardToCenter(bestMove.card, bestMove.card.element);
+                gameState.aiProcessing = false; // Ready for next thought
+            });
+        }, reactionDelay);
+        
+        return; // Exit, we found a move
+    }
+
+    // 2. PRIORITY: FLIP A CARD
+    // Only if we have space (< 4 active)
+    if (activeCards.length < 4) {
+        const hiddenCard = gameState.aiHand.find(c => !c.isFaceUp);
+        if (hiddenCard) {
+            gameState.aiProcessing = true;
+            // Shorter delay for flipping (it's easier)
+            setTimeout(() => {
+                setCardFaceUp(hiddenCard.element, hiddenCard, 'ai');
+                gameState.aiProcessing = false;
+            }, 1000);
+            return;
+        }
+    }
+
+    // 3. PRIORITY: STUCK? CLICK DRAW DECK
+    // If we have no moves AND no cards to flip
+    if (!bestMove && activeCards.length === 4) {
+        if (!gameState.aiReady) {
+            gameState.aiProcessing = true;
+            setTimeout(() => {
+                console.log("AI is stuck. Requesting Draw.");
+                gameState.aiReady = true;
+                document.getElementById('ai-draw-deck').classList.add('deck-ready');
+                gameState.aiProcessing = false;
+                checkDrawCondition();
+            }, 2000);
+        }
+    }
+}
+
+// --- AI ANIMATION (THE VISUAL DRAG) ---
+function animateAIMove(card, targetSide, callback) {
+    const el = card.element;
+    const targetId = targetSide === 'left' ? 'center-pile-left' : 'center-pile-right';
+    const targetEl = document.getElementById(targetId);
+
+    // 1. Detach from layout flow for smooth movement
+    const startRect = el.getBoundingClientRect();
+    const targetRect = targetEl.getBoundingClientRect();
+
+    // Set to fixed position so it floats above everything
+    el.style.position = 'fixed';
+    el.style.left = startRect.left + 'px';
+    el.style.top = startRect.top + 'px';
+    el.style.zIndex = 2000;
+    el.style.transition = 'all 0.6s ease-in-out'; // Smooth Glide
+
+    // 2. Trigger Move (Next Frame)
+    requestAnimationFrame(() => {
+        // Move to center of target pile
+        const destX = targetRect.left + (targetRect.width / 2) - (startRect.width / 2);
+        const destY = targetRect.top + (targetRect.height / 2) - (startRect.height / 2);
+        
+        el.style.left = destX + 'px';
+        el.style.top = destY + 'px';
+        el.style.transform = 'rotate(0deg)'; // Un-rotate the AI card for play
+    });
+
+    // 3. Cleanup after animation
+    setTimeout(() => {
+        callback(); 
+    }, 600); // Must match transition time
+}
+
+// --- HYBRID PHYSICS ENGINE (Player) ---
+function makeDraggable(img, cardData) {
+    img.onmousedown = (e) => {
+        if (!gameState.gameActive) return; 
         e.preventDefault();
 
-        // 2. Bring to front
         gameState.globalZ++;
         img.style.zIndex = gameState.globalZ;
-        img.style.transition = 'none'; // Disable smoothing for instant response
+        img.style.transition = 'none'; 
 
-        // 3. OFFSET MATH (This is the "Old Code" magic)
-        // We calculate exactly where you grabbed the card relative to its corner
         let shiftX = e.clientX - img.getBoundingClientRect().left;
         let shiftY = e.clientY - img.getBoundingClientRect().top;
-
-        // Store original position for Snap Back
-        let originalLeft = img.style.left;
-        let originalTop = img.style.top;
-
+        const box = document.getElementById('player-foundation-area');
+        
         function moveAt(pageX, pageY) {
-            // Calculate new position based on the offset
-            // We need to convert page coordinates to relative coordinates for the box
-            const box = document.getElementById('player-foundation-area');
             const boxRect = box.getBoundingClientRect();
-
             let newLeft = pageX - shiftX - boxRect.left;
             let newTop = pageY - shiftY - boxRect.top;
 
-            // --- THE WALL (Boundary Logic) ---
-            // 0 is the top edge of the box. 
-            // If trying to go OUT (negative), check if legal.
             if (newTop < 0) { 
-                if (!checkLegalPlay(cardData)) {
-                    newTop = 0; // Hit the Wall
-                }
+                if (!checkLegalPlay(cardData)) newTop = 0; 
             }
 
             img.style.left = newLeft + 'px';
             img.style.top = newTop + 'px';
         }
 
-        // Initial move to prevent jump
         moveAt(e.pageX, e.pageY);
 
-        function onMouseMove(event) {
-            moveAt(event.pageX, event.pageY);
-        }
+        function onMouseMove(event) { moveAt(event.pageX, event.pageY); }
 
         function onMouseUp(event) {
-            // Clean up listeners
             document.removeEventListener('mousemove', onMouseMove);
             document.removeEventListener('mouseup', onMouseUp);
 
-            img.style.transition = 'all 0.2s ease-out'; // Re-enable smoothing
+            img.style.transition = 'all 0.1s ease-out'; 
 
-            // DROP LOGIC
-            // If we crossed the line (buffer -10) AND it's legal
             if (parseInt(img.style.top) < -10 && checkLegalPlay(cardData)) {
                 playCardToCenter(cardData, img);
-            } else {
-                // If illegal or inside box, we essentially leave it (Free Roam)
-                // BUT if it's stuck against the wall (0), we just leave it there.
-                // The "Snap Back" in your old code reset it to the foundation slot.
-                // In this version, we usually want "Free Roam" inside the box.
             }
         }
 
@@ -293,7 +419,7 @@ function makeDraggable(img, cardData) {
     };
 }
 
-// --- RULE LOGIC ---
+// --- RULES & LOGIC ---
 function checkLegalPlay(card) {
     return checkPileLogic(card, gameState.centerPileLeft) || 
            checkPileLogic(card, gameState.centerPileRight);
@@ -301,13 +427,10 @@ function checkLegalPlay(card) {
 
 function checkPileLogic(card, targetPile) {
     if (targetPile.length === 0) return false;
-    
     const targetCard = targetPile[targetPile.length - 1];
     const diff = Math.abs(card.value - targetCard.value);
-    
     if (diff === 1) return true;
     if (diff === 12) return true;
-    
     return false;
 }
 
@@ -325,6 +448,18 @@ function playCardToCenter(card, imgElement) {
 
     if (target) {
         target.push(card);
+        // REMOVE from Hand Memory
+        if (card.owner === 'player') {
+            gameState.playerHand = gameState.playerHand.filter(c => c !== card);
+            // Reset "Ready" status if we played a card
+            gameState.playerReady = false;
+            document.getElementById('player-draw-deck').classList.remove('deck-ready');
+        } else {
+            gameState.aiHand = gameState.aiHand.filter(c => c !== card);
+            gameState.aiReady = false;
+            document.getElementById('ai-draw-deck').classList.remove('deck-ready');
+        }
+
         imgElement.remove(); 
         renderCenterPile(side, card); 
     }
