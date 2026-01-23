@@ -1,19 +1,18 @@
 /* =========================================
-   SLAPS ENGINE v2.1 - Face Down/Up Logic
+   SLAPS ENGINE v2.2 - FIXED DRAG & PILES
    ========================================= */
 
 const gameState = {
     playerFoundation: [], 
     aiFoundation: [],
-    centerPileLeft: [],
-    centerPileRight: [],
     draggedCard: null,
     originalPos: { left: 0, top: 0 }
 };
 
+// ASSETS CONFIGURATION
 const SUITS = ['hearts', 'diamonds', 'clubs', 'spades'];
 const RANKS = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'jack', 'queen', 'king', 'ace'];
-const CARD_BACK_SRC = 'assets/cards/back_of_card.png';
+const CARD_BACK_SRC = 'assets/cards/back_of_card.png'; 
 
 class Card {
     constructor(suit, rank, value) {
@@ -21,12 +20,12 @@ class Card {
         this.rank = rank;
         this.value = value; 
         this.imgSrc = `assets/cards/${rank}_of_${suit}.png`;
-        this.isFaceUp = false; // New property to track state
+        this.isFaceUp = false;
         this.element = null; 
     }
 }
 
-// --- SETUP ---
+// --- INITIALIZATION ---
 window.onload = function() {
     initGame();
 };
@@ -38,9 +37,11 @@ function initGame() {
     let playerDeck = fullDeck.slice(0, 26);
     let aiDeck = fullDeck.slice(26, 52);
 
+    // Deal specifically for Player and AI
     dealFoundation(playerDeck, 'player');
     dealFoundation(aiDeck, 'ai');
 
+    // Update the Draw Deck Counts
     document.getElementById('player-count').innerText = playerDeck.length;
     document.getElementById('ai-count').innerText = aiDeck.length;
 }
@@ -62,101 +63,94 @@ function shuffle(array) {
     }
 }
 
-// --- NEW DEALING LOGIC (4-3-2-1 with Face Down Rules) ---
+// --- THE PILE BUILDER (4-3-2-1) ---
 function dealFoundation(deck, owner) {
     const container = document.getElementById(`${owner}-foundation-area`);
-    container.innerHTML = ''; // Clear any existing cards
+    container.innerHTML = ''; // Clear board
 
-    // The ISF Pile Structure: 4, 3, 2, 1 cards
-    const pileSizes = [4, 3, 2, 1];
-    
-    // Spacing: Start at 10% width and space them out by 20%
-    let currentLeftPercent = 10; 
+    const pileSizes = [4, 3, 2, 1]; // The Official ISF Structure
+    let currentLeftPercent = 10;    // Start 10% from the left
 
     pileSizes.forEach(size => {
-        // Extract the cards for this specific pile
+        // Grab the cards for this specific pile
         let pileCards = deck.splice(0, size);
         
         pileCards.forEach((card, index) => {
             const img = document.createElement('img');
             img.className = 'game-card';
             
-            // LOGIC: Is this the TOP card of the pile?
-            // The last card in the array (index === size - 1) is the TOP card.
+            // LOGIC: Is this the Top Card?
+            // The last card in this sub-array is the top one.
             const isTopCard = (index === size - 1);
 
             if (isTopCard) {
-                // FACE UP
+                // FACE UP & INTERACTIVE
                 img.src = card.imgSrc;
                 card.isFaceUp = true;
                 
-                // Only Player's Face-Up cards are interactive
                 if (owner === 'player') {
                     img.classList.add('player-card');
-                    makeDraggable(img, card); 
+                    makeDraggable(img, card); // ENABLE DRAG
                 } else {
                     img.classList.add('opponent-card');
                 }
             } else {
-                // FACE DOWN
+                // FACE DOWN & LOCKED
                 img.src = CARD_BACK_SRC;
                 card.isFaceUp = false;
-                // No drag listeners added here, so it's locked in place
+                // We do NOT call makeDraggable here, so it's stuck.
             }
 
             // POSITIONING
-            // We use percentages for Left to keep it responsive/spread out
+            // Spread them out horizontally
             img.style.left = `${currentLeftPercent}%`;
             
-            // Stack effect: Face down cards are higher up (visually "underneath")
-            // owner === 'player' ? stack upwards : stack downwards (for AI)
-            let stackOffset = index * 15; 
+            // Stack them vertically so you can see how many are left
+            // Player piles stack UPWARDS slightly (to look like a stack)
+            // AI piles stack DOWNWARDS
+            let stackOffset = index * 5; 
             if (owner === 'ai') {
                  img.style.top = `${20 + stackOffset}px`;
             } else {
-                 // For player, we want piles to look like they are stacking towards the user
-                 // Or flat. Let's stack them slightly "up" so the top card covers the bottom
-                 img.style.top = `${50 + stackOffset}px`;
+                 img.style.top = `${50 - stackOffset}px`;
             }
             
-            // Z-Index ensures the Top card is visually on top of the pile
+            // Ensure top card is visually on top
             img.style.zIndex = index;
 
             card.element = img;
             container.appendChild(img);
         });
 
-        // Increase spacing for the next pile
-        currentLeftPercent += 22; // Wider gap between piles
+        // Add 20% spacing for the next pile
+        currentLeftPercent += 20; 
     });
 }
 
-// --- DRAG AND DROP (Click - Hold - Release) ---
+// --- DRAG ENGINE (PREVENTS GHOSTING) ---
 function makeDraggable(img, cardData) {
     let isDragging = false;
     let startX, startY, initialLeft, initialTop;
 
     img.addEventListener('mousedown', (e) => {
-        e.preventDefault(); // Prevents default browser "ghost image" drag
-        isDragging = true;
+        e.preventDefault(); // <--- THIS KILLS THE GHOST IMAGE
         
-        // Record where we clicked relative to the card
+        isDragging = true;
         startX = e.clientX;
         startY = e.clientY;
-        
-        // Record current card position
         initialLeft = img.offsetLeft;
         initialTop = img.offsetTop;
         
-        // Save for Snap Back
+        // Save position for snap-back
         gameState.originalPos = { left: img.style.left, top: img.style.top };
         
-        // Visual feedback
+        // Visuals
         img.style.cursor = 'grabbing';
-        img.style.zIndex = 1000; // Bring to absolute front while dragging
-        img.style.transform = 'scale(1.1)';
+        img.style.zIndex = 1000; // Float above everything
+        img.style.transform = 'scale(1.1)'; // Slight pop
     });
 
+    // We listen on 'window' so if you drag fast and mouse leaves the card, it keeps working
     window.addEventListener('mousemove', (e) => {
         if (!isDragging) return;
         
@@ -172,22 +166,18 @@ function makeDraggable(img, cardData) {
         isDragging = false;
         
         img.style.cursor = 'grab';
-        img.style.transform = 'scale(1)'; // Reset size
-        img.style.zIndex = 10; // Reset Z-index (but keep above face-down cards)
+        img.style.transform = 'scale(1)'; 
+        img.style.zIndex = 10; 
 
-        // BOUNDARY CHECK:
-        // Did we drag it high enough to hit the center zone? (Negative top relative to box)
-        // OR did we drop it back inside the box?
-        
+        // LOGIC: Did it leave the box?
+        // -50 means "50 pixels above the top edge of the player box"
         if (img.offsetTop < -50) { 
-            // Attempt Play Logic
             if (checkLegalPlay(cardData)) {
-                // Valid Play Code Here
+                console.log("Valid Move");
             } else {
                 snapBack(img);
             }
         } 
-        // If we just dropped it inside the box, it stays there (Free Roam)
     });
 }
 
@@ -196,12 +186,13 @@ function snapBack(img) {
     img.style.left = gameState.originalPos.left;
     img.style.top = gameState.originalPos.top;
     
+    // Reset transition after the snap finishes
     setTimeout(() => {
-        img.style.transition = "transform 0.1s"; // Remove position transition so drag feels instant next time
+        img.style.transition = "transform 0.1s"; 
     }, 200);
 }
 
 function checkLegalPlay(card) {
-    // Logic placeholder - currently rejects everything to test snap-back
+    // Currently returns false so you can test the "Snap Back" mechanics
     return false; 
 }
