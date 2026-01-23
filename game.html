@@ -5,10 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SLAPS - Match in Progress</title>
     <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700;900&display=swap" rel="stylesheet">
 </head>
-<body class="game-body">
+<body class="game-body" ondragstart="return false;" ondrop="return false;">
 
     <div class="ui-widget-left">
         <button class="btn-quit" onclick="window.location.href='index.html'">QUIT MATCH</button>
@@ -22,7 +21,7 @@
         <div class="center-zone">
             
             <div class="deck-area" id="ai-draw-deck">
-                <img src="assets/cards/back_of_card.png" class="card-back">
+                <img src="assets/cards/back_of_card.png" class="card-back" draggable="false">
                 <span class="deck-count" id="ai-count">26</span>
             </div>
 
@@ -32,7 +31,7 @@
             </div>
 
             <div class="deck-area" id="player-draw-deck">
-                <img src="assets/cards/back_of_card.png" class="card-back">
+                <img src="assets/cards/back_of_card.png" class="card-back" draggable="false">
                 <span class="deck-count" id="player-count">26</span>
             </div>
 
@@ -45,3 +44,4 @@
 
     <script src="game.js"></script>
 </body>
+</html>
