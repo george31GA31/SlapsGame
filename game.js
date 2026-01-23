@@ -1,82 +1,61 @@
 /* =========================================
-   SLAPS GAME ENGINE v1.1
-   Based on ISF Laws 2025-26
+   SLAPS ENGINE v2.0 - Symmetrical & Free Drag
    ========================================= */
 
-// --- GAME STATE OBJECT ---
 const gameState = {
-    playerDeck: [],
-    playerFoundation: [[], [], [], []], // 4 piles for the player
-    aiDeck: [],
-    aiFoundation: [[], [], [], []],     // 4 piles for the AI
+    playerFoundation: [], // Stores card objects
+    aiFoundation: [],
     centerPileLeft: [],
     centerPileRight: [],
-    gameActive: false,
-    selectedCard: null 
+    draggedCard: null,    // The card currently being held
+    originalPos: { x: 0, y: 0 } // Where the card was before dragging
 };
 
-// --- CONFIGURATION ---
-// These MUST match your image filenames exactly (case sensitive!)
 const SUITS = ['hearts', 'diamonds', 'clubs', 'spades'];
 const RANKS = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'jack', 'queen', 'king', 'ace'];
-const FILE_EXTENSION = ".png"; 
 
-// --- CARD CLASS ---
 class Card {
     constructor(suit, rank, value) {
         this.suit = suit;
         this.rank = rank;
         this.value = value; 
-        // Generates path like: "assets/cards/king_of_hearts.png"
-        this.imgSrc = `assets/cards/${rank}_of_${suit}${FILE_EXTENSION}`;
+        this.imgSrc = `assets/cards/${rank}_of_${suit}.png`;
+        this.element = null; // Will hold the HTML <img> tag
     }
 }
 
-/* =========================================
-   INITIALIZATION & SETUP
-   ========================================= */
+// --- SETUP ---
+window.onload = function() {
+    initGame();
+};
 
 function initGame() {
-    console.log("Initializing ISF Official Match...");
-    
-    // 1. Create a fresh 52-card deck
     let fullDeck = createDeck();
-    
-    // 2. Shuffle it randomly
     shuffle(fullDeck);
 
-    // 3. Deal 26 cards to each player
-    gameState.playerDeck = fullDeck.slice(0, 26);
-    gameState.aiDeck = fullDeck.slice(26, 52);
+    // Split Deck: 26 cards each
+    let playerDeck = fullDeck.slice(0, 26);
+    let aiDeck = fullDeck.slice(26, 52);
 
-    // 4. Build the Foundation Piles (4-3-2-1 Rule)
-    buildFoundation(gameState.playerDeck, gameState.playerFoundation);
-    buildFoundation(gameState.aiDeck, gameState.aiFoundation);
+    // Deal Foundations (4-3-2-1)
+    dealFoundation(playerDeck, 'player');
+    dealFoundation(aiDeck, 'ai');
 
-    // 5. Draw the initial board state
-    renderBoard();
-    
-    console.log("Match Ready. Foundations built.");
+    // Update Counts (Remainder is Draw Deck)
+    document.getElementById('player-count').innerText = playerDeck.length;
+    document.getElementById('ai-count').innerText = aiDeck.length;
 }
 
-// Generates the deck and assigns numerical values
 function createDeck() {
     let deck = [];
     SUITS.forEach(suit => {
         RANKS.forEach((rank, index) => {
-            // LOGIC: 
-            // Index 0 ('2') + 2 = Value 2
-            // Index 8 ('10') + 2 = Value 10
-            // Index 11 ('king') + 2 = Value 13
-            // Index 12 ('ace') + 2 = Value 14
-            let val = index + 2;
-            deck.push(new Card(suit, rank, val));
+            deck.push(new Card(suit, rank, index + 2)); // 2=2, Ace=14
         });
     });
     return deck;
 }
 
-// Standard Fisher-Yates Shuffle
 function shuffle(array) {
     for (let i = array.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
@@ -84,145 +63,116 @@ function shuffle(array) {
     }
 }
 
-// Distributes cards into the 4 sub-piles (4, 3, 2, 1 cards)
-function buildFoundation(deck, foundationArray) {
-    // We splice cards OUT of the deck and into the piles
-    foundationArray[0] = deck.splice(0, 4);
-    foundationArray[1] = deck.splice(0, 3);
-    foundationArray[2] = deck.splice(0, 2);
-    foundationArray[3] = deck.splice(0, 1);
+[cite_start]// THE 4-3-2-1 DEAL [cite: 430-434]
+function dealFoundation(deck, owner) {
+    const container = document.getElementById(`${owner}-foundation-area`);
+    
+    // We take the top 10 cards for the foundation
+    // Pile 1 (4 cards), Pile 2 (3 cards), Pile 3 (2 cards), Pile 4 (1 card)
+    const piles = [4, 3, 2, 1];
+    let currentX = 50; // Starting X position inside the box
+
+    piles.forEach(count => {
+        // Take cards from deck
+        let pileCards = deck.splice(0, count);
+        
+        // Render them slightly stacked
+        pileCards.forEach((card, index) => {
+            const img = document.createElement('img');
+            img.src = card.imgSrc;
+            img.className = 'game-card';
+            
+            // Only Player cards are draggable
+            if (owner === 'player') {
+                img.classList.add('player-card');
+                makeDraggable(img, card); // Enable Drag Logic
+            } else {
+                img.classList.add('opponent-card');
+            }
+
+            // Initial Position (Slightly stacked effect)
+            img.style.left = `${currentX + (index * 5)}px`;
+            img.style.top = `${30 - (index * 5)}px`; // Stack upwards slightly
+            
+            // Store reference
+            card.element = img;
+            container.appendChild(img);
+        });
+
+        currentX += 120; // Move to next pile position
+    });
 }
 
-/* =========================================
-   RENDERING (VISUALS)
-   ========================================= */
+// --- DRAG AND DROP MECHANICS ---
+function makeDraggable(img, cardData) {
+    let isDragging = false;
+    let startX, startY, initialLeft, initialTop;
 
-function renderBoard() {
-    // 1. Render Player Foundation
-    const pContainer = document.getElementById('player-foundation');
-    pContainer.innerHTML = ''; // Wipe current HTML
-    
-    gameState.playerFoundation.forEach((pile, index) => {
-        const slot = document.createElement('div');
-        slot.className = 'fp-slot'; // Uses the CSS sizing we fixed
+    img.addEventListener('mousedown', (e) => {
+        isDragging = true;
+        startX = e.clientX;
+        startY = e.clientY;
         
-        // Only draw a card if the pile has one
-        if (pile.length > 0) {
-            // The last card in the array is the "Top" face-up card
-            const topCard = pile[pile.length - 1];
-            
-            const img = document.createElement('img');
-            img.src = topCard.imgSrc;
-            img.className = 'game-card player-card';
-            
-            // Add Click Event
-            img.onclick = () => handleCardClick(index);
-            
-            slot.appendChild(img);
-        }
-        pContainer.appendChild(slot);
+        // Get current position (removes 'px' to do math)
+        initialLeft = img.offsetLeft;
+        initialTop = img.offsetTop;
+        
+        // Save for "Snap Back" if move is illegal
+        gameState.originalPos = { left: img.style.left, top: img.style.top };
+        
+        img.style.cursor = 'grabbing';
     });
 
-    // 2. Render AI Foundation (Top cards visible but Upside Down)
-    const aiContainer = document.getElementById('opponent-foundation');
-    aiContainer.innerHTML = '';
-    
-    gameState.aiFoundation.forEach(pile => {
-        const slot = document.createElement('div');
-        slot.className = 'fp-slot';
-        
-        if (pile.length > 0) {
-            const topCard = pile[pile.length - 1];
-            
-            const img = document.createElement('img');
-            img.src = topCard.imgSrc; 
-            img.className = 'game-card opponent-card'; // Rotated 180deg by CSS
-            
-            slot.appendChild(img);
-        }
-        aiContainer.appendChild(slot);
+    window.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        e.preventDefault();
+
+        // Calculate new position
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+
+        img.style.left = `${initialLeft + dx}px`;
+        img.style.top = `${initialTop + dy}px`;
     });
 
-    // 3. Update Deck Counts
-    document.getElementById('player-deck-count').innerText = gameState.playerDeck.length;
-    document.getElementById('ai-deck-count').innerText = gameState.aiDeck.length;
+    window.addEventListener('mouseup', (e) => {
+        if (!isDragging) return;
+        isDragging = false;
+        img.style.cursor = 'grab';
+
+        // BOUNDARY CHECK: Did card leave the Foundation Box?
+        // We check if the card is dragged ABOVE the box (negative Top value)
+        if (img.offsetTop < -50) { 
+            // Attempt to play to center
+            if (checkLegalPlay(cardData)) {
+                console.log("Valid Play!");
+                // (Future: Move card to center pile visually)
+                // For now, let's just log it works
+            } else {
+                // ILLEGAL MOVE: Snap back to original spot
+                snapBack(img);
+            }
+        }
+        // If inside box, do nothing (It stays where you dropped it = Free Movement)
+    });
 }
 
-/* =========================================
-   GAMEPLAY LOGIC
-   ========================================= */
-
-function handleCardClick(pileIndex) {
-    const pile = gameState.playerFoundation[pileIndex];
-    if (pile.length === 0) return; // Ignore empty piles
-
-    const card = pile[pile.length - 1]; // Get the clicked card object
+function snapBack(img) {
+    // Animate back to original position
+    img.style.transition = "all 0.2s ease";
+    img.style.left = gameState.originalPos.left;
+    img.style.top = gameState.originalPos.top;
     
-    console.log(`Clicked: ${card.rank} (Val: ${card.value})`); // DEBUG
-    
-    // Check Left Pile, then Right Pile
-    if (attemptPlay(card, 'left')) {
-        playCard(pileIndex, 'left');
-    } else if (attemptPlay(card, 'right')) {
-        playCard(pileIndex, 'right');
-    } else {
-        console.log("Move Invalid: No matching rank +/- 1");
-    }
+    // Remove transition after snap so dragging is fast again
+    setTimeout(() => {
+        img.style.transition = "transform 0.1s";
+    }, 200);
 }
 
-function attemptPlay(card, targetSide) {
-    let targetPile = targetSide === 'left' ? gameState.centerPileLeft : gameState.centerPileRight;
-    
-    // If center pile is empty, you cannot play (Game hasn't started/Reveal needed)
-    if (targetPile.length === 0) return false;
-
-    const targetCard = targetPile[targetPile.length - 1];
-    const diff = Math.abs(card.value - targetCard.value);
-
-    // Rule 1: Normal +/- 1 (e.g. 7 on 8, or 5 on 4)
-    if (diff === 1) return true;
-    
-    // Rule 2: Ace Loop (Ace is 14, Two is 2. Diff is 12)
-    // 14 on 2 is legal. 2 on 14 is legal.
-    if (diff === 12) return true; 
-
-    return false;
+// LOGIC CHECK (Law D.6)
+function checkLegalPlay(card) {
+    // Placeholder logic until we setup Center Piles fully
+    // For now, lets say ANY play is valid if Center is empty
+    // In next step, we will connect this to the Center Pile Arrays
+    return false; // Force "Snap Back" for now so you can test the boundary
 }
-
-function playCard(pileIndex, targetSide) {
-    // 1. Logic Move: Remove from foundation, Add to center
-    const pile = gameState.playerFoundation[pileIndex];
-    const card = pile.pop();
-    
-    if (targetSide === 'left') {
-        gameState.centerPileLeft.push(card);
-        updateCenterPile('left', card);
-    } else {
-        gameState.centerPileRight.push(card);
-        updateCenterPile('right', card);
-    }
-
-    // 2. Refresh the board to show the card underneath (if any)
-    renderBoard();
-}
-
-// Updates just the center pile visual (optimization)
-function updateCenterPile(side, card) {
-    const elementId = side === 'left' ? 'center-pile-left' : 'center-pile-right';
-    const container = document.getElementById(elementId);
-    
-    container.innerHTML = ''; // Remove previous top card visual
-    
-    const img = document.createElement('img');
-    img.src = card.imgSrc;
-    img.className = 'game-card played-card';
-    
-    // Random rotation for realistic "messy pile" look
-    const rotation = Math.random() * 20 - 10; 
-    img.style.transform = `rotate(${rotation}deg)`;
-    
-    container.appendChild(img);
-}
-
-// Start game on load
-window.onload = initGame;
