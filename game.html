@@ -11,55 +11,35 @@
 <body class="game-body">
 
     <div class="ui-widget-left">
-        <div class="stat-box">
-            <span class="stat-label">AI CARDS</span>
-            <span class="stat-value text-red" id="ai-deck-count">26</span>
-        </div>
-        <div class="stat-box">
-            <span class="stat-label">YOUR CARDS</span>
-            <span class="stat-value text-red" id="player-deck-count">26</span>
-        </div>
-        <button class="btn-quit" onclick="window.location.href='index.html'">QUIT</button>
-    </div>
-
-    <div class="ui-widget-right">
-        <div class="score-row">
-            <span class="score-label">ROUNDS</span>
-            <span class="score-data">YOU: <span id="player-rounds">0</span> AI: <span id="ai-rounds">0</span></span>
-        </div>
-        <div class="score-row">
-            <span class="score-label">SLAPS</span>
-            <span class="score-data">YOU: <span id="player-slaps">0</span> AI: <span id="ai-slaps">0</span></span>
-        </div>
+        <button class="btn-quit" onclick="window.location.href='index.html'">QUIT MATCH</button>
     </div>
 
     <div class="game-board">
         
-        <div class="foundation-piles" id="opponent-foundation">
-    </div>
-        <div class="zone middle-zone">
+        <div class="foundation-box opponent-box" id="ai-foundation-area">
+            </div>
+
+        <div class="center-zone">
             
-            <div class="deck-slot top-deck" id="ai-draw-deck">
-                <img src="assets/cards/back_of_card.png" class="game-card">
+            <div class="deck-area" id="ai-draw-deck">
+                <img src="assets/cards/back_of_card.png" class="card-back">
+                <span class="deck-count" id="ai-count">26</span>
             </div>
 
-            <div class="center-pile-area">
-                <div class="pile-slot left-pile" id="center-pile-left">
-                     <img src="assets/cards/2_of_clubs.png" class="game-card played-card"> 
-                </div>
-                <div class="pile-slot right-pile" id="center-pile-right">
-                     <img src="assets/cards/ace_of_spades.png" class="game-card played-card"> 
-                </div>
+            <div class="battlefield">
+                <div class="center-pile" id="center-pile-left"></div>
+                <div class="center-pile" id="center-pile-right"></div>
             </div>
 
-            <div class="deck-slot bottom-deck" id="player-draw-deck">
-                <img src="assets/cards/back_of_card.png" class="game-card">
+            <div class="deck-area" id="player-draw-deck">
+                <img src="assets/cards/back_of_card.png" class="card-back">
+                <span class="deck-count" id="player-count">26</span>
             </div>
 
         </div>
 
-       <div class="foundation-piles" id="player-foundation">
-    </div>
+        <div class="foundation-box player-box" id="player-foundation-area">
+            </div>
 
     </div>
 
