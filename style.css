@@ -1,4 +1,6 @@
-/* --- VARIABLES --- */
+/* =========================================
+   1. VARIABLES & RESET
+   ========================================= */
 :root {
     --bg-dark: #21201d;       /* Main Sidebar Grey */
     --bg-light: #262522;      /* Button/Card Grey */
@@ -30,9 +32,11 @@ body {
     width: 100%;
 }
 
-/* --- LEFT SIDEBAR --- */
+/* =========================================
+   2. SIDEBAR STYLES
+   ========================================= */
 .sidebar-left {
-    width: 240px; /* Fixed width sidebar */
+    width: 240px; 
     background-color: var(--bg-dark);
     display: flex;
     flex-direction: column;
@@ -44,11 +48,10 @@ body {
     padding: 15px 0 25px 15px;
 }
 
-/* UPDATED: Real Image Logo Styling */
 .isf-logo {
     max-width: 100%;
     height: auto;
-    max-height: 80px; /* Adjust this number to make the logo bigger/smaller */
+    max-height: 80px;
     display: block;
 }
 
@@ -61,7 +64,6 @@ body {
     margin-bottom: 5px;
 }
 
-/* UPDATED: Bolder, larger links with hover state */
 .nav-links a {
     display: flex;
     align-items: center;
@@ -85,7 +87,6 @@ body {
     color: var(--text-white);
 }
 
-/* Search Bar */
 .nav-search {
     position: relative;
     margin-bottom: 15px;
@@ -110,7 +111,6 @@ body {
     font-size: 12px;
 }
 
-/* Auth Buttons */
 .auth-buttons {
     display: flex;
     flex-direction: column;
@@ -128,7 +128,7 @@ body {
     font-weight: bold;
     font-size: 16px;
     text-shadow: 0 1px 2px rgba(0,0,0,0.2);
-    cursor: default; /* Disabled cursor */
+    cursor: default; 
 }
 
 .btn-login {
@@ -158,9 +158,11 @@ body {
     gap: 5px;
 }
 
-/* --- CENTER GAME BOARD --- */
+/* =========================================
+   3. HOME PAGE (CENTER & RIGHT)
+   ========================================= */
 .game-board-area {
-    flex-grow: 1; /* Takes up remaining space */
+    flex-grow: 1; 
     background-color: var(--bg-green);
     position: relative;
     display: flex;
@@ -169,19 +171,17 @@ body {
 }
 
 .board-center {
-    width: 60vh; /* Responsive to height */
+    width: 60vh; 
     height: 60vh;
     display: flex;
     justify-content: center;
     align-items: center;
 }
 
-/* UPDATED: Cards look more grounded and professional */
 .hero-cards {
     max-width: 80%;
     height: auto;
     transform: rotate(-5deg);
-    /* Better shadow for depth */
     box-shadow: 0 20px 40px rgba(0,0,0,0.6); 
     border-radius: 12px; 
     border: 4px solid #1a3320; 
@@ -196,24 +196,13 @@ body {
     font-weight: 600;
 }
 
-.player-profile.opponent {
-    top: 20px;
-    left: 20px;
-}
-
-.player-profile.player {
-    bottom: 20px;
-    left: 20px;
-}
+.player-profile.opponent { top: 20px; left: 20px; }
+.player-profile.player { bottom: 20px; left: 20px; }
 
 .avatar {
-    width: 40px;
-    height: 40px;
-    background-color: #ccc; 
-    border-radius: 4px;
+    width: 40px; height: 40px; background-color: #ccc; border-radius: 4px;
 }
 
-/* --- RIGHT SIDEBAR --- */
 .sidebar-right {
     width: 350px;
     background-color: var(--bg-dark);
@@ -233,294 +222,153 @@ body {
 }
 
 .menu-header h1 {
-    font-size: 28px;
-    font-weight: 900;
-    text-transform: uppercase;
+    font-size: 28px; font-weight: 900; text-transform: uppercase;
 }
 
 .icon-slap {
-    font-size: 24px;
-    color: #dacaa6; /* Tan color from image header icon */
+    font-size: 24px; color: #dacaa6;
 }
 
 .menu-options {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
+    display: flex; flex-direction: column; gap: 12px;
 }
 
-/* UPDATED: Highly polished menu cards with gradients and side-borders */
 .menu-card {
     background-color: var(--bg-light);
-    /* Subtle gradient background like the reference */
     background-image: linear-gradient(to bottom, #2d2c29, #262522);
     border-radius: 8px;
     padding: 12px 15px;
-    display: flex;
-    align-items: center;
-    gap: 15px;
+    display: flex; align-items: center; gap: 15px;
     cursor: default;
-    /* Sharper shadow for a "button" feel */
     box-shadow: 0 2px 5px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.05);
     border: 1px solid #1e1e1c;
-    position: relative;
-    overflow: hidden;
-    transition: transform 0.1s;
+    position: relative; overflow: hidden; transition: transform 0.1s;
 }
 
-/* Add a subtle highlight line on the left */
 .menu-card::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 0;
-    height: 100%;
-    width: 4px;
-    background-color: transparent; 
+    content: ''; position: absolute; left: 0; top: 0;
+    height: 100%; width: 4px; background-color: transparent; 
     transition: background-color 0.2s;
 }
 
-/* Specific highlights based on the icon color */
-.menu-card:nth-child(1)::before { background-color: #f1c40f; } /* Play Online - Yellow */
-.menu-card:nth-child(2)::before { background-color: #3498db; } /* Bots - Blue */
-.menu-card:nth-child(3)::before { background-color: #95a5a6; } /* Friend - Grey */
-.menu-card:nth-child(4)::before { background-color: #e67e22; } /* Tournaments - Orange */
+.menu-card:nth-child(1)::before { background-color: #f1c40f; }
+.menu-card:nth-child(2)::before { background-color: #3498db; }
+.menu-card:nth-child(3)::before { background-color: #95a5a6; }
+.menu-card:nth-child(4)::before { background-color: #e67e22; }
 
 .card-icon {
-    font-size: 24px;
-    width: 40px;
-    text-align: center;
+    font-size: 24px; width: 40px; text-align: center;
 }
-
-.card-icon .fa-bolt { color: #f1c40f; } /* Yellow */
-.card-icon .fa-robot { color: #3498db; } /* Blue */
-.card-icon .fa-handshake-simple { color: #95a5a6; } /* Grey */
-.card-icon .fa-medal { color: #e67e22; } /* Orange */
+.card-icon .fa-bolt { color: #f1c40f; }
+.card-icon .fa-robot { color: #3498db; }
+.card-icon .fa-handshake-simple { color: #95a5a6; }
+.card-icon .fa-medal { color: #e67e22; }
 
 .card-text h3 {
-    font-size: 17px;
-    margin-bottom: 3px;
-    color: var(--text-white);
-    font-weight: 700;
+    font-size: 17px; margin-bottom: 3px; color: var(--text-white); font-weight: 700;
 }
-
 .card-text p {
-    font-size: 13px;
-    color: #888; /* slightly darker grey for subtitles */
-    font-weight: 500;
+    font-size: 13px; color: #888; font-weight: 500;
 }
 
-/* Disabled State Logic */
-.disabled {
-    pointer-events: none;
-    opacity: 0.9;
-}
+.disabled { pointer-events: none; opacity: 0.9; }
 
 .menu-footer {
-    margin-top: auto; /* Pushes to bottom */
-    display: flex;
-    justify-content: space-between;
-    padding-top: 20px;
+    margin-top: auto; display: flex; justify-content: space-between; padding-top: 20px;
+}
+.footer-btn {
+    font-size: 12px; color: #dacaa6; font-weight: 600; display: flex; align-items: center; gap: 5px;
 }
 
-.footer-btn {
-    font-size: 12px;
-    color: #dacaa6; /* Tan/Gold color */
-    font-weight: 600;
-    display: flex;
-    align-items: center;
-    gap: 5px;
-}
 /* =========================================
-   GAME BOARD STYLES
+   4. GAME BOARD STYLES
    ========================================= */
 
-/* Specific Body style for game page */
 .game-body {
-    background-color: #1e3324; /* Dark green base */
+    background-color: #1e3324; 
     background: radial-gradient(circle at center, #3a5e45 0%, #1e3324 100%);
-    height: 100vh;
-    width: 100vw;
-    overflow: hidden; 
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    position: relative;
-    font-family: 'Montserrat', sans-serif;
+    height: 100vh; width: 100vw; overflow: hidden; 
+    display: flex; justify-content: center; align-items: center;
+    position: relative; font-family: 'Montserrat', sans-serif;
 }
 
-/* --- THE BOARD CONTAINER --- */
 .game-board {
-    width: 95%;
-    height: 100vh;
-    max-width: 1400px;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
+    width: 95%; height: 100vh; max-width: 1400px;
+    display: flex; flex-direction: column; justify-content: space-between;
 }
 
-/* --- ZONES (The Containers) --- */
-.zone {
-    width: 100%;
-    position: relative;
-}
+.zone { width: 100%; position: relative; }
 
-/* --- FOUNDATION ZONES (Top & Bottom) --- */
+/* Foundation Zones */
 .foundation-zone {
-    height: 25%; 
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    background-color: rgba(0,0,0,0.2); 
-    z-index: 10; /* Ensures they stay above other elements if overlaps happen */
+    height: 25%; display: flex; justify-content: center; align-items: center;
+    background-color: rgba(0,0,0,0.2); z-index: 10;
 }
 
-/* OPPONENT ZONE (TOP) */
 .opponent-zone {
-    border-bottom: 4px solid white;
-    /* This pushes the "box" up off the screen so no top border is visible */
-    margin-top: -20px; 
-    padding-top: 20px;
-    align-items: flex-end; /* Align cards to the bottom line */
-    padding-bottom: 20px;
+    border-bottom: 4px solid white; margin-top: -20px; 
+    padding-top: 20px; align-items: flex-end; padding-bottom: 20px;
 }
 
-/* PLAYER ZONE (BOTTOM) */
 .player-zone {
-    border-top: 4px solid white;
-    /* This pushes the "box" down off the screen so no bottom border is visible */
-    margin-bottom: -20px;
-    padding-bottom: 20px;
-    align-items: flex-start; /* Align cards to the top line */
-    padding-top: 20px;
+    border-top: 4px solid white; margin-bottom: -20px;
+    padding-bottom: 20px; align-items: flex-start; padding-top: 20px;
 }
 
-/* The invisible container holding the 4 piles */
 .foundation-piles {
-    display: flex;
-    gap: 20px; 
-    width: 60%; /* Restricts the total width of the 4 piles */
-    justify-content: center;
+    display: flex; gap: 20px; width: 60%; justify-content: center;
 }
 
-/* THE SLOTS - These control the card size now */
 .fp-slot {
-    width: 12vh; /* Responsive width based on screen height */
-    max-width: 100px;
-    aspect-ratio: 2.5 / 3.5; /* Forces a playing card shape */
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    position: relative;
+    width: 12vh; max-width: 100px; aspect-ratio: 2.5 / 3.5;
+    display: flex; justify-content: center; align-items: center; position: relative;
 }
 
-
-/* --- MIDDLE BATTLEFIELD ZONE --- */
+/* Middle Zone */
 .middle-zone {
-    flex-grow: 1; 
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    gap: 5vw; /* Responsive spacing */
+    flex-grow: 1; display: flex; justify-content: center; align-items: center; gap: 5vw;
 }
 
-/* --- CARD SIZING (THE FIX) --- */
+/* Card Sizing */
 .game-card {
-    /* Force the image to fit the slot */
-    width: 100% !important; 
-    height: auto !important;
-    display: block;
-    border-radius: 5px;
-    /* Slight shadow for pop */
-    filter: drop-shadow(0 4px 6px rgba(0,0,0,0.5));
+    width: 100% !important; height: auto !important; display: block;
+    border-radius: 5px; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.5));
 }
+.opponent-card { transform: rotate(180deg); }
+.player-card { cursor: pointer; transition: transform 0.1s; }
+.player-card:hover { transform: translateY(-10px); }
 
-/* Flip opponent cards */
-.opponent-card {
-    transform: rotate(180deg);
-}
-
-/* Player cursor */
-.player-card {
-    cursor: pointer;
-    transition: transform 0.1s;
-}
-
-.player-card:hover {
-    transform: translateY(-10px); /* Little pop up effect */
-}
-
-/* --- MIDDLE AREA COMPONENTS --- */
-
+/* Center & Decks */
 .center-pile-area {
-    width: 40%;
-    height: 70%;
-    border: 4px solid white;
-    display: flex;
-    justify-content: space-around;
-    align-items: center;
+    width: 40%; height: 70%; border: 4px solid white;
+    display: flex; justify-content: space-around; align-items: center;
     background-color: rgba(255,255,255,0.05);
 }
-
-/* The slots inside the center rectangle */
 .pile-slot {
-    width: 14vh; /* Slightly larger than foundation cards */
-    max-width: 120px;
-    aspect-ratio: 2.5 / 3.5;
-    display: flex;
-    justify-content: center;
-    align-items: center;
+    width: 14vh; max-width: 120px; aspect-ratio: 2.5 / 3.5;
+    display: flex; justify-content: center; align-items: center;
 }
-
 .deck-slot {
-    width: 14vh;
-    max-width: 120px;
-    aspect-ratio: 2.5 / 3.5;
-    border: 3px dashed rgba(255,255,255,0.3);
-    border-radius: 8px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
+    width: 14vh; max-width: 120px; aspect-ratio: 2.5 / 3.5;
+    border: 3px dashed rgba(255,255,255,0.3); border-radius: 8px;
+    display: flex; justify-content: center; align-items: center;
 }
-
 .top-deck { align-self: flex-start; margin-top: 20px;}
 .bottom-deck { align-self: flex-end; margin-bottom: 20px;}
 
-
-/* --- UI WIDGETS --- */
-/* Kept exactly as before, just ensuring Z-index is high */
+/* Widgets */
 .ui-widget-left {
-    position: absolute;
-    left: 20px;
-    top: 50%;
-    transform: translateY(-50%);
-    background-color: #1a1a1a;
-    padding: 20px;
-    border-radius: 8px;
-    display: flex;
-    flex-direction: column;
-    gap: 15px;
-    box-shadow: 0 5px 15px rgba(0,0,0,0.5);
-    width: 140px;
-    text-align: center;
-    z-index: 100; 
+    position: absolute; left: 20px; top: 50%; transform: translateY(-50%);
+    background-color: #1a1a1a; padding: 20px; border-radius: 8px;
+    display: flex; flex-direction: column; gap: 15px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.5); width: 140px; text-align: center; z-index: 100; 
 }
-
 .ui-widget-right {
-    position: absolute;
-    top: 20px;
-    right: 20px;
-    background-color: #1a1a1a;
-    padding: 15px 25px;
-    border-radius: 8px;
-    border-bottom: 3px solid #4a8a5a;
-    box-shadow: 0 5px 15px rgba(0,0,0,0.5);
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    z-index: 100;
+    position: absolute; top: 20px; right: 20px; background-color: #1a1a1a;
+    padding: 15px 25px; border-radius: 8px; border-bottom: 3px solid #4a8a5a;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.5); display: flex; flex-direction: column;
+    gap: 8px; z-index: 100;
 }
-
 .stat-box { display: flex; flex-direction: column; gap: 2px; }
 .stat-label { font-size: 10px; color: #888; font-weight: 700; letter-spacing: 1px; }
 .stat-value { font-size: 32px; font-weight: 900; line-height: 1; }
@@ -537,3 +385,63 @@ body {
 }
 .score-label { color: #888; width: 60px; }
 .score-data { color: #ff7575; }
+
+/* =========================================
+   5. SETUP PAGE & SLIDER STYLES
+   ========================================= */
+.setup-card {
+    background-color: #21201d; 
+    padding: 40px; border-radius: 12px; width: 450px; text-align: center;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5); border: 1px solid #333; z-index: 200;
+}
+
+.setup-header {
+    color: #b0b0b0; margin-bottom: 30px; font-size: 14px; letter-spacing: 2px;
+}
+
+.setup-header i {
+    font-size: 40px; color: #66ff66; display: block;
+    margin-bottom: 10px; transition: color 0.3s ease, text-shadow 0.3s ease;
+}
+
+.difficulty-display { margin-bottom: 30px; }
+
+.diff-number {
+    font-size: 80px; font-weight: 900; line-height: 1;
+    margin-bottom: 5px; transition: color 0.2s ease;
+}
+
+.difficulty-display h2 {
+    font-size: 24px; font-weight: 700; margin: 0; transition: color 0.2s ease;
+}
+
+.slider-container { margin-bottom: 40px; padding: 0 10px; }
+
+.slider {
+    -webkit-appearance: none; width: 100%; height: 10px;
+    background: #1a1917; border-radius: 5px; outline: none; border: 1px solid #444;
+}
+
+.slider::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 25px; height: 25px; border-radius: 50%;
+    background: #ff7575; cursor: pointer;
+    box-shadow: 0 0 10px rgba(255, 117, 117, 0.5);
+    margin-top: -8px; border: 2px solid white;
+}
+
+.slider-steps {
+    display: flex; justify-content: space-between;
+    margin-top: 10px; color: #888; font-size: 12px; font-weight: 700;
+}
+
+.btn-start {
+    width: 100%; padding: 15px; background-color: #142819;
+    color: white; border: none; border-radius: 6px;
+    font-size: 18px; font-weight: 700; cursor: pointer;
+    transition: background 0.2s; border: 1px solid rgba(255,255,255,0.1);
+}
+
+.btn-start:hover {
+    background-color: #1e3a24; border-color: #ff7575;
+}
