@@ -1,5 +1,5 @@
 /* =========================================
-   SLAPS ENGINE v8.1 - ANIMATION & LOGIC FIXES
+   SLAPS ENGINE v9.0 - SPEED CHECK & SCORING
    ========================================= */
 
 const gameState = {
@@ -10,9 +10,14 @@ const gameState = {
     centerPileLeft: [],
     centerPileRight: [],
     
+    // SCORE TRACKING
+    playerCount: 26,
+    aiCount: 26,
+
     gameActive: false,
     playerReady: false,
     aiReady: false,
+    aiLoopRunning: false,
     
     draggedCard: null,
     globalZ: 100,
@@ -24,8 +29,6 @@ const gameState = {
 const SUITS = ['hearts', 'diamonds', 'clubs', 'spades'];
 const RANKS = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'jack', 'queen', 'king', 'ace'];
 const CARD_BACK_SRC = 'assets/cards/back_of_card.png'; 
-
-// AI Lane positions (Percent)
 const AI_LANES = [5, 29, 53, 77]; 
 
 class Card {
@@ -44,7 +47,6 @@ class Card {
 window.onload = function() {
     const storedDiff = localStorage.getItem('slapsDifficulty');
     if (storedDiff) gameState.difficulty = parseInt(storedDiff);
-    console.log("AI Difficulty Loaded:", gameState.difficulty);
     initGame();
 };
 
@@ -57,6 +59,13 @@ function initGame() {
 
     dealFoundation(gameState.playerDeck, 'player');
     dealFoundation(gameState.aiDeck, 'ai');
+    
+    updateScoreboard();
+}
+
+function updateScoreboard() {
+    document.getElementById('score-player').innerText = gameState.playerCount;
+    document.getElementById('score-ai').innerText = gameState.aiCount;
 }
 
 function createDeck() {
@@ -118,9 +127,19 @@ function dealFoundation(deck, owner) {
             if (owner === 'player') gameState.playerHand.push(card);
             else gameState.aiHand.push(card);
         });
+        
+        // Update counts as we remove from deck
+        if(owner === 'player') gameState.playerCount -= size;
+        else gameState.aiCount -= size;
 
         currentLeftPercent += 24; 
     });
+    
+    // Since we subtracted during deal, reset to 26 initially? 
+    // Actually, logic is: Count = Cards Remaining (Hand + Deck).
+    // So we should just set it to 26 at start of `initGame` and subtract when played to center.
+    gameState.playerCount = 26;
+    gameState.aiCount = 26;
 }
 
 function setCardFaceUp(img, card, owner) {
@@ -214,13 +233,17 @@ function performReveal() {
         let pCard = gameState.playerDeck.pop();
         gameState.centerPileRight.push(pCard);
         renderCenterPile('right', pCard);
+        gameState.playerCount--; // Decrement score
     }
     
     if (gameState.aiDeck.length > 0) {
         let aCard = gameState.aiDeck.pop();
         gameState.centerPileLeft.push(aCard);
         renderCenterPile('left', aCard);
+        gameState.aiCount--; // Decrement score
     }
+    
+    updateScoreboard();
 
     gameState.gameActive = true;
     gameState.playerReady = false;
@@ -247,7 +270,7 @@ function renderCenterPile(side, card) {
     container.appendChild(img);
 }
 
-// --- SMART AI BRAIN ---
+// --- AI BRAIN ---
 function startAILoop() {
     gameState.aiLoopRunning = true;
     setInterval(() => {
@@ -264,7 +287,7 @@ function attemptAIMove() {
 
     const activeCards = gameState.aiHand.filter(c => c.isFaceUp);
 
-    // 1. PRIORITY: PLAY CARD
+    // 1. PLAY CARD
     let bestMove = null;
     for (let card of activeCards) {
         if (checkPileLogic(card, gameState.centerPileLeft)) { bestMove = { c: card, t: 'left' }; break; }
@@ -275,23 +298,28 @@ function attemptAIMove() {
         gameState.aiProcessing = true; 
         setTimeout(() => {
             animateAIMove(bestMove.c, bestMove.t, () => {
-                playCardToCenter(bestMove.c, bestMove.c.element);
+                // TRY TO PLAY (Race Condition Check happens inside playCardToCenter)
+                let success = playCardToCenter(bestMove.c, bestMove.c.element);
+                
+                if (!success) {
+                    // Snap back if failed
+                    console.log("AI was too slow! Snapping back.");
+                    animateSnapBack(bestMove.c);
+                }
                 gameState.aiProcessing = false; 
             });
         }, reactionDelay);
         return; 
     }
 
-    // 2. PRIORITY: SORT (Smart Human Logic)
+    // 2. SORT
     if (activeCards.length < 4) {
         let lanes = [[], [], [], []];
         gameState.aiHand.forEach(c => lanes[c.laneIndex].push(c));
         let blockerInfo = null;
         let emptyLaneIndex = -1;
 
-        for (let i = 0; i < 4; i++) {
-            if (lanes[i].length === 0) emptyLaneIndex = i;
-        }
+        for (let i = 0; i < 4; i++) { if (lanes[i].length === 0) emptyLaneIndex = i; }
 
         if (emptyLaneIndex !== -1) {
             for (let i = 0; i < 4; i++) {
@@ -309,7 +337,6 @@ function attemptAIMove() {
 
         if (blockerInfo) {
             gameState.aiProcessing = true;
-            console.log("AI Sorting Board...");
             setTimeout(() => {
                 animateAIMoveToLane(blockerInfo.card, emptyLaneIndex, () => {
                     blockerInfo.card.laneIndex = emptyLaneIndex;
@@ -333,16 +360,13 @@ function attemptAIMove() {
         }
     }
 
-    // 3. PRIORITY: DRAW CARD (The Fix)
-    // Draw if we have no moves AND (we have 4 cards up OR no hidden cards left to flip)
+    // 3. DRAW
     const hiddenCardsLeft = gameState.aiHand.filter(c => !c.isFaceUp).length;
-    
     if (!bestMove) {
         if (activeCards.length === 4 || hiddenCardsLeft === 0) {
             if (!gameState.aiReady) {
                 gameState.aiProcessing = true;
                 setTimeout(() => {
-                    console.log("AI Stuck -> Requesting Draw");
                     gameState.aiReady = true;
                     document.getElementById('ai-draw-deck').classList.add('deck-ready');
                     gameState.aiProcessing = false;
@@ -358,17 +382,19 @@ function isTopOffPile(card) {
     return cardsInLane[cardsInLane.length - 1] === card;
 }
 
-// --- ANIMATION FIX: FORCE RECT CALCULATION ---
+// --- ANIMATION ---
 function animateAIMove(card, targetSide, callback) {
     const el = card.element;
     const targetId = targetSide === 'left' ? 'center-pile-left' : 'center-pile-right';
     const targetEl = document.getElementById(targetId);
 
-    // FIX: Force browser to recognize current location before moving
     const startRect = el.getBoundingClientRect();
     const targetRect = targetEl.getBoundingClientRect();
+    
+    // Store original for snapback
+    card.originalLeft = el.style.left;
+    card.originalTop = el.style.top;
 
-    // If startRect is 0 (hidden), default to AI foundation top-left to avoid weird jumps
     const startLeft = startRect.left || 100;
     const startTop = startRect.top || 50;
 
@@ -381,7 +407,6 @@ function animateAIMove(card, targetSide, callback) {
     requestAnimationFrame(() => {
         const destX = targetRect.left + (targetRect.width / 2) - (startRect.width / 2);
         const destY = targetRect.top + (targetRect.height / 2) - (startRect.height / 2);
-        
         el.style.left = destX + 'px';
         el.style.top = destY + 'px';
         el.style.transform = 'rotate(0deg)'; 
@@ -390,26 +415,44 @@ function animateAIMove(card, targetSide, callback) {
     setTimeout(() => { callback(); }, 600); 
 }
 
+function animateSnapBack(card) {
+    const el = card.element;
+    // We need to revert 'fixed' position to the foundation container
+    // But since it's fixed, we can just animate it back to original Screen Coordinates?
+    // Simpler: Reset to foundation box styles
+    
+    // For now, let's just snap it visually
+    el.style.transition = 'none';
+    el.style.position = 'absolute';
+    el.style.left = card.originalLeft;
+    el.style.top = card.originalTop;
+    el.style.zIndex = 10;
+    // Add a red flash to show it failed
+    el.style.border = '2px solid red';
+    setTimeout(() => { el.style.border = 'none'; }, 500);
+}
+
 function animateAIMoveToLane(card, laneIdx, callback) {
     const el = card.element;
     const leftPercent = AI_LANES[laneIdx];
-    
     el.style.transition = 'all 0.5s ease';
     el.style.left = `${leftPercent}%`;
     el.style.top = '10px'; 
     el.style.zIndex = 10;  
-
     setTimeout(() => { callback(); }, 500);
 }
 
-// --- UNLOCKED PLAYER PHYSICS ---
+// --- PLAYER PHYSICS ---
 function makeDraggable(img, cardData) {
     img.onmousedown = (e) => {
         e.preventDefault();
-
         gameState.globalZ++;
         img.style.zIndex = gameState.globalZ;
         img.style.transition = 'none'; 
+        
+        // Store original for snapback
+        cardData.originalLeft = img.style.left;
+        cardData.originalTop = img.style.top;
 
         let shiftX = e.clientX - img.getBoundingClientRect().left;
         let shiftY = e.clientY - img.getBoundingClientRect().top;
@@ -419,11 +462,9 @@ function makeDraggable(img, cardData) {
             const boxRect = box.getBoundingClientRect();
             let newLeft = pageX - shiftX - boxRect.left;
             let newTop = pageY - shiftY - boxRect.top;
-
             if (newTop < 0) { 
                 if (!gameState.gameActive || !checkLegalPlay(cardData)) newTop = 0; 
             }
-
             img.style.left = newLeft + 'px';
             img.style.top = newTop + 'px';
         }
@@ -438,19 +479,26 @@ function makeDraggable(img, cardData) {
 
             img.style.transition = 'all 0.1s ease-out'; 
 
-            if (gameState.gameActive && parseInt(img.style.top) < -10 && checkLegalPlay(cardData)) {
-                playCardToCenter(cardData, img);
+            if (gameState.gameActive && parseInt(img.style.top) < -10) {
+                // ATTEMPT TO PLAY
+                let success = playCardToCenter(cardData, img);
+                
+                if (!success) {
+                    // IF FAILED (Race condition), Snap Back
+                    img.style.left = cardData.originalLeft;
+                    img.style.top = cardData.originalTop;
+                }
             }
         }
-
         document.addEventListener('mousemove', onMouseMove);
         document.addEventListener('mouseup', onMouseUp);
     };
 }
 
-// --- RULES ---
+// --- RULES & LOGIC ---
 function checkLegalPlay(card) {
     if (!gameState.gameActive) return false;
+    // This is the "Pre-Check" for UI feedback
     return checkPileLogic(card, gameState.centerPileLeft) || 
            checkPileLogic(card, gameState.centerPileRight);
 }
@@ -464,31 +512,45 @@ function checkPileLogic(card, targetPile) {
     return false;
 }
 
+// UPDATED: Now returns TRUE if successful, FALSE if failed
 function playCardToCenter(card, imgElement) {
     let target = null;
     let side = '';
 
-    if (checkPileLogic(card, gameState.centerPileLeft)) {
+    // DOUBLE CHECK: Is it STILL legal? (Race Condition Check)
+    const isLeftLegal = checkPileLogic(card, gameState.centerPileLeft);
+    const isRightLegal = checkPileLogic(card, gameState.centerPileRight);
+
+    if (isLeftLegal) {
         target = gameState.centerPileLeft;
         side = 'left';
-    } else if (checkPileLogic(card, gameState.centerPileRight)) {
+    } else if (isRightLegal) {
         target = gameState.centerPileRight;
         side = 'right';
     }
 
     if (target) {
+        // SUCCESS: The move is valid right now
         target.push(card);
+        
         if (card.owner === 'player') {
             gameState.playerHand = gameState.playerHand.filter(c => c !== card);
             gameState.playerReady = false;
             document.getElementById('player-draw-deck').classList.remove('deck-ready');
+            gameState.playerCount--;
         } else {
             gameState.aiHand = gameState.aiHand.filter(c => c !== card);
             gameState.aiReady = false;
             document.getElementById('ai-draw-deck').classList.remove('deck-ready');
+            gameState.aiCount--;
         }
 
         imgElement.remove(); 
         renderCenterPile(side, card); 
+        updateScoreboard();
+        return true; // Move Accepted
+    } else {
+        // FAILURE: The board changed before we arrived!
+        return false; // Move Rejected
     }
 }
