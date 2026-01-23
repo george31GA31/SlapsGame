@@ -1,1 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SLAPS - Match in Progress</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700;900&display=swap" rel="stylesheet">
+</head>
+<body class="game-body">
 
+    <div class="ui-widget-left">
+        <div class="stat-box">
+            <span class="stat-label">AI CARDS</span>
+            <span class="stat-value text-red" id="ai-deck-count">26</span>
+        </div>
+        <div class="stat-box">
+            <span class="stat-label">YOUR CARDS</span>
+            <span class="stat-value text-red" id="player-deck-count">26</span>
+        </div>
+        <button class="btn-quit" onclick="window.location.href='index.html'">QUIT MATCH</button>
+    </div>
+
+    <div class="ui-widget-right">
+        <div class="score-row">
+            <span class="score-label">ROUNDS</span>
+            <span class="score-data">YOU: <span id="player-rounds">0</span> AI: <span id="ai-rounds">0</span></span>
+        </div>
+        <div class="score-row">
+            <span class="score-label">SLAPS</span>
+            <span class="score-data">YOU: <span id="player-slaps">0</span> AI: <span id="ai-slaps">0</span></span>
+        </div>
+    </div>
+
+    <div class="game-board">
+        
+        <div class="zone foundation-zone opponent-zone">
+            </div>
+
+        <div class="zone middle-zone">
+            
+            <div class="deck-slot" id="ai-draw-deck">
+                <img src="assets/cards/back_of_card.png" class="card-back">
+            </div>
+
+            <div class="center-pile-area">
+                <div class="pile-slot left-pile" id="center-pile-left"></div>
+                <div class="pile-slot right-pile" id="center-pile-right"></div>
+            </div>
+
+            <div class="deck-slot" id="player-draw-deck">
+                <img src="assets/cards/back_of_card.png" class="card-back">
+            </div>
+
+        </div>
+
+        <div class="zone foundation-zone player-zone">
+            </div>
+
+    </div>
+
+    <script src="game.js"></script>
+</body>
+</html>
