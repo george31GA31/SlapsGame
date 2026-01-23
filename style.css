@@ -23,33 +23,8 @@ body {
 .app-container { display: flex; height: 100%; width: 100%; }
 
 /* =========================================
-   2. HOME PAGE FIXES (CRITICAL)
+   2. SIDEBAR & NAVIGATION
    ========================================= */
-/* Container for the center image */
-.board-center {
-    width: 50vh; 
-    height: 50vh;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    /* Force it to not overflow */
-    max-width: 500px;
-    max-height: 500px;
-}
-
-/* The Hero Image itself */
-.hero-cards {
-    width: 100%;       /* Fill the container */
-    max-width: 400px;  /* Never exceed 400px */
-    height: auto;      /* Maintain aspect ratio */
-    transform: rotate(-5deg);
-    box-shadow: 0 20px 40px rgba(0,0,0,0.6);
-    border-radius: 12px;
-    border: 4px solid #1a3320;
-    display: block;    /* Prevents inline weirdness */
-}
-
-/* Sidebar Styles */
 .sidebar-left {
     width: 240px; background-color: var(--bg-dark);
     display: flex; flex-direction: column; padding: 10px;
@@ -60,12 +35,6 @@ body {
     border-left: 1px solid #333; padding: 20px;
     display: flex; flex-direction: column; z-index: 10;
 }
-.game-board-area {
-    flex-grow: 1; background-color: var(--bg-green);
-    position: relative; display: flex; justify-content: center; align-items: center;
-}
-
-/* Navigation & Menu Styles (Kept from your original) */
 .logo-area { padding: 15px 0 25px 15px; }
 .isf-logo { max-width: 100%; height: auto; max-height: 80px; display: block; }
 .nav-links { list-style: none; flex-grow: 1; }
@@ -84,7 +53,6 @@ body {
     box-shadow: 0 2px 5px rgba(0,0,0,0.3); border: 1px solid #1e1e1c;
     position: relative; overflow: hidden;
 }
-/* Coloured stripes */
 .menu-card:nth-child(1) { border-left: 4px solid #f1c40f; }
 .menu-card:nth-child(2) { border-left: 4px solid #3498db; }
 .menu-card:nth-child(3) { border-left: 4px solid #95a5a6; }
@@ -94,23 +62,36 @@ body {
 .card-text p { font-size: 12px; color: #888; }
 
 /* =========================================
-   3. GAME BOARD STYLES
+   3. HOME PAGE (HERO IMAGE FIX)
+   ========================================= */
+.game-board-area {
+    flex-grow: 1; background-color: var(--bg-green);
+    position: relative; display: flex; justify-content: center; align-items: center;
+}
+.board-center {
+    width: 50vh; height: 50vh;
+    display: flex; justify-content: center; align-items: center;
+    max-width: 500px; max-height: 500px;
+}
+.hero-cards {
+    width: 100%; max-width: 400px; height: auto;
+    transform: rotate(-5deg);
+    box-shadow: 0 20px 40px rgba(0,0,0,0.6);
+    border-radius: 12px; border: 4px solid #1a3320;
+    display: block;
+}
+
+/* =========================================
+   4. GAME BOARD STYLES
    ========================================= */
 .game-body {
     background: radial-gradient(circle at center, #3a5e45 0%, #1e3324 100%);
 }
 .game-board {
-    width: 95%; 
-    height: 95%; 
-    max-width: 1200px;
-    display: flex; 
-    flex-direction: column; 
-    justify-content: space-between;
-    
-    /* THE FIX: Force it to the center horizontally */
-    margin: 0 auto; 
+    width: 95%; height: 95%; max-width: 1200px;
+    display: flex; flex-direction: column; justify-content: space-between;
+    margin: 0 auto; /* CENTERS THE BOARD */
     position: relative;
-    left: 0; right: 0;
 }
 
 .foundation-box {
@@ -142,16 +123,16 @@ body {
 }
 
 /* =========================================
-   4. CARD STYLING (FIXED SIZE)
+   5. CARD STYLING (FIXED SIZE)
    ========================================= */
 .game-card {
-    width: 12vh;        /* Keeps cards proportional to screen height */
+    width: 12vh;        
     max-width: 100px; 
-    height: auto;       /* Maintains aspect ratio */
+    height: auto;       
     position: absolute; 
     border-radius: 5px;
     filter: drop-shadow(0 4px 6px rgba(0,0,0,0.5));
-    transition: transform 0.05s; /* Faster for drag response */
+    transition: transform 0.05s; 
     z-index: 10;
 }
 .opponent-card { 
@@ -166,7 +147,35 @@ body {
 }
 
 /* =========================================
-   5. SLIDER & ANIMATIONS
+   6. UI WIDGETS (SCOREBOARDS)
+   ========================================= */
+.ui-widget-left, .ui-widget-right {
+    position: absolute;
+    background-color: #1a1a1a;
+    padding: 15px 25px;
+    border-radius: 8px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+    z-index: 100;
+    text-align: center;
+    border: 1px solid #333;
+}
+.stat-label {
+    font-size: 10px; color: #888; font-weight: 700;
+    letter-spacing: 2px; display: block; margin-bottom: 5px;
+}
+.stat-value { font-size: 32px; font-weight: 900; line-height: 1; }
+.text-red { color: #ff7575; }
+.text-green { color: #66ff66; }
+
+.btn-quit {
+    background: transparent; border: 1px solid #444; color: #888;
+    padding: 8px; font-size: 10px; font-weight: 700; border-radius: 4px;
+    cursor: pointer; transition: all 0.2s;
+}
+.btn-quit:hover { border-color: #ff7575; color: #ff7575; }
+
+/* =========================================
+   7. SETUP PAGE & ANIMATIONS
    ========================================= */
 .setup-card {
     background-color: #21201d; padding: 50px; border-radius: 16px; width: 500px;
