@@ -630,3 +630,16 @@ body {
     background-color: #1e3a24;
     border-color: var(--accent-pink);
 }
+/* NEW: Setup Page Additions */
+.diff-number {
+    font-size: 80px;
+    font-weight: 900;
+    line-height: 1;
+    margin-bottom: 10px;
+    transition: color 0.2s ease;
+}
+
+#bot-icon {
+    /* Smooth transition for the color change */
+    transition: color 0.3s ease, text-shadow 0.3s ease;
+}
