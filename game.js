@@ -23,7 +23,8 @@ const gameState = {
     globalZ: 100,
     
     difficulty: 1, 
-    aiProcessing: false 
+    aiProcessing: false,
+    aiInChain: false
 };
 
 const SUITS = ['hearts', 'diamonds', 'clubs', 'spades'];
@@ -280,31 +281,62 @@ function startAILoop() {
 }
 
 function attemptAIMove() {
+    // 1. CALCULATE REACTION SPEED (New Linear Scale)
+    // Level 1: 3500ms - 5500ms
+    // Level 10: 400ms - 1500ms
     const diff = gameState.difficulty;
-    const minTime = 4000 - ((diff - 1) * 388); 
-    const maxTime = 6000 - ((diff - 1) * 500); 
-    const reactionDelay = Math.random() * (maxTime - minTime) + minTime;
+    
+    // Linear Interpolation Formula
+    const minTime = 3500 + (diff - 1) * -344; // Scales down to ~400ms
+    const maxTime = 5500 + (diff - 1) * -444; // Scales down to ~1500ms
+    
+    let reactionDelay = Math.random() * (maxTime - minTime) + minTime;
+
+    // CHAIN BONUS: If AI played last turn, this turn is 50% faster
+    if (gameState.aiInChain) {
+        reactionDelay *= 0.5;
+        // console.log("AI Chain Speed Bonus Active!");
+    }
 
     const activeCards = gameState.aiHand.filter(c => c.isFaceUp);
 
-    // 1. PLAY CARD
+    // 2. PRIORITY: PLAY CARD (Strict First Choice)
     let bestMove = null;
     for (let card of activeCards) {
         if (checkPileLogic(card, gameState.centerPileLeft)) { bestMove = { c: card, t: 'left' }; break; }
         if (checkPileLogic(card, gameState.centerPileRight)) { bestMove = { c: card, t: 'right' }; break; }
     }
 
+    // IF MOVE FOUND:
     if (bestMove) {
         gameState.aiProcessing = true; 
+        
         setTimeout(() => {
             animateAIMove(bestMove.c, bestMove.t, () => {
-                // TRY TO PLAY (Race Condition Check happens inside playCardToCenter)
+                // Store lane index to find the card underneath later
+                const laneIdx = bestMove.c.laneIndex; 
+
+                // Attempt Play
                 let success = playCardToCenter(bestMove.c, bestMove.c.element);
                 
-                if (!success) {
-                    // Snap back if failed
-                    console.log("AI was too slow! Snapping back.");
+                if (success) {
+                    // SUCCESS: We played. NOW we Flip (Priority 2)
+                    gameState.aiInChain = true; // Flag for next turn speed boost
+
+                    // Check if there is a card underneath in the same lane
+                    const laneCards = gameState.aiHand.filter(c => c.laneIndex === laneIdx);
+                    if (laneCards.length > 0) {
+                        const newTop = laneCards[laneCards.length - 1];
+                        if (!newTop.isFaceUp) {
+                            // Immediate Flip after Play
+                            setCardFaceUp(newTop.element, newTop, 'ai');
+                        }
+                    }
+                } else {
+                    // FAILED (Too slow): Snap back and lose chain
+                    console.log("AI too slow!");
                     animateSnapBack(bestMove.c);
+                    gameState.aiInChain = false;
                 }
                 gameState.aiProcessing = false; 
             });
@@ -312,67 +344,26 @@ function attemptAIMove() {
         return; 
     }
 
-    // 2. SORT
-    if (activeCards.length < 4) {
-        let lanes = [[], [], [], []];
-        gameState.aiHand.forEach(c => lanes[c.laneIndex].push(c));
-        let blockerInfo = null;
-        let emptyLaneIndex = -1;
+    // IF NO MOVE FOUND:
+    gameState.aiInChain = false; // Break the chain streak
 
-        for (let i = 0; i < 4; i++) { if (lanes[i].length === 0) emptyLaneIndex = i; }
-
-        if (emptyLaneIndex !== -1) {
-            for (let i = 0; i < 4; i++) {
-                let pile = lanes[i];
-                if (pile.length > 1) {
-                    let top = pile[pile.length - 1];
-                    let below = pile[pile.length - 2];
-                    if (top.isFaceUp && !below.isFaceUp) {
-                        blockerInfo = { card: top, oldLane: i };
-                        break;
-                    }
-                }
-            }
-        }
-
-        if (blockerInfo) {
-            gameState.aiProcessing = true;
-            setTimeout(() => {
-                animateAIMoveToLane(blockerInfo.card, emptyLaneIndex, () => {
-                    blockerInfo.card.laneIndex = emptyLaneIndex;
-                    let pile = lanes[blockerInfo.oldLane];
-                    let revealedCard = pile[pile.length - 2]; 
-                    setCardFaceUp(revealedCard.element, revealedCard, 'ai');
-                    gameState.aiProcessing = false;
-                });
-            }, reactionDelay * 0.8);
-            return;
-        }
-
-        const simpleHidden = gameState.aiHand.find(c => !c.isFaceUp && isTopOffPile(c));
-        if (simpleHidden) {
-            gameState.aiProcessing = true;
-            setTimeout(() => {
-                setCardFaceUp(simpleHidden.element, simpleHidden, 'ai');
-                gameState.aiProcessing = false;
-            }, reactionDelay * 0.5); 
-            return;
-        }
-    }
-
-    // 3. DRAW
+    // 3. PRIORITY: DRAW (Reassess)
+    // AI draws if it has no moves. 
+    // (Note: "Sort/Flip" removed as per instruction to only flip after playing)
+    
     const hiddenCardsLeft = gameState.aiHand.filter(c => !c.isFaceUp).length;
-    if (!bestMove) {
-        if (activeCards.length === 4 || hiddenCardsLeft === 0) {
-            if (!gameState.aiReady) {
-                gameState.aiProcessing = true;
-                setTimeout(() => {
-                    gameState.aiReady = true;
-                    document.getElementById('ai-draw-deck').classList.add('deck-ready');
-                    gameState.aiProcessing = false;
-                    checkDrawCondition();
-                }, 1000 + reactionDelay);
-            }
+    
+    // If we have 4 cards up OR no hidden cards left, and still can't move -> Stuck.
+    if (activeCards.length === 4 || hiddenCardsLeft === 0) {
+        if (!gameState.aiReady) {
+            gameState.aiProcessing = true;
+            setTimeout(() => {
+                // console.log("AI Stuck -> Requesting Draw");
+                gameState.aiReady = true;
+                document.getElementById('ai-draw-deck').classList.add('deck-ready');
+                gameState.aiProcessing = false;
+                checkDrawCondition();
+            }, 1000 + reactionDelay);
         }
     }
 }
