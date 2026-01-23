@@ -1,5 +1,5 @@
 /* =========================================
-   SLAPS ENGINE v10.0 - ROUNDS, WINNING & BORROWING
+   SLAPS ENGINE v11.0 - SMART LOGIC & SPEED
    ========================================= */
 
 const gameState = {
@@ -10,7 +10,7 @@ const gameState = {
     centerPileLeft: [],
     centerPileRight: [],
     
-    // SCORE TRACKING (Total cards owned for next round)
+    // SCORE TRACKING
     playerTotal: 26,
     aiTotal: 26,
 
@@ -47,39 +47,28 @@ class Card {
 window.onload = function() {
     const storedDiff = localStorage.getItem('slapsDifficulty');
     if (storedDiff) gameState.difficulty = parseInt(storedDiff);
-    
-    // Start fresh match
     startRound();
 };
 
 // --- ROUND MANAGEMENT ---
 function startRound() {
-    // 1. Create fresh deck if it's the very first round, 
-    //    OR recreate full deck to redistribute based on totals
     let fullDeck = createDeck();
     shuffle(fullDeck);
 
-    // 2. Distribute based on Totals (Winner keeps draw deck, Loser takes rest logic is calculated at end)
-    // Here we just deal the cards they currently OWN.
-    
-    // Check Match Win
     if (gameState.playerTotal <= 0) { showEndGame("YOU WIN THE MATCH!", true); return; }
     if (gameState.aiTotal <= 0) { showEndGame("AI WINS THE MATCH!", false); return; }
 
     gameState.playerDeck = fullDeck.slice(0, gameState.playerTotal);
     gameState.aiDeck = fullDeck.slice(gameState.playerTotal, 52);
 
-    // 3. Deal Foundation (4-3-2-1)
     dealFoundation(gameState.playerDeck, 'player');
     dealFoundation(gameState.aiDeck, 'ai');
     
-    // 4. Reset States
     gameState.centerPileLeft = [];
     gameState.centerPileRight = [];
     document.getElementById('center-pile-left').innerHTML = '';
     document.getElementById('center-pile-right').innerHTML = '';
     
-    // Hide borrowed status
     document.getElementById('borrowed-player').classList.add('hidden');
     document.getElementById('borrowed-ai').classList.add('hidden');
     document.getElementById('game-message').classList.add('hidden');
@@ -90,32 +79,21 @@ function startRound() {
 
 function endRound(winner) {
     gameState.gameActive = false;
-    
-    // LOGIC: 
-    // Winner Total = Their Remaining Draw Deck
-    // Loser Total = 52 - Winner Total
-    
     let winnerRemaining = 0;
-    
     if (winner === 'player') {
         winnerRemaining = gameState.playerDeck.length;
         gameState.playerTotal = winnerRemaining;
         gameState.aiTotal = 52 - winnerRemaining;
-        
-        showRoundMessage("ROUND WON!", `You kept ${winnerRemaining} cards. AI takes the rest.`);
+        showRoundMessage("ROUND WON!", `You kept ${winnerRemaining} cards.`);
     } else {
         winnerRemaining = gameState.aiDeck.length;
         gameState.aiTotal = winnerRemaining;
         gameState.playerTotal = 52 - winnerRemaining;
-        
-        showRoundMessage("ROUND LOST!", `AI kept ${winnerRemaining} cards. You take the rest.`);
+        showRoundMessage("ROUND LOST!", `AI kept ${winnerRemaining} cards.`);
     }
 }
 
-// Global function for the button
-window.nextRound = function() {
-    startRound();
-};
+window.nextRound = function() { startRound(); };
 
 function showRoundMessage(title, sub) {
     const modal = document.getElementById('game-message');
@@ -129,11 +107,9 @@ function showEndGame(title, isWin) {
     modal.querySelector('h1').innerText = title;
     modal.querySelector('h1').style.color = isWin ? '#66ff66' : '#ff7575';
     modal.querySelector('p').innerText = "Return to Menu to play again.";
-    
     const btn = document.getElementById('msg-btn');
     btn.innerText = "MAIN MENU";
     btn.onclick = () => window.location.href = 'index.html';
-    
     modal.classList.remove('hidden');
 }
 
@@ -156,10 +132,8 @@ function shuffle(array) {
 }
 
 function updateScoreboard() {
-    // Current Cards = Hand + Deck
     const pCount = gameState.playerHand.length + gameState.playerDeck.length;
     const aCount = gameState.aiHand.length + gameState.aiDeck.length;
-    
     document.getElementById('score-player').innerText = pCount;
     document.getElementById('score-ai').innerText = aCount;
 }
@@ -171,14 +145,11 @@ function dealFoundation(deck, owner) {
     if (owner === 'player') gameState.playerHand = [];
     else gameState.aiHand = [];
 
-    // Safety: If deck is too small for full setup, just lay what we have
     const pileSizes = [4, 3, 2, 1]; 
     let currentLeftPercent = 5; 
 
     pileSizes.forEach((size, laneIdx) => {
         if (deck.length === 0) return;
-        
-        // Take up to 'size' cards, but don't error if deck empty
         let actualSize = Math.min(size, deck.length);
         let pileCards = deck.splice(0, actualSize);
         
@@ -188,7 +159,6 @@ function dealFoundation(deck, owner) {
             card.owner = owner; 
             card.laneIndex = laneIdx; 
 
-            // Top card is face up
             const isTopCard = (index === actualSize - 1);
             if (isTopCard) setCardFaceUp(img, card, owner);
             else setCardFaceDown(img, card, owner);
@@ -285,13 +255,10 @@ function performReveal() {
     document.getElementById('player-draw-deck').classList.remove('deck-ready');
     document.getElementById('ai-draw-deck').classList.remove('deck-ready');
 
-    // --- BORROWING LOGIC ---
     let playerBorrowed = false;
     let aiBorrowed = false;
 
-    // Check Player Shortage
     if (gameState.playerDeck.length === 0) {
-        // Take half AI deck
         const stealAmount = Math.floor(gameState.aiDeck.length / 2);
         const stolen = gameState.aiDeck.splice(0, stealAmount);
         gameState.playerDeck = gameState.playerDeck.concat(stolen);
@@ -299,7 +266,6 @@ function performReveal() {
         playerBorrowed = true;
     }
 
-    // Check AI Shortage
     if (gameState.aiDeck.length === 0) {
         const stealAmount = Math.floor(gameState.playerDeck.length / 2);
         const stolen = gameState.playerDeck.splice(0, stealAmount);
@@ -308,17 +274,13 @@ function performReveal() {
         aiBorrowed = true;
     }
 
-    // --- EXECUTE REVEAL (Opponent pays 2 if borrowed) ---
-    // Right Pile (Player Side)
     if (playerBorrowed) {
-        // Player borrowed, so AI pays for this card
         if (gameState.aiDeck.length > 0) {
             let card = gameState.aiDeck.pop();
             gameState.centerPileRight.push(card);
             renderCenterPile('right', card);
         }
     } else {
-        // Normal
         if (gameState.playerDeck.length > 0) {
             let card = gameState.playerDeck.pop();
             gameState.centerPileRight.push(card);
@@ -326,16 +288,13 @@ function performReveal() {
         }
     }
 
-    // Left Pile (AI Side)
     if (aiBorrowed) {
-        // AI borrowed, so Player pays for this card
         if (gameState.playerDeck.length > 0) {
             let card = gameState.playerDeck.pop();
             gameState.centerPileLeft.push(card);
             renderCenterPile('left', card);
         }
     } else {
-        // Normal
         if (gameState.aiDeck.length > 0) {
             let card = gameState.aiDeck.pop();
             gameState.centerPileLeft.push(card);
@@ -364,26 +323,28 @@ function renderCenterPile(side, card) {
     container.appendChild(img);
 }
 
-// --- AI BRAIN ---
+// --- INTELLIGENT AI BRAIN (v11.0) ---
 function startAILoop() {
     gameState.aiLoopRunning = true;
+    // Check frequently (every 100ms) to ensure high responsiveness
     setInterval(() => {
         if (!gameState.gameActive || gameState.aiProcessing) return;
         attemptAIMove();
-    }, 500);
+    }, 250); 
 }
 
 function attemptAIMove() {
+    // 1. CALCULATE SPEED (Level 1: 3.5s | Level 10: 0.2s)
     const diff = gameState.difficulty;
-    const minTime = 3500 + (diff - 1) * -344; 
-    const maxTime = 5500 + (diff - 1) * -444; 
+    const minTime = 3000 - ((diff - 1) * 310); // ~200ms at L10
+    const maxTime = 5000 - ((diff - 1) * 490); // ~600ms at L10
+    
     let reactionDelay = Math.random() * (maxTime - minTime) + minTime;
-
     if (gameState.aiInChain) reactionDelay *= 0.5;
 
     const activeCards = gameState.aiHand.filter(c => c.isFaceUp);
 
-    // 1. PLAY CARD
+    // --- PRIORITY 1: PLAY CARD ---
     let bestMove = null;
     for (let card of activeCards) {
         if (checkPileLogic(card, gameState.centerPileLeft)) { bestMove = { c: card, t: 'left' }; break; }
@@ -393,11 +354,20 @@ function attemptAIMove() {
     if (bestMove) {
         gameState.aiProcessing = true; 
         setTimeout(() => {
+            // STALE CHECK: Re-verify move is VALID before moving
+            // If user played while AI was waiting, this prevents the "9 on 9" bug
+            let targetPile = (bestMove.t === 'left') ? gameState.centerPileLeft : gameState.centerPileRight;
+            if (!checkPileLogic(bestMove.c, targetPile)) {
+                gameState.aiProcessing = false; // Abort silently, try again next tick
+                return;
+            }
+
             animateAIMove(bestMove.c, bestMove.t, () => {
                 const laneIdx = bestMove.c.laneIndex; 
                 let success = playCardToCenter(bestMove.c, bestMove.c.element);
                 if (success) {
                     gameState.aiInChain = true; 
+                    // Auto-flip underneath if exists
                     const laneCards = gameState.aiHand.filter(c => c.laneIndex === laneIdx);
                     if (laneCards.length > 0) {
                         const newTop = laneCards[laneCards.length - 1];
@@ -415,27 +385,81 @@ function attemptAIMove() {
 
     gameState.aiInChain = false; 
 
-    // 3. DRAW (Shortage Logic)
-    // Draw if (No moves AND 4 cards up) OR (No moves AND No hidden cards left)
-    const hiddenCardsLeft = gameState.aiHand.filter(c => !c.isFaceUp).length;
-    
-    // NOTE: If deck is empty, AI still needs to signal readiness to trigger the Borrow logic in performReveal
-    if (!bestMove) {
-        if (activeCards.length === 4 || hiddenCardsLeft === 0) {
-            if (!gameState.aiReady) {
-                gameState.aiProcessing = true;
-                setTimeout(() => {
-                    gameState.aiReady = true;
-                    document.getElementById('ai-draw-deck').classList.add('deck-ready');
-                    gameState.aiProcessing = false;
-                    checkDrawCondition();
-                }, 1000 + reactionDelay);
+    // --- PRIORITY 2: SORT & REVEAL (The Blocker Logic) ---
+    // If we can't play, can we unblock a face-down card?
+    if (activeCards.length < 4) {
+        let lanes = [[], [], [], []];
+        gameState.aiHand.forEach(c => lanes[c.laneIndex].push(c));
+        let blockerInfo = null;
+        let emptyLaneIndex = -1;
+
+        // Find empty lane
+        for (let i = 0; i < 4; i++) { if (lanes[i].length === 0) emptyLaneIndex = i; }
+
+        if (emptyLaneIndex !== -1) {
+            // Find a blocker (Face Up on top of Face Down)
+            for (let i = 0; i < 4; i++) {
+                let pile = lanes[i];
+                if (pile.length > 1) {
+                    let top = pile[pile.length - 1];
+                    let below = pile[pile.length - 2];
+                    if (top.isFaceUp && !below.isFaceUp) {
+                        blockerInfo = { card: top, oldLane: i };
+                        break;
+                    }
+                }
             }
         }
+
+        if (blockerInfo) {
+            gameState.aiProcessing = true;
+            setTimeout(() => {
+                animateAIMoveToLane(blockerInfo.card, emptyLaneIndex, () => {
+                    blockerInfo.card.laneIndex = emptyLaneIndex;
+                    // Flip the card revealed
+                    let pile = lanes[blockerInfo.oldLane];
+                    let revealedCard = pile[pile.length - 2]; 
+                    setCardFaceUp(revealedCard.element, revealedCard, 'ai');
+                    gameState.aiProcessing = false;
+                });
+            }, reactionDelay * 0.8);
+            return;
+        }
+
+        // --- PRIORITY 3: SIMPLE FLIP (If just a stack of face-downs) ---
+        const simpleHidden = gameState.aiHand.find(c => !c.isFaceUp && isTopOffPile(c));
+        if (simpleHidden) {
+            gameState.aiProcessing = true;
+            setTimeout(() => {
+                setCardFaceUp(simpleHidden.element, simpleHidden, 'ai');
+                gameState.aiProcessing = false;
+            }, reactionDelay * 0.5); 
+            return;
+        }
+    }
+
+    // --- PRIORITY 4: DRAW (The Last Resort) ---
+    // If NO moves, NO sorts, and (Board Full OR No cards to flip) -> Click Deck
+    const hiddenCardsLeft = gameState.aiHand.filter(c => !c.isFaceUp).length;
+    
+    // We are stuck.
+    if (!gameState.aiReady) {
+        gameState.aiProcessing = true;
+        setTimeout(() => {
+            gameState.aiReady = true;
+            document.getElementById('ai-draw-deck').classList.add('deck-ready');
+            gameState.aiProcessing = false;
+            checkDrawCondition();
+        }, 800 + reactionDelay);
     }
 }
 
-// --- PHYSICS & ANIMATION ---
+function isTopOffPile(card) {
+    let cardsInLane = gameState.aiHand.filter(c => c.laneIndex === card.laneIndex);
+    return cardsInLane[cardsInLane.length - 1] === card;
+}
+
+// --- ANIMATION ---
 function animateAIMove(card, targetSide, callback) {
     const el = card.element;
     const targetId = targetSide === 'left' ? 'center-pile-left' : 'center-pile-right';
@@ -445,7 +469,6 @@ function animateAIMove(card, targetSide, callback) {
     
     card.originalLeft = el.style.left;
     card.originalTop = el.style.top;
-
     const startLeft = startRect.left || 100;
     const startTop = startRect.top || 50;
 
@@ -453,7 +476,7 @@ function animateAIMove(card, targetSide, callback) {
     el.style.left = startLeft + 'px';
     el.style.top = startTop + 'px';
     el.style.zIndex = 2000;
-    el.style.transition = 'all 0.6s ease-in-out'; 
+    el.style.transition = 'all 0.4s ease-in-out'; // Faster animation
 
     requestAnimationFrame(() => {
         const destX = targetRect.left + (targetRect.width / 2) - (startRect.width / 2);
@@ -463,7 +486,7 @@ function animateAIMove(card, targetSide, callback) {
         el.style.transform = 'rotate(0deg)'; 
     });
 
-    setTimeout(() => { callback(); }, 600); 
+    setTimeout(() => { callback(); }, 400); 
 }
 
 function animateSnapBack(card) {
@@ -477,6 +500,17 @@ function animateSnapBack(card) {
     setTimeout(() => { el.style.border = 'none'; }, 500);
 }
 
+function animateAIMoveToLane(card, laneIdx, callback) {
+    const el = card.element;
+    const leftPercent = AI_LANES[laneIdx];
+    el.style.transition = 'all 0.5s ease';
+    el.style.left = `${leftPercent}%`;
+    el.style.top = '10px'; 
+    el.style.zIndex = 10;  
+    setTimeout(() => { callback(); }, 500);
+}
+
+// --- PLAYER PHYSICS ---
 function makeDraggable(img, cardData) {
     img.onmousedown = (e) => {
         e.preventDefault();
@@ -549,20 +583,12 @@ function playCardToCenter(card, imgElement) {
             gameState.playerHand = gameState.playerHand.filter(c => c !== card);
             gameState.playerReady = false;
             document.getElementById('player-draw-deck').classList.remove('deck-ready');
-            
-            // CHECK WIN CONDITION
-            if (gameState.playerHand.length === 0) {
-                endRound('player');
-            }
+            if (gameState.playerHand.length === 0) endRound('player');
         } else {
             gameState.aiHand = gameState.aiHand.filter(c => c !== card);
             gameState.aiReady = false;
             document.getElementById('ai-draw-deck').classList.remove('deck-ready');
-            
-            // CHECK WIN CONDITION
-            if (gameState.aiHand.length === 0) {
-                endRound('ai');
-            }
+            if (gameState.aiHand.length === 0) endRound('ai');
         }
 
         imgElement.remove(); 
