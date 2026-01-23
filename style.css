@@ -44,19 +44,12 @@ body {
     padding: 15px 0 25px 15px;
 }
 
-/* NEW: Placeholder Logo Styling */
-.isf-logo-placeholder {
-    font-family: var(--font-logo);
-    font-size: 24px;
-    font-weight: 700;
-    color: var(--text-white);
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-.isf-logo-placeholder i {
-    color: var(--accent-pink);
-    font-size: 28px;
+/* UPDATED: Real Image Logo Styling */
+.isf-logo {
+    max-width: 100%;    /* Ensures it doesn't overflow the sidebar */
+    height: auto;       /* Maintains aspect ratio */
+    max-height: 80px;   /* Prevents it from being too tall */
+    display: block;     /* Removes weird spacing */
 }
 
 .nav-links {
