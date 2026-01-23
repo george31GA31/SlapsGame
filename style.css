@@ -359,24 +359,36 @@ body {
     border-radius: 6px;
 }
 
-/* --- CARD STYLING --- */
-/* Important: Absolute position allows free dragging */
+/* --- CARD STYLING (FIXED) --- */
+
+/* 1. Fixes Card Size (Uses responsive height 'vh') */
 .game-card {
-    width: 100px;
+    width: 12vh; 
+    max-width: 100px;
     height: auto;
     position: absolute; 
-    cursor: grab;
+    border-radius: 5px;
     filter: drop-shadow(0 4px 6px rgba(0,0,0,0.5));
-    transition: transform 0.1s; /* Smooth pickup */
+    transition: transform 0.1s; 
+    z-index: 10;
 }
 
-.game-card:active {
+/* 2. Fixes Opponent Bug (Stops them from spinning/being clicked) */
+.opponent-card { 
+    transform: rotate(180deg);
+    pointer-events: none; /* <--- CRITICAL: Makes them untouchable */
+}
+
+/* 3. Player Card Interactions */
+.player-card {
+    cursor: grab;
+}
+
+.player-card:active {
     cursor: grabbing;
-    transform: scale(1.1); /* Slight grow when holding */
-    z-index: 1000; /* Ensure held card is on top */
+    transform: scale(1.1);
+    z-index: 1000 !important; /* Always on top when holding */
 }
-
-.opponent-card { transform: rotate(180deg); }
 
 /* =========================================
    5. SETUP PAGE & SLIDER STYLES (BOLD EDITION)
