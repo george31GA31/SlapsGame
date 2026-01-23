@@ -84,16 +84,24 @@
             10: "#8b0000" // Deep Red
         };
 
-        function updateUI(val) {
-            label.innerText = levels[val];
-            numberDisplay.innerText = val;
-            
-            const color = colors[val];
-            label.style.color = color;
-            numberDisplay.style.color = color;
-            icon.style.color = color;
-            icon.style.textShadow = `0 0 15px ${color}`;
-        }
+        // This function updates the UI when you slide
+function updateUI(val) {
+    // 1. Update the Text
+    label.innerText = levels[val];
+    numberDisplay.innerText = val;
+    
+    // 2. Get the specific color for this level
+    const color = colors[val];
+    
+    // 3. Apply the color to Text and Number
+    label.style.color = color;
+    numberDisplay.style.color = color;
+    
+    // 4. Apply the color AND the Glow to the Icon
+    icon.style.color = color;
+    // This creates the "Gradient" light effect around the icon
+    icon.style.textShadow = `0 0 25px ${color}`; 
+}
 
         updateUI(slider.value);
 
