@@ -1,32 +1,33 @@
 /* =========================================
-   SLAPS GAME ENGINE v1.0
+   SLAPS GAME ENGINE v1.1
    Based on ISF Laws 2025-26
    ========================================= */
 
-// --- GAME STATE ---
+// --- GAME STATE OBJECT ---
 const gameState = {
     playerDeck: [],
-    playerFoundation: [[], [], [], []], // 4 piles
+    playerFoundation: [[], [], [], []], // 4 piles for the player
     aiDeck: [],
-    aiFoundation: [[], [], [], []],     // 4 piles
+    aiFoundation: [[], [], [], []],     // 4 piles for the AI
     centerPileLeft: [],
     centerPileRight: [],
     gameActive: false,
-    selectedCard: null // Tracks which card the player is dragging/clicking
+    selectedCard: null 
 };
 
 // --- CONFIGURATION ---
-// Ensure these match your actual filenames in assets/cards/
+// These MUST match your image filenames exactly (case sensitive!)
 const SUITS = ['hearts', 'diamonds', 'clubs', 'spades'];
 const RANKS = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'jack', 'queen', 'king', 'ace'];
-const FILE_EXTENSION = ".png"; // CHANGE THIS if your cards are .jpg
+const FILE_EXTENSION = ".png"; 
 
+// --- CARD CLASS ---
 class Card {
     constructor(suit, rank, value) {
         this.suit = suit;
         this.rank = rank;
-        this.value = value; // 2-14 (Ace is 14 for comparison logic)
-        // Constructs filename: "2_of_clubs.png"
+        this.value = value; 
+        // Generates path like: "assets/cards/king_of_hearts.png"
         this.imgSrc = `assets/cards/${rank}_of_${suit}${FILE_EXTENSION}`;
     }
 }
@@ -38,38 +39,44 @@ class Card {
 function initGame() {
     console.log("Initializing ISF Official Match...");
     
-    [cite_start]// 1. Create and Shuffle Deck [cite: 62, 63]
+    // 1. Create a fresh 52-card deck
     let fullDeck = createDeck();
+    
+    // 2. Shuffle it randomly
     shuffle(fullDeck);
 
-    [cite_start]// 2. Deal 26 Cards each [cite: 63]
+    // 3. Deal 26 cards to each player
     gameState.playerDeck = fullDeck.slice(0, 26);
     gameState.aiDeck = fullDeck.slice(26, 52);
 
-    [cite_start]// 3. Build Foundations (4-3-2-1 Rule) [cite: 65, 430]
+    // 4. Build the Foundation Piles (4-3-2-1 Rule)
     buildFoundation(gameState.playerDeck, gameState.playerFoundation);
     buildFoundation(gameState.aiDeck, gameState.aiFoundation);
 
-    // 4. Render the Board
+    // 5. Draw the initial board state
     renderBoard();
     
-    // 5. Start Game Loop (Reveal first cards)
-    // For now, we just indicate readiness. Real match starts with simultaneous reveal.
-    console.log("Match Ready.");
+    console.log("Match Ready. Foundations built.");
 }
 
+// Generates the deck and assigns numerical values
 function createDeck() {
     let deck = [];
     SUITS.forEach(suit => {
         RANKS.forEach((rank, index) => {
-            // Value: 2=2, ... 10=10, J=11, Q=12, K=13, A=1 (Logic handled later)
-            // We'll use index+2 for simple numeric value (2 is index 0 + 2)
-            deck.push(new Card(suit, rank, index + 2));
+            // LOGIC: 
+            // Index 0 ('2') + 2 = Value 2
+            // Index 8 ('10') + 2 = Value 10
+            // Index 11 ('king') + 2 = Value 13
+            // Index 12 ('ace') + 2 = Value 14
+            let val = index + 2;
+            deck.push(new Card(suit, rank, val));
         });
     });
     return deck;
 }
 
+// Standard Fisher-Yates Shuffle
 function shuffle(array) {
     for (let i = array.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
@@ -77,18 +84,13 @@ function shuffle(array) {
     }
 }
 
-// Logic to distribute cards into the 4 foundation piles (4, 3, 2, 1)
+// Distributes cards into the 4 sub-piles (4, 3, 2, 1 cards)
 function buildFoundation(deck, foundationArray) {
-    // Pile 1: 4 cards
+    // We splice cards OUT of the deck and into the piles
     foundationArray[0] = deck.splice(0, 4);
-    // Pile 2: 3 cards
     foundationArray[1] = deck.splice(0, 3);
-    // Pile 3: 2 cards
     foundationArray[2] = deck.splice(0, 2);
-    // Pile 4: 1 card
     foundationArray[3] = deck.splice(0, 1);
-    
-    // Remaining cards stay in draw deck (handled by splice reference)
 }
 
 /* =========================================
@@ -96,24 +98,24 @@ function buildFoundation(deck, foundationArray) {
    ========================================= */
 
 function renderBoard() {
-    // Render Player Foundation
+    // 1. Render Player Foundation
     const pContainer = document.getElementById('player-foundation');
-    pContainer.innerHTML = ''; // Clear current
+    pContainer.innerHTML = ''; // Wipe current HTML
     
     gameState.playerFoundation.forEach((pile, index) => {
         const slot = document.createElement('div');
-        slot.className = 'fp-slot';
+        slot.className = 'fp-slot'; // Uses the CSS sizing we fixed
         
-        // Only show if pile has cards
+        // Only draw a card if the pile has one
         if (pile.length > 0) {
-            [cite_start]// The top card is the "Live Card" [cite: 70, 179]
+            // The last card in the array is the "Top" face-up card
             const topCard = pile[pile.length - 1];
+            
             const img = document.createElement('img');
             img.src = topCard.imgSrc;
             img.className = 'game-card player-card';
-            img.dataset.pileIndex = index; // Store which pile this is
             
-            // Interaction: Click to Play
+            // Add Click Event
             img.onclick = () => handleCardClick(index);
             
             slot.appendChild(img);
@@ -121,7 +123,7 @@ function renderBoard() {
         pContainer.appendChild(slot);
     });
 
-    // Render AI Foundation (Top cards visible but Upside Down)
+    // 2. Render AI Foundation (Top cards visible but Upside Down)
     const aiContainer = document.getElementById('opponent-foundation');
     aiContainer.innerHTML = '';
     
@@ -131,15 +133,17 @@ function renderBoard() {
         
         if (pile.length > 0) {
             const topCard = pile[pile.length - 1];
+            
             const img = document.createElement('img');
             img.src = topCard.imgSrc; 
-            img.className = 'game-card opponent-card';
+            img.className = 'game-card opponent-card'; // Rotated 180deg by CSS
+            
             slot.appendChild(img);
         }
         aiContainer.appendChild(slot);
     });
 
-    // Update Counts
+    // 3. Update Deck Counts
     document.getElementById('player-deck-count').innerText = gameState.playerDeck.length;
     document.getElementById('ai-deck-count').innerText = gameState.aiDeck.length;
 }
@@ -148,88 +152,77 @@ function renderBoard() {
    GAMEPLAY LOGIC
    ========================================= */
 
-// Player clicks a card in their foundation
 function handleCardClick(pileIndex) {
     const pile = gameState.playerFoundation[pileIndex];
-    if (pile.length === 0) return;
+    if (pile.length === 0) return; // Ignore empty piles
 
-    const card = pile[pile.length - 1]; // Top card
-    gameState.selectedCard = { card, pileIndex };
+    const card = pile[pile.length - 1]; // Get the clicked card object
     
-    // Visual feedback (optional: highlight selected card)
-    console.log(`Selected: ${card.rank} of ${card.suit}`);
+    console.log(`Clicked: ${card.rank} (Val: ${card.value})`); // DEBUG
     
-    // Attempt to play on Left or Right center piles (Simple auto-play for now)
-    // Real Drag/Drop will check where the user releases the mouse
+    // Check Left Pile, then Right Pile
     if (attemptPlay(card, 'left')) {
         playCard(pileIndex, 'left');
     } else if (attemptPlay(card, 'right')) {
         playCard(pileIndex, 'right');
     } else {
-        console.log("Invalid Move");
-        // Shake animation could go here
+        console.log("Move Invalid: No matching rank +/- 1");
     }
 }
 
-[cite_start]// ISF Rule Check: Rank +/- 1 [cite: 89]
 function attemptPlay(card, targetSide) {
     let targetPile = targetSide === 'left' ? gameState.centerPileLeft : gameState.centerPileRight;
     
-    // If pile is empty (start of game), we can't play normally (Requires Reveal)
+    // If center pile is empty, you cannot play (Game hasn't started/Reveal needed)
     if (targetPile.length === 0) return false;
 
     const targetCard = targetPile[targetPile.length - 1];
     const diff = Math.abs(card.value - targetCard.value);
 
-    // Standard +/- 1
+    // Rule 1: Normal +/- 1 (e.g. 7 on 8, or 5 on 4)
     if (diff === 1) return true;
     
-    [cite_start]// Sequence Loop: Ace (14) on 2 (2) or Ace on King (13) [cite: 91, 470]
-    // Values: 2=2 ... K=13, A=14
-    // Ace (14) on 2 (2) -> diff 12. 
-    // Ace (14) on King (13) -> diff 1.
-    // 2 (2) on Ace (14) -> diff 12.
-    if (diff === 12) return true; // Handles Ace <-> 2 wrapping
+    // Rule 2: Ace Loop (Ace is 14, Two is 2. Diff is 12)
+    // 14 on 2 is legal. 2 on 14 is legal.
+    if (diff === 12) return true; 
 
     return false;
 }
 
 function playCard(pileIndex, targetSide) {
-    // 1. Move logic
+    // 1. Logic Move: Remove from foundation, Add to center
     const pile = gameState.playerFoundation[pileIndex];
-    const card = pile.pop(); // Remove from foundation
+    const card = pile.pop();
     
     if (targetSide === 'left') {
         gameState.centerPileLeft.push(card);
-        // Render Center Left
         updateCenterPile('left', card);
     } else {
         gameState.centerPileRight.push(card);
-        // Render Center Right
         updateCenterPile('right', card);
     }
 
-    [cite_start]// 2. Refresh Board (shows new top card of foundation) [cite: 439]
+    // 2. Refresh the board to show the card underneath (if any)
     renderBoard();
 }
 
+// Updates just the center pile visual (optimization)
 function updateCenterPile(side, card) {
     const elementId = side === 'left' ? 'center-pile-left' : 'center-pile-right';
     const container = document.getElementById(elementId);
     
-    // Clear old card visually
-    container.innerHTML = '';
+    container.innerHTML = ''; // Remove previous top card visual
     
     const img = document.createElement('img');
     img.src = card.imgSrc;
     img.className = 'game-card played-card';
     
-    // Random slight rotation for realism
+    // Random rotation for realistic "messy pile" look
     const rotation = Math.random() * 20 - 10; 
     img.style.transform = `rotate(${rotation}deg)`;
     
     container.appendChild(img);
 }
 
-// Start the game when page loads
+// Start game on load
 window.onload = initGame;
