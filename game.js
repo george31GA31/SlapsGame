@@ -351,6 +351,23 @@ function playCardToCenter(card, imgElement) {
         
         // 2. Visual Move
         imgElement.remove(); // Remove from foundation
-        renderCenterPile(side, card); // Add to center
+        function renderCenterPile(side, card) {
+    const id = side === 'left' ? 'center-pile-left' : 'center-pile-right';
+    const container = document.getElementById(id);
+    
+    // Create new image for center
+    const img = document.createElement('img');
+    img.src = card.imgSrc;
+    img.className = 'game-card'; // Adds the CSS class we just fixed
+    
+    // Center the card in the pile slot
+    img.style.left = '50%';
+    img.style.top = '50%';
+    // Combine the random rotation with the centering transform
+    const rot = Math.random() * 20 - 10;
+    img.style.transform = `translate(-50%, -50%) rotate(${rot}deg)`;
+    
+    container.appendChild(img);
+}
     }
 }
