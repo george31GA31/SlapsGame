@@ -387,61 +387,110 @@ body {
 .score-data { color: #ff7575; }
 
 /* =========================================
-   5. SETUP PAGE & SLIDER STYLES
+   5. SETUP PAGE & SLIDER STYLES (THE BOLD VERSION)
    ========================================= */
+
+/* The Card Container: Floating, dark, with a shadow */
 .setup-card {
     background-color: #21201d; 
-    padding: 40px; border-radius: 12px; width: 450px; text-align: center;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.5); border: 1px solid #333; z-index: 200;
+    padding: 40px; 
+    border-radius: 12px; 
+    width: 450px; 
+    text-align: center;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5); 
+    border: 1px solid #333; 
+    z-index: 200;
 }
 
+/* The Robot Icon Header */
 .setup-header {
-    color: #b0b0b0; margin-bottom: 30px; font-size: 14px; letter-spacing: 2px;
+    color: #b0b0b0; 
+    margin-bottom: 30px; 
+    font-size: 14px; 
+    letter-spacing: 2px;
 }
 
 .setup-header i {
-    font-size: 40px; color: #66ff66; display: block;
-    margin-bottom: 10px; transition: color 0.3s ease, text-shadow 0.3s ease;
+    font-size: 40px; 
+    color: #66ff66; /* Default start color */
+    display: block;
+    margin-bottom: 10px; 
+    transition: color 0.3s ease, text-shadow 0.3s ease;
 }
 
+/* The Difficulty Text Area */
 .difficulty-display { margin-bottom: 30px; }
 
+/* The BIG Number (1-10) */
 .diff-number {
-    font-size: 80px; font-weight: 900; line-height: 1;
-    margin-bottom: 5px; transition: color 0.2s ease;
+    font-size: 80px; /* Massive bold font */
+    font-weight: 900; 
+    line-height: 1;
+    margin-bottom: 5px; 
+    transition: color 0.2s ease;
 }
 
+/* The Label (ROOKIE, MASTER, etc.) */
 .difficulty-display h2 {
-    font-size: 24px; font-weight: 700; margin: 0; transition: color 0.2s ease;
+    font-size: 24px; 
+    font-weight: 700; 
+    margin: 0; 
+    transition: color 0.2s ease;
 }
 
+/* --- THE SLIDER BAR (The Track) --- */
 .slider-container { margin-bottom: 40px; padding: 0 10px; }
 
 .slider {
-    -webkit-appearance: none; width: 100%; height: 10px;
-    background: #1a1917; border-radius: 5px; outline: none; border: 1px solid #444;
+    -webkit-appearance: none; /* Removes default browser styling */
+    width: 100%; 
+    height: 10px; /* Thicker track */
+    background: #1a1917; 
+    border-radius: 5px; 
+    outline: none; 
+    border: 1px solid #444;
 }
 
+/* --- THE SLIDER THUMB (The Circle you drag) --- */
 .slider::-webkit-slider-thumb {
-    -webkit-appearance: none; appearance: none;
-    width: 25px; height: 25px; border-radius: 50%;
-    background: #ff7575; cursor: pointer;
-    box-shadow: 0 0 10px rgba(255, 117, 117, 0.5);
-    margin-top: -8px; border: 2px solid white;
+    -webkit-appearance: none; 
+    appearance: none;
+    width: 25px; 
+    height: 25px; 
+    border-radius: 50%; /* Makes it a perfect circle */
+    background: #ff7575; /* Your Pink Accent */
+    cursor: pointer;
+    box-shadow: 0 0 10px rgba(255, 117, 117, 0.5); /* Glowing effect */
+    margin-top: -8px; /* Centers it on the track */
+    border: 2px solid white; /* White ring for contrast */
 }
 
+/* The "1" and "10" labels below the slider */
 .slider-steps {
-    display: flex; justify-content: space-between;
-    margin-top: 10px; color: #888; font-size: 12px; font-weight: 700;
+    display: flex; 
+    justify-content: space-between;
+    margin-top: 10px; 
+    color: #888; 
+    font-size: 12px; 
+    font-weight: 700;
 }
 
+/* The Start Button */
 .btn-start {
-    width: 100%; padding: 15px; background-color: #142819;
-    color: white; border: none; border-radius: 6px;
-    font-size: 18px; font-weight: 700; cursor: pointer;
-    transition: background 0.2s; border: 1px solid rgba(255,255,255,0.1);
+    width: 100%; 
+    padding: 15px; 
+    background-color: #142819;
+    color: white; 
+    border: none; 
+    border-radius: 6px;
+    font-size: 18px; 
+    font-weight: 700; 
+    cursor: pointer;
+    transition: background 0.2s; 
+    border: 1px solid rgba(255,255,255,0.1);
 }
 
 .btn-start:hover {
-    background-color: #1e3a24; border-color: #ff7575;
+    background-color: #1e3a24; 
+    border-color: #ff7575;
 }
