@@ -1,1 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SLAPS - Bot Setup</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700;900&display=swap" rel="stylesheet">
+</head>
+<body>
 
+    <div class="app-container">
+        
+        <nav class="sidebar-left">
+            <div class="logo-area">
+                <img src="assets/ISF_pink.png" alt="ISF" class="isf-logo">
+            </div>
+            
+            <ul class="nav-links">
+                <li><a href="index.html"><i class="fa-solid fa-arrow-left"></i> Back to Home</a></li>
+            </ul>
+        </nav>
+
+        <main class="game-board-area" style="flex-direction: column;">
+            
+            <div class="setup-card">
+                <div class="setup-header">
+                    <i class="fa-solid fa-robot"></i>
+                    <h1>BOT DIFFICULTY</h1>
+                </div>
+
+                <div class="difficulty-display">
+                    <h2 id="difficulty-label">MEDIUM</h2>
+                    <p id="difficulty-desc">Balanced speed and reaction time.</p>
+                </div>
+
+                <div class="slider-container">
+                    <input type="range" min="1" max="4" value="2" class="slider" id="diffRange">
+                    <div class="slider-steps">
+                        <span>Easy</span>
+                        <span>Med</span>
+                        <span>Hard</span>
+                        <span>Pro</span>
+                    </div>
+                </div>
+
+                <button class="btn-start" onclick="window.location.href='game.html'">START MATCH</button>
+            </div>
+
+        </main>
+    </div>
+
+    <script>
+        const slider = document.getElementById("diffRange");
+        const label = document.getElementById("difficulty-label");
+        const desc = document.getElementById("difficulty-desc");
+        
+        const difficulties = {
+            1: { name: "BEGINNER", desc: "Slow reactions. Good for learning." },
+            2: { name: "MEDIUM", desc: "Balanced speed and reaction time." },
+            3: { name: "HARD", desc: "Fast reflexes required. No mistakes." },
+            4: { name: "ISF MASTER", desc: "Inhuman speed. Good luck." }
+        };
+
+        slider.oninput = function() {
+            const val = this.value;
+            label.innerText = difficulties[val].name;
+            desc.innerText = difficulties[val].desc;
+            
+            // Color changes based on difficulty
+            if(val == 1) label.style.color = "#2ecc71"; // Green
+            if(val == 2) label.style.color = "#f1c40f"; // Yellow
+            if(val == 3) label.style.color = "#e67e22"; // Orange
+            if(val == 4) label.style.color = "#ff7575"; // Your Pink
+        }
+    </script>
+</body>
+</html>
