@@ -337,11 +337,11 @@ body {
 
 /* Specific Body style for game page */
 .game-body {
-    background-color: #2e4d38; 
+    background-color: #1e3324; /* Dark green base */
     background: radial-gradient(circle at center, #3a5e45 0%, #1e3324 100%);
     height: 100vh;
     width: 100vw;
-    overflow: hidden; /* Crucial: hides the parts extending off screen */
+    overflow: hidden; 
     display: flex;
     justify-content: center;
     align-items: center;
@@ -351,16 +351,15 @@ body {
 
 /* --- THE BOARD CONTAINER --- */
 .game-board {
-    width: 95%; /* Wider to fill space */
-    height: 100vh; /* Full height to touch top and bottom edges */
+    width: 95%;
+    height: 100vh;
     max-width: 1400px;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
 }
 
-/* --- ZONES (The White Outlines) --- */
-/* Base zone style */
+/* --- ZONES (The Containers) --- */
 .zone {
     width: 100%;
     position: relative;
@@ -372,119 +371,124 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
-    background-color: rgba(0,0,0,0.2); /* Slight dark tint to differentiate */
+    background-color: rgba(0,0,0,0.2); 
+    z-index: 10; /* Ensures they stay above other elements if overlaps happen */
 }
 
-/* OPPONENT ZONE (TOP) - Extends off top screen */
+/* OPPONENT ZONE (TOP) */
 .opponent-zone {
-    /* Only have a bottom border. Top is open. */
     border-bottom: 4px solid white;
-    /* Push it slightly up so the "cut" is clean */
-    margin-top: -5px;
-    padding-top: 5px;
-    align-items: flex-end; /* Align cards to the boundary line */
+    /* This pushes the "box" up off the screen so no top border is visible */
+    margin-top: -20px; 
+    padding-top: 20px;
+    align-items: flex-end; /* Align cards to the bottom line */
     padding-bottom: 20px;
 }
 
-/* PLAYER ZONE (BOTTOM) - Extends off bottom screen */
+/* PLAYER ZONE (BOTTOM) */
 .player-zone {
-    /* Only have a top border. Bottom is open. */
     border-top: 4px solid white;
-    /* Push it slightly down */
-    margin-bottom: -5px;
-    padding-bottom: 5px;
-    align-items: flex-start; /* Align cards to the boundary line */
+    /* This pushes the "box" down off the screen so no bottom border is visible */
+    margin-bottom: -20px;
+    padding-bottom: 20px;
+    align-items: flex-start; /* Align cards to the top line */
     padding-top: 20px;
 }
 
-/* Container for the 4 piles side-by-side */
+/* The invisible container holding the 4 piles */
 .foundation-piles {
     display: flex;
-    gap: 15px; /* Space between the 4 piles */
-    width: 80%;
+    gap: 20px; 
+    width: 60%; /* Restricts the total width of the 4 piles */
     justify-content: center;
 }
 
+/* THE SLOTS - These control the card size now */
 .fp-slot {
-    width: 22%; /* Each slot takes roughly a quarter space */
+    width: 12vh; /* Responsive width based on screen height */
+    max-width: 100px;
+    aspect-ratio: 2.5 / 3.5; /* Forces a playing card shape */
     display: flex;
     justify-content: center;
+    align-items: center;
     position: relative;
-    /* Temporary height to hold shape if empty */
-    min-height: 100px; 
 }
 
 
 /* --- MIDDLE BATTLEFIELD ZONE --- */
 .middle-zone {
-    flex-grow: 1; /* Takes available space between foundations */
+    flex-grow: 1; 
     display: flex;
     justify-content: center;
     align-items: center;
-    gap: 30px; 
-    /* No borders on the middle zone itself, it uses the foundation borders */
+    gap: 5vw; /* Responsive spacing */
 }
 
-/* --- CARD SIZING --- */
-/* The master class for all cards on the board */
+/* --- CARD SIZING (THE FIX) --- */
 .game-card {
-    width: 90px; /* Fixed width for consistency */
-    height: auto; /* Maintain aspect ratio */
-    border-radius: 6px;
-    box-shadow: 2px 4px 8px rgba(0,0,0,0.4);
-    border: 2px solid transparent; /* Placeholder for highlight borders */
-    transition: all 0.1s;
+    /* Force the image to fit the slot */
+    width: 100% !important; 
+    height: auto !important;
+    display: block;
+    border-radius: 5px;
+    /* Slight shadow for pop */
+    filter: drop-shadow(0 4px 6px rgba(0,0,0,0.5));
 }
 
-/* Adjustments based on where the card is */
-
-/* Opponent cards look slightly smaller due to perspective */
+/* Flip opponent cards */
 .opponent-card {
-    width: 80px;
-    /* Flip them upside down visually for the opponent view */
     transform: rotate(180deg);
 }
 
-/* Player cards are standard size */
+/* Player cursor */
 .player-card {
-    cursor: grab; /* Show hand icon for dragging later */
+    cursor: pointer;
+    transition: transform 0.1s;
 }
 
-/* Cards played in the center */
-.played-card {
-    width: 100px; /* Slightly larger center cards */
-    box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+.player-card:hover {
+    transform: translateY(-10px); /* Little pop up effect */
 }
 
-
-/* --- MIDDLE COMPONENTS LAYOUT --- */
+/* --- MIDDLE AREA COMPONENTS --- */
 
 .center-pile-area {
     width: 40%;
-    height: 80%;
+    height: 70%;
     border: 4px solid white;
     display: flex;
     justify-content: space-around;
     align-items: center;
     background-color: rgba(255,255,255,0.05);
-    border-radius: 10px;
+}
+
+/* The slots inside the center rectangle */
+.pile-slot {
+    width: 14vh; /* Slightly larger than foundation cards */
+    max-width: 120px;
+    aspect-ratio: 2.5 / 3.5;
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 
 .deck-slot {
-    width: 120px;
-    height: 160px;
-    border: 3px dashed rgba(255,255,255,0.5);
+    width: 14vh;
+    max-width: 120px;
+    aspect-ratio: 2.5 / 3.5;
+    border: 3px dashed rgba(255,255,255,0.3);
     border-radius: 8px;
     display: flex;
     justify-content: center;
     align-items: center;
 }
 
-.top-deck { align-self: flex-start; }
-.bottom-deck { align-self: flex-end; }
+.top-deck { align-self: flex-start; margin-top: 20px;}
+.bottom-deck { align-self: flex-end; margin-bottom: 20px;}
 
 
-/* --- UI WIDGETS (Minor adjustments for new layout) --- */
+/* --- UI WIDGETS --- */
+/* Kept exactly as before, just ensuring Z-index is high */
 .ui-widget-left {
     position: absolute;
     left: 20px;
@@ -499,7 +503,7 @@ body {
     box-shadow: 0 5px 15px rgba(0,0,0,0.5);
     width: 140px;
     text-align: center;
-    z-index: 100; /* Ensure it's on top */
+    z-index: 100; 
 }
 
 .ui-widget-right {
@@ -517,4 +521,19 @@ body {
     z-index: 100;
 }
 
-/* ... keep the rest of widget font styles ... */
+.stat-box { display: flex; flex-direction: column; gap: 2px; }
+.stat-label { font-size: 10px; color: #888; font-weight: 700; letter-spacing: 1px; }
+.stat-value { font-size: 32px; font-weight: 900; line-height: 1; }
+.text-red { color: #ff7575; }
+.btn-quit {
+    background: transparent; border: 1px solid #444; color: #888;
+    padding: 8px; font-size: 10px; font-weight: 700; border-radius: 4px;
+    cursor: pointer; margin-top: 10px; transition: all 0.2s;
+}
+.btn-quit:hover { border-color: #ff7575; color: #ff7575; }
+.score-row {
+    font-size: 12px; font-weight: 700; color: #fff;
+    display: flex; justify-content: space-between; gap: 15px;
+}
+.score-label { color: #888; width: 60px; }
+.score-data { color: #ff7575; }
