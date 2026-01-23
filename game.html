@@ -9,7 +9,17 @@
 </head>
 <body class="game-body" ondragstart="return false;" ondrop="return false;">
 
-    <div class="ui-widget-left">
+    <div class="ui-widget-left" style="top: 20%; left: 20px;">
+        <span class="stat-label">AI CARDS</span>
+        <div class="stat-value text-red" id="score-ai">26</div>
+    </div>
+
+    <div class="ui-widget-right" style="top: 20%; right: 20px;">
+        <span class="stat-label">YOUR CARDS</span>
+        <div class="stat-value text-green" id="score-player">26</div>
+    </div>
+
+    <div class="ui-widget-left" style="bottom: 20px; top: auto;">
         <button class="btn-quit" onclick="window.location.href='index.html'">QUIT MATCH</button>
     </div>
 
@@ -23,7 +33,7 @@
             
             <div class="deck-area" id="ai-draw-deck">
                 <img src="assets/cards/back_of_card.png" class="card-back" draggable="false">
-                </div>
+            </div>
 
             <div class="battlefield">
                 <div class="center-pile" id="center-pile-left"></div>
