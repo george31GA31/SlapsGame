@@ -1,5 +1,5 @@
 /* =========================================
-   1. VARIABLES & RESET
+   1. GLOBAL VARIABLES & RESET
    ========================================= */
 :root {
     --bg-dark: #21201d;       
@@ -7,9 +7,7 @@
     --bg-green: #142819;      
     --accent-pink: #ff7575;   
     --text-white: #ffffff;
-    --text-grey: #b0b0b0;
     --font-main: 'Segoe UI', Helvetica, Arial, sans-serif;
-    --font-logo: 'Montagu Slab', serif;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -24,41 +22,85 @@ body {
 
 .app-container { display: flex; height: 100%; width: 100%; }
 
-/* --- SIDEBAR --- */
+/* =========================================
+   2. HOME PAGE FIXES (CRITICAL)
+   ========================================= */
+/* Container for the center image */
+.board-center {
+    width: 50vh; 
+    height: 50vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    /* Force it to not overflow */
+    max-width: 500px;
+    max-height: 500px;
+}
+
+/* The Hero Image itself */
+.hero-cards {
+    width: 100%;       /* Fill the container */
+    max-width: 400px;  /* Never exceed 400px */
+    height: auto;      /* Maintain aspect ratio */
+    transform: rotate(-5deg);
+    box-shadow: 0 20px 40px rgba(0,0,0,0.6);
+    border-radius: 12px;
+    border: 4px solid #1a3320;
+    display: block;    /* Prevents inline weirdness */
+}
+
+/* Sidebar Styles */
 .sidebar-left {
     width: 240px; background-color: var(--bg-dark);
     display: flex; flex-direction: column; padding: 10px;
-    border-right: 1px solid #333;
+    border-right: 1px solid #333; z-index: 10;
 }
-.logo-area { padding: 15px 0 25px 15px; }
-.isf-logo { max-width: 100%; height: auto; max-height: 80px; display: block; }
-.nav-links { list-style: none; flex-grow: 1; }
-.nav-links li { margin-bottom: 5px; }
-.nav-links a {
-    display: flex; align-items: center; color: #999; 
-    text-decoration: none; padding: 12px 10px; font-size: 16px; 
-    border-radius: 5px; transition: background 0.2s, color 0.2s;
-    font-weight: 700; letter-spacing: 0.5px;
+.sidebar-right {
+    width: 350px; background-color: var(--bg-dark);
+    border-left: 1px solid #333; padding: 20px;
+    display: flex; flex-direction: column; z-index: 10;
 }
-.nav-links a i { width: 30px; font-size: 18px; }
-.nav-links a:hover { background-color: #2a2926; color: var(--text-white); }
-
-/* --- HOME PAGE --- */
 .game-board-area {
     flex-grow: 1; background-color: var(--bg-green);
     position: relative; display: flex; justify-content: center; align-items: center;
 }
 
-/* --- GAME BOARD --- */
+/* Navigation & Menu Styles (Kept from your original) */
+.logo-area { padding: 15px 0 25px 15px; }
+.isf-logo { max-width: 100%; height: auto; max-height: 80px; display: block; }
+.nav-links { list-style: none; flex-grow: 1; }
+.nav-links a {
+    display: flex; align-items: center; color: #999; text-decoration: none; 
+    padding: 12px 10px; font-weight: 700; border-radius: 5px; transition: 0.2s;
+}
+.nav-links a:hover { background-color: #2a2926; color: white; }
+.nav-links i { width: 30px; font-size: 18px; }
+
+.menu-card {
+    background-color: var(--bg-light);
+    background-image: linear-gradient(to bottom, #2d2c29, #262522);
+    border-radius: 8px; padding: 12px 15px; margin-bottom: 12px;
+    display: flex; align-items: center; gap: 15px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.3); border: 1px solid #1e1e1c;
+    position: relative; overflow: hidden;
+}
+/* Coloured stripes */
+.menu-card:nth-child(1) { border-left: 4px solid #f1c40f; }
+.menu-card:nth-child(2) { border-left: 4px solid #3498db; }
+.menu-card:nth-child(3) { border-left: 4px solid #95a5a6; }
+.menu-card:nth-child(4) { border-left: 4px solid #e67e22; }
+
+.card-text h3 { font-size: 16px; margin-bottom: 2px; color: white; }
+.card-text p { font-size: 12px; color: #888; }
+
+/* =========================================
+   3. GAME BOARD STYLES
+   ========================================= */
 .game-body {
-    background-color: #1e3324; 
     background: radial-gradient(circle at center, #3a5e45 0%, #1e3324 100%);
-    height: 100vh; width: 100vw; overflow: hidden; 
-    display: flex; justify-content: center; align-items: center;
-    font-family: 'Montserrat', sans-serif;
 }
 .game-board {
-    width: 95%; height: 95%; max-width: 1200px;
+    width: 95%; height: 95%; max-width: 1400px;
     display: flex; flex-direction: column; justify-content: space-between;
 }
 
@@ -74,11 +116,11 @@ body {
 }
 
 .deck-area {
-    width: 120px; height: 160px;
+    width: 12vh; height: 16vh;
     border: 2px dashed rgba(255,255,255,0.3); border-radius: 8px;
-    display: flex; justify-content: center; align-items: center; position: relative;
+    display: flex; justify-content: center; align-items: center;
 }
-.card-back { width: 100%; height: auto; border-radius: 5px; }
+.card-back { width: 100%; height: 100%; border-radius: 5px; }
 
 .battlefield {
     width: 50%; height: 100%;
@@ -86,64 +128,51 @@ body {
     display: flex; justify-content: space-around; align-items: center;
 }
 .center-pile {
-    width: 110px; height: 150px;
+    width: 13vh; height: 18vh;
     border: 2px solid rgba(255,255,255,0.1); border-radius: 6px; position: relative;
 }
 
-/* --- CARD STYLING (FIXED) --- */
+/* =========================================
+   4. CARD STYLING (FIXED SIZE)
+   ========================================= */
 .game-card {
-    width: 12vh; /* Fixed Size */
-    max-width: 100px; height: auto;
-    position: absolute; border-radius: 5px;
+    width: 12vh;        /* Keeps cards proportional to screen height */
+    max-width: 100px; 
+    height: auto;       /* Maintains aspect ratio */
+    position: absolute; 
+    border-radius: 5px;
     filter: drop-shadow(0 4px 6px rgba(0,0,0,0.5));
-    transition: transform 0.1s; z-index: 10;
+    transition: transform 0.05s; /* Faster for drag response */
+    z-index: 10;
 }
 .opponent-card { 
     transform: rotate(180deg);
-    pointer-events: none; /* Stops spinning/clicking */
+    pointer-events: none; /* AI Cards untouchable */
 }
 .player-card { cursor: grab; }
 .player-card:active {
-    cursor: grabbing; transform: scale(1.1); z-index: 1000 !important;
+    cursor: grabbing; 
+    transform: scale(1.05); 
+    z-index: 1000 !important;
 }
 
-/* --- SETUP SLIDER --- */
+/* =========================================
+   5. SLIDER & ANIMATIONS
+   ========================================= */
 .setup-card {
     background-color: #21201d; padding: 50px; border-radius: 16px; width: 500px;
     text-align: center; border: 4px solid #4a4a4a; box-shadow: 0 20px 50px rgba(0,0,0,0.8);
     margin: auto; z-index: 200;
 }
-.setup-header i {
-    font-size: 60px; color: #66ff66; display: block; margin-bottom: 15px;
-    transition: color 0.3s ease, text-shadow 0.3s ease;
-    text-shadow: 0 0 20px rgba(102, 255, 102, 0.5);
-}
-.diff-number {
-    font-size: 100px; font-weight: 900; line-height: 1; margin-bottom: 0; color: #fff;
-    transition: color 0.2s ease;
-}
-.slider {
-    -webkit-appearance: none; width: 100%; height: 16px; border-radius: 8px;
-    outline: none; border: 2px solid #333; background: #111;
-}
-.slider::-webkit-slider-thumb {
-    -webkit-appearance: none; appearance: none;
-    width: 34px; height: 34px; border-radius: 50%; background: #fff; cursor: pointer;
-    box-shadow: 0 0 15px rgba(255, 255, 255, 0.5); border: 4px solid #21201d; margin-top: -10px;
-}
-.btn-start {
-    width: 100%; padding: 20px; background-color: #142819; color: #fff;
-    border: 2px solid #333; border-radius: 8px; font-size: 20px; font-weight: 900;
-    cursor: pointer; transition: all 0.2s;
-}
-.btn-start:hover { background-color: #1e3a24; border-color: #fff; }
+.setup-header i { font-size: 60px; color: #66ff66; margin-bottom: 15px; }
+.diff-number { font-size: 100px; font-weight: 900; line-height: 1; color: #fff; }
+.slider { -webkit-appearance: none; width: 100%; height: 16px; border-radius: 8px; background: #111; border: 2px solid #333; }
+.slider::-webkit-slider-thumb { -webkit-appearance: none; width: 34px; height: 34px; border-radius: 50%; background: #fff; border: 4px solid #21201d; margin-top: -10px; cursor: pointer; }
+.btn-start { width: 100%; padding: 20px; background: #142819; color: #fff; border: 2px solid #333; font-size: 20px; font-weight: 900; cursor: pointer; }
 
-/* --- ANIMATIONS --- */
+/* Animations */
 .hidden { display: none !important; }
-.deck-ready {
-    box-shadow: 0 0 25px #ff7575; border-color: #ff7575 !important;
-    transform: scale(1.05); transition: all 0.2s ease;
-}
+.deck-ready { box-shadow: 0 0 25px #ff7575; border-color: #ff7575 !important; transform: scale(1.05); }
 #countdown-overlay {
     position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
     font-size: 150px; font-weight: 900; color: #fff; text-shadow: 0 0 50px rgba(0,0,0,0.8);
@@ -154,5 +183,3 @@ body {
     80% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; }
     100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
 }
-.card-face-down { filter: brightness(0.6); cursor: pointer; }
-.card-face-down:hover { filter: brightness(0.8); }
