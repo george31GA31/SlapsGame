@@ -1,5 +1,5 @@
 /* =========================================
-   SLAPS ENGINE v3.0 - GAME LOOP & BOUNDARIES
+   SLAPS ENGINE v3.1 - FIXED SIZES
    ========================================= */
 
 const gameState = {
@@ -45,7 +45,6 @@ function initGame() {
     gameState.playerDeck = fullDeck.slice(0, 26);
     gameState.aiDeck = fullDeck.slice(26, 52);
 
-    // Initial Deal (Foundations)
     dealFoundation(gameState.playerDeck, 'player');
     dealFoundation(gameState.aiDeck, 'ai');
 }
@@ -54,7 +53,6 @@ function createDeck() {
     let deck = [];
     SUITS.forEach(suit => {
         RANKS.forEach((rank, index) => {
-            // Logic: 2=2, ... King=13, Ace=14
             deck.push(new Card(suit, rank, index + 2)); 
         });
     });
@@ -81,11 +79,10 @@ function dealFoundation(deck, owner) {
         
         pileCards.forEach((card, index) => {
             const img = document.createElement('img');
-            img.className = 'game-card';
+            img.className = 'game-card'; // This uses the CSS size (12vh), NOT 100%
             
             const isTopCard = (index === size - 1);
 
-            // STATE: Face Up or Down
             if (isTopCard) {
                 setCardFaceUp(img, card, owner);
             } else {
@@ -111,7 +108,6 @@ function dealFoundation(deck, owner) {
     });
 }
 
-// Helper: Make Card Face Up
 function setCardFaceUp(img, card, owner) {
     img.src = card.imgSrc;
     img.classList.remove('card-face-down');
@@ -119,49 +115,41 @@ function setCardFaceUp(img, card, owner) {
     
     if (owner === 'player') {
         img.classList.add('player-card');
-        img.onclick = null; // Remove flip listener
-        makeDraggable(img, card); // Make interactive
+        img.onclick = null; 
+        makeDraggable(img, card); 
     } else {
         img.classList.add('opponent-card');
     }
 }
 
-// Helper: Make Card Face Down
 function setCardFaceDown(img, card, owner) {
     img.src = CARD_BACK_SRC;
     img.classList.add('card-face-down');
     card.isFaceUp = false;
     
-    // Add Click-to-Flip Listener
     if (owner === 'player') {
         img.onclick = () => tryFlipCard(img, card);
     }
 }
 
-// --- FLIP LOGIC (Limit 4 Live Cards) ---
 function tryFlipCard(img, card) {
-    // 1. Count current face-up cards
     const container = document.getElementById('player-foundation-area');
     const liveCards = container.querySelectorAll('.player-card').length;
 
-    // 2. Enforce Rule: Max 4
     if (liveCards < 4) {
         setCardFaceUp(img, card, 'player');
     } else {
         console.log("Cannot flip: Max 4 cards active!");
-        // Optional: Shake animation here
     }
 }
 
-// --- THE REVEAL SEQUENCE (3-2-1) ---
+// --- THE REVEAL SEQUENCE ---
 function handlePlayerDeckClick() {
     if (gameState.gameActive || gameState.playerReady) return;
 
-    // 1. Player Set Ready
     gameState.playerReady = true;
     document.getElementById('player-draw-deck').classList.add('deck-ready');
 
-    // 2. Sim AI Ready (Delay 500ms for realism)
     setTimeout(() => {
         gameState.aiReady = true;
         document.getElementById('ai-draw-deck').classList.add('deck-ready');
@@ -180,9 +168,8 @@ function startCountdown() {
         count--;
         if (count > 0) {
             overlay.innerText = count;
-            // Retrigger animation
             overlay.style.animation = 'none';
-            overlay.offsetHeight; /* trigger reflow */
+            overlay.offsetHeight; 
             overlay.style.animation = 'popIn 0.5s ease';
         } else {
             clearInterval(timer);
@@ -193,20 +180,18 @@ function startCountdown() {
 }
 
 function performReveal() {
-    // 1. Remove Glow
     document.getElementById('player-draw-deck').classList.remove('deck-ready');
     document.getElementById('ai-draw-deck').classList.remove('deck-ready');
 
-    // 2. Move Logic: Take 1 card from each deck
     if (gameState.playerDeck.length > 0) {
         let pCard = gameState.playerDeck.pop();
-        gameState.centerPileRight.push(pCard); // Player reveals to Right
+        gameState.centerPileRight.push(pCard);
         renderCenterPile('right', pCard);
     }
     
     if (gameState.aiDeck.length > 0) {
         let aCard = gameState.aiDeck.pop();
-        gameState.centerPileLeft.push(aCard); // AI reveals to Left
+        gameState.centerPileLeft.push(aCard);
         renderCenterPile('left', aCard);
     }
 
@@ -215,33 +200,33 @@ function performReveal() {
     gameState.aiReady = false;
 }
 
+// --- THIS IS THE FIX FOR THE GIANT CARDS ---
 function renderCenterPile(side, card) {
     const id = side === 'left' ? 'center-pile-left' : 'center-pile-right';
     const container = document.getElementById(id);
     
-    // Create new image for center
     const img = document.createElement('img');
     img.src = card.imgSrc;
-    img.style.width = '100%';
-    img.style.height = '100%';
-    img.style.position = 'absolute';
+    img.className = 'game-card'; // Uses the fixed 12vh CSS size
     
-    // Random rotation for realism
+    // Center it
+    img.style.left = '50%';
+    img.style.top = '50%';
+    // Random rotation
     const rot = Math.random() * 20 - 10;
-    img.style.transform = `rotate(${rot}deg)`;
+    img.style.transform = `translate(-50%, -50%) rotate(${rot}deg)`;
     
     container.appendChild(img);
 }
 
-// --- DRAG ENGINE WITH PHYSICAL BOUNDARY ---
+// --- DRAG ENGINE ---
 function makeDraggable(img, cardData) {
     let isDragging = false;
     let startX, startY, initialLeft, initialTop;
-    const box = document.getElementById('player-foundation-area');
 
     img.onmousedown = (e) => {
         e.preventDefault();
-        if (!gameState.gameActive) return; // Can't drag before start
+        if (!gameState.gameActive) return; 
 
         isDragging = true;
         startX = e.clientX;
@@ -264,18 +249,11 @@ function makeDraggable(img, cardData) {
         let newTop = initialTop + dy;
         let newLeft = initialLeft + dx;
 
-        // BOUNDARY LOGIC:
-        // -50 is roughly the "Exit Threshold" to leave the box
+        // BOUNDARY WALL LOGIC
         if (newTop < -40) {
-            // We are trying to leave the box!
-            // CHECK: Is it a legal play?
             if (!checkLegalPlay(cardData)) {
-                // ILLEGAL! WALL COLLISION!
-                // We clamp 'newTop' so it cannot go higher than -40
-                // It feels like hitting a physical ceiling.
-                newTop = -40; 
+                newTop = -40; // Hit the wall
             }
-            // If it IS legal, we let it go through (no clamp)
         }
 
         img.style.left = `${newLeft}px`;
@@ -289,15 +267,10 @@ function makeDraggable(img, cardData) {
         img.style.cursor = 'grab';
         img.style.zIndex = 10; 
 
-        // DROP LOGIC
         if (img.offsetTop < -50 && checkLegalPlay(cardData)) {
-            // It crossed the line AND is legal -> Play it!
             playCardToCenter(cardData, img);
         } else {
-            // It didn't leave, or was illegal -> Snap back or stay put
-            // If it's inside the box, we leave it (Free move).
-            // If it's pushed against the wall (illegal attempt), we snap back to be tidy.
-            if (img.offsetTop <= -40) snapBack(img);
+            if (img.offsetTop <= -40 && !checkLegalPlay(cardData)) snapBack(img);
         }
     };
 }
@@ -309,9 +282,7 @@ function snapBack(img) {
     setTimeout(() => { img.style.transition = ""; }, 200);
 }
 
-// --- RULE LOGIC: +/- 1 ---
 function checkLegalPlay(card) {
-    // Check both piles
     return checkPileLogic(card, gameState.centerPileLeft) || 
            checkPileLogic(card, gameState.centerPileRight);
 }
@@ -322,18 +293,13 @@ function checkPileLogic(card, targetPile) {
     const targetCard = targetPile[targetPile.length - 1];
     const diff = Math.abs(card.value - targetCard.value);
     
-    // Normal +/- 1 rule
     if (diff === 1) return true;
-    
-    // Ace Loop (14 vs 2) -> Diff is 12
     if (diff === 12) return true;
     
     return false;
 }
 
 function playCardToCenter(card, imgElement) {
-    // Determine which pile to play on
-    // Preference: Left first if valid, else Right
     let target = null;
     let side = '';
 
@@ -346,28 +312,8 @@ function playCardToCenter(card, imgElement) {
     }
 
     if (target) {
-        // 1. Update Data
         target.push(card);
-        
-        // 2. Visual Move
-        imgElement.remove(); // Remove from foundation
-        function renderCenterPile(side, card) {
-    const id = side === 'left' ? 'center-pile-left' : 'center-pile-right';
-    const container = document.getElementById(id);
-    
-    // Create new image for center
-    const img = document.createElement('img');
-    img.src = card.imgSrc;
-    img.className = 'game-card'; // Adds the CSS class we just fixed
-    
-    // Center the card in the pile slot
-    img.style.left = '50%';
-    img.style.top = '50%';
-    // Combine the random rotation with the centering transform
-    const rot = Math.random() * 20 - 10;
-    img.style.transform = `translate(-50%, -50%) rotate(${rot}deg)`;
-    
-    container.appendChild(img);
-}
+        imgElement.remove(); 
+        renderCenterPile(side, card); 
     }
 }
