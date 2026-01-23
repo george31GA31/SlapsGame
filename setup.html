@@ -16,7 +16,6 @@
             <div class="logo-area">
                 <img src="assets/ISF_pink.png" alt="ISF" class="isf-logo">
             </div>
-            
             <ul class="nav-links">
                 <li><a href="index.html"><i class="fa-solid fa-arrow-left"></i> Back to Home</a></li>
             </ul>
@@ -25,23 +24,23 @@
         <main class="game-board-area" style="flex-direction: column;">
             
             <div class="setup-card">
+                
                 <div class="setup-header">
-                    <i class="fa-solid fa-robot"></i>
+                    <i class="fa-solid fa-robot" id="bot-icon"></i>
                     <h1>BOT DIFFICULTY</h1>
                 </div>
 
                 <div class="difficulty-display">
-                    <h2 id="difficulty-label">MEDIUM</h2>
-                    <p id="difficulty-desc">Balanced speed and reaction time.</p>
+                    <div class="diff-number" id="diff-number">1</div>
+                    <h2 id="difficulty-label">ROOKIE</h2>
                 </div>
 
                 <div class="slider-container">
-                    <input type="range" min="1" max="4" value="2" class="slider" id="diffRange">
+                    <input type="range" min="1" max="10" value="1" class="slider" id="diffRange">
+                    
                     <div class="slider-steps">
-                        <span>Easy</span>
-                        <span>Med</span>
-                        <span>Hard</span>
-                        <span>Pro</span>
+                        <span>1</span>
+                        <span>10</span>
                     </div>
                 </div>
 
@@ -54,25 +53,60 @@
     <script>
         const slider = document.getElementById("diffRange");
         const label = document.getElementById("difficulty-label");
-        const desc = document.getElementById("difficulty-desc");
+        const numberDisplay = document.getElementById("diff-number");
+        const icon = document.getElementById("bot-icon");
         
-        const difficulties = {
-            1: { name: "BEGINNER", desc: "Slow reactions. Good for learning." },
-            2: { name: "MEDIUM", desc: "Balanced speed and reaction time." },
-            3: { name: "HARD", desc: "Fast reflexes required. No mistakes." },
-            4: { name: "ISF MASTER", desc: "Inhuman speed. Good luck." }
+        // The 10 Difficulty Levels
+        const levels = {
+            1: "ROOKIE",
+            2: "NOVICE",
+            3: "DEVELOPING",
+            4: "INTERMEDIATE",
+            5: "COMPETENT",
+            6: "ADVANCED",
+            7: "ESTABLISHED",
+            8: "PROVEN",
+            9: "ELITE",
+            10: "MASTER"
         };
 
-        slider.oninput = function() {
-            const val = this.value;
-            label.innerText = difficulties[val].name;
-            desc.innerText = difficulties[val].desc;
+        // Smooth Color Gradient: Light Green -> Deep Red
+        // We use specific Hex codes to ensure it looks good at every step
+        const colors = {
+            1: "#66ff66", // Light Green
+            2: "#88ff66",
+            3: "#aaff66",
+            4: "#ccff66",
+            5: "#ffff66", // Yellow (Middle)
+            6: "#ffcc66",
+            7: "#ffaa66",
+            8: "#ff8866",
+            9: "#ff6666",
+            10: "#8b0000" // Deep Red
+        };
+
+        // Function to update everything
+        function updateUI(val) {
+            // Update Text
+            label.innerText = levels[val];
+            numberDisplay.innerText = val;
             
-            // Color changes based on difficulty
-            if(val == 1) label.style.color = "#2ecc71"; // Green
-            if(val == 2) label.style.color = "#f1c40f"; // Yellow
-            if(val == 3) label.style.color = "#e67e22"; // Orange
-            if(val == 4) label.style.color = "#ff7575"; // Your Pink
+            // Update Colors
+            const color = colors[val];
+            label.style.color = color;
+            numberDisplay.style.color = color;
+            icon.style.color = color;
+            
+            // Add a subtle glow to the icon matching the color
+            icon.style.textShadow = `0 0 15px ${color}`;
+        }
+
+        // Initialize on load
+        updateUI(slider.value);
+
+        // Update on slide
+        slider.oninput = function() {
+            updateUI(this.value);
         }
     </script>
 </body>
