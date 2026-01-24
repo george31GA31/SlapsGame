@@ -164,10 +164,12 @@ body {
 /* =========================================
    4. GAME BOARD (GREEN FELT RESTORED)
    ========================================= */
+
+/* Forces the green background on the body itself or the main container */
+.game-body, 
 .game-board-area {
-    flex-grow: 1; 
     width: 100%;
-    height: 100%;
+    height: 100vh;
     
     /* FORCE GREEN GRADIENT OVERRIDE */
     background: radial-gradient(circle at center, #3a5e45 0%, #1e3324 100%) !important;
