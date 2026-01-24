@@ -224,48 +224,74 @@ function dealSyncedHand(cardsData, owner) {
 function dealSmartHand(cards, owner) {
     const container = document.getElementById(`${owner}-foundation-area`);
     container.innerHTML = ''; 
-    if (owner === 'player') gameState.playerHand = []; else gameState.aiHand = [];
+    
+    // Reset local hand tracking
+    if (owner === 'player') gameState.playerHand = []; 
+    else gameState.aiHand = [];
 
+    // Distribute cards into 4 Piles (Lanes)
     const piles = [[], [], [], []];
     let idx = 0;
-    if (cards.length >= 10) { [4,3,2,1].forEach((s, i) => { for(let j=0; j<s; j++) piles[i].push(cards[idx++]); }); } 
-    else { cards.forEach(c => { piles[idx].push(c); idx = (idx+1)%4; }); }
+    if (cards.length >= 10) { 
+        // Standard Deal: 4-3-2-1 distribution
+        [4,3,2,1].forEach((s, i) => { 
+            for(let j=0; j<s; j++) piles[i].push(cards[idx++]); 
+        }); 
+    } else { 
+        // Shortage Deal: Round-robin distribution
+        cards.forEach(c => { 
+            piles[idx].push(c); 
+            idx = (idx+1)%4; 
+        }); 
+    }
 
-    // --- MIRRORING FIX ---
-    // Player: 5 -> 29 -> 53 -> 77 (Left to Right)
-    // AI:     77 -> 53 -> 29 -> 5 (Right to Left, mirrored)
-    
+    // Render the Piles
     piles.forEach((pile, laneIdx) => {
-        // Calculate Base Left %
+        if(pile.length === 0) return;
+
+        // --- MIRRORING MATH ---
+        // Player (Me): Lane 0 is Left (5%). Lane 3 is Right (77%).
+        // AI (Opponent): Lane 0 is THEIR Left, so I should see it on my RIGHT (77%).
+        //                Lane 3 is THEIR Right, so I should see it on my LEFT (5%).
+        
         let leftPos;
         if (owner === 'player') {
-            leftPos = 5 + (laneIdx * 24);
+            leftPos = 5 + (laneIdx * 24);   // Normal: 5, 29, 53, 77
         } else {
-            // MIRROR: Start at 77 and go backwards
-            leftPos = 77 - (laneIdx * 24);
+            leftPos = 77 - (laneIdx * 24);  // Mirrored: 77, 53, 29, 5
         }
 
-        if(pile.length===0) return;
-
         pile.forEach((card, i) => {
-            const img = document.createElement('img'); img.className = 'game-card';
+            const img = document.createElement('img'); 
+            img.className = 'game-card';
             img.src = card.imgSrc;
             
-            card.owner = owner; card.laneIndex = laneIdx; card.element = img;
+            card.owner = owner; 
+            card.laneIndex = laneIdx; 
+            card.element = img;
+            
             const isTop = (i === pile.length - 1);
             
+            // Apply Calculated Position
             img.style.left = `${leftPos}%`; 
-            img.style.zIndex = i+10;
+            img.style.zIndex = i + 10;
             
-            if (owner === 'ai') img.style.top = `${10 + i*5}px`; else img.style.top = `${60 - i*5}px`;
+            // Vertical Stacking
+            if (owner === 'ai') img.style.top = `${10 + i * 5}px`; 
+            else img.style.top = `${60 - i * 5}px`;
             
-            if (isTop) setCardFaceUp(img, card, owner); else setCardFaceDown(img, card, owner);
+            // Set Face Up/Down
+            if (isTop) setCardFaceUp(img, card, owner); 
+            else setCardFaceDown(img, card, owner);
+            
             container.appendChild(img);
-            if(owner==='player') gameState.playerHand.push(card); else gameState.aiHand.push(card);
+            
+            // Add to State
+            if(owner === 'player') gameState.playerHand.push(card); 
+            else gameState.aiHand.push(card);
         });
     });
 }
-
 // --- PHYSICS: BOUNDARIES & SYNC ---
 function makeDraggable(img, cardData) {
     img.onmousedown = (e) => {
