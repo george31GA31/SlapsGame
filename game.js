@@ -1,5 +1,5 @@
 /* =========================================
-   SLAPS ENGINE v13.0 - RULES PERFECTED
+   SLAPS ENGINE v14.0 - STRICT COUNTING RULES
    ========================================= */
 
 const gameState = {
@@ -10,7 +10,7 @@ const gameState = {
     centerPileLeft: [],
     centerPileRight: [],
     
-    // Total cards owned (persists across rounds)
+    // SCORE TRACKING (Simple integer counters)
     playerTotal: 26,
     aiTotal: 26,
 
@@ -38,7 +38,7 @@ class Card {
         this.value = value; 
         this.imgSrc = `assets/cards/${rank}_of_${suit}.png`;
         this.isFaceUp = false;
-        this.owner = null; // 'player' or 'ai' (Permanent Ownership)
+        this.owner = null; 
         this.element = null; 
         this.laneIndex = 0; 
     }
@@ -48,7 +48,7 @@ window.onload = function() {
     const storedDiff = localStorage.getItem('slapsDifficulty');
     if (storedDiff) gameState.difficulty = parseInt(storedDiff);
     
-    // Force 26-26 on first load
+    // FORCE START: 26-26
     gameState.playerTotal = 26;
     gameState.aiTotal = 26;
     
@@ -60,44 +60,40 @@ function startRound() {
     let fullDeck = createDeck();
     shuffle(fullDeck);
 
-    // WIN CONDITION: If you start a round with 0 cards, you win the match.
+    // MATCH WIN CHECK
     if (gameState.playerTotal <= 0) { showEndGame("YOU WIN THE MATCH!", true); return; }
     if (gameState.aiTotal <= 0) { showEndGame("AI WINS THE MATCH!", false); return; }
 
-    // 1. Separate cards by owner count
+    // 1. Setup Decks based on Totals
     const pTotal = gameState.playerTotal;
     const pAllCards = fullDeck.slice(0, pTotal);
     const aAllCards = fullDeck.slice(pTotal, 52);
 
-    // 2. Determine Foundation Size (Max 10)
-    // If < 10, Deck is empty immediately
+    // 2. Foundation Split (<10 check)
     const pHandSize = Math.min(10, pTotal);
     const aHandSize = Math.min(10, 52 - pTotal);
 
-    // 3. Split Hand vs Deck
     const pHandCards = pAllCards.splice(0, pHandSize);
-    gameState.playerDeck = pAllCards; // Remaining go to deck
+    gameState.playerDeck = pAllCards; 
     
     const aHandCards = aAllCards.splice(0, aHandSize);
     gameState.aiDeck = aAllCards;
 
-    // 4. IMMEDIATE SHORTAGE CHECK
-    // If I have cards on board but 0 in deck, and Opponent has > 1 in deck -> Split Immediately
+    // 3. IMMEDIATE SHORTAGE CHECK (Start of Round)
+    // Borrowing happens physically, but DOES NOT CHANGE SCORE
     if (gameState.playerDeck.length === 0 && gameState.aiDeck.length > 1) {
         const steal = Math.floor(gameState.aiDeck.length / 2);
-        const stolen = gameState.aiDeck.splice(0, steal);
-        gameState.playerDeck = gameState.playerDeck.concat(stolen);
+        gameState.playerDeck = gameState.aiDeck.splice(0, steal);
         document.getElementById('borrowed-player').classList.remove('hidden');
     }
     
     if (gameState.aiDeck.length === 0 && gameState.playerDeck.length > 1) {
         const steal = Math.floor(gameState.playerDeck.length / 2);
-        const stolen = gameState.playerDeck.splice(0, steal);
-        gameState.aiDeck = gameState.aiDeck.concat(stolen);
+        gameState.aiDeck = gameState.playerDeck.splice(0, steal);
         document.getElementById('borrowed-ai').classList.remove('hidden');
     }
 
-    // 5. Deal Hands (Using Smart Spread for low cards)
+    // 4. Deal
     dealSmartHand(pHandCards, 'player');
     dealSmartHand(aHandCards, 'ai');
     
@@ -110,7 +106,7 @@ function startRound() {
 
     checkDeckVisibility();
     gameState.gameActive = false;
-    updateScoreboard();
+    updateScoreboard(); // Shows the starting totals
 }
 
 function dealSmartHand(cards, owner) {
@@ -120,29 +116,20 @@ function dealSmartHand(cards, owner) {
     if (owner === 'player') gameState.playerHand = [];
     else gameState.aiHand = [];
 
-    // SETUP STRATEGY:
-    // If >= 10 cards: Standard 4-3-2-1
-    // If < 10 cards: Spread horizontally first (1-1-1-1) to maximize open slots
-    
     const piles = [[], [], [], []];
-    
     if (cards.length >= 10) {
-        // Standard Deal
         let cardIdx = 0;
         [4, 3, 2, 1].forEach((size, i) => {
             for (let j=0; j<size; j++) piles[i].push(cards[cardIdx++]);
         });
     } else {
-        // Spread Deal (For < 10)
-        // Deal 1 to each pile, then loop
         let pileIdx = 0;
         cards.forEach(card => {
             piles[pileIdx].push(card);
-            pileIdx = (pileIdx + 1) % 4; // Cycle 0-1-2-3
+            pileIdx = (pileIdx + 1) % 4; 
         });
     }
 
-    // RENDER THE PILES
     let currentLeftPercent = 5; 
     piles.forEach((pile, laneIdx) => {
         if (pile.length === 0) { currentLeftPercent += 24; return; }
@@ -153,14 +140,12 @@ function dealSmartHand(cards, owner) {
             card.owner = owner; 
             card.laneIndex = laneIdx; 
 
-            // Only top card is Face Up
             const isTopCard = (index === pile.length - 1);
             if (isTopCard) setCardFaceUp(img, card, owner);
             else setCardFaceDown(img, card, owner);
 
             img.style.left = `${currentLeftPercent}%`;
             
-            // Stack visuals
             let stackOffset = index * 5; 
             if (owner === 'ai') img.style.top = `${10 + stackOffset}px`;
             else img.style.top = `${60 - stackOffset}px`;
@@ -194,27 +179,11 @@ function shuffle(array) {
     }
 }
 
-// SCOREBOARD: Counts OWNERSHIP, not Location
+// --- SCOREBOARD: SIMPLE INTEGER DISPLAY ---
 function updateScoreboard() {
-    let pCount = 0;
-    let aCount = 0;
-
-    // We scan all active piles (Hand + Deck)
-    // Borrowed cards in 'playerDeck' still have owner='ai', so they count for AI.
-    const allActiveLists = [
-        gameState.playerHand, gameState.playerDeck,
-        gameState.aiHand, gameState.aiDeck
-    ];
-
-    allActiveLists.forEach(list => {
-        list.forEach(c => {
-            if (c.owner === 'player') pCount++;
-            else if (c.owner === 'ai') aCount++;
-        });
-    });
-
-    document.getElementById('score-player').innerText = pCount;
-    document.getElementById('score-ai').innerText = aCount;
+    // No calculations here. Just display the Life Counter.
+    document.getElementById('score-player').innerText = gameState.playerTotal;
+    document.getElementById('score-ai').innerText = gameState.aiTotal;
 }
 
 function checkDeckVisibility() {
@@ -228,31 +197,23 @@ function checkDeckVisibility() {
 function endRound(winner) {
     gameState.gameActive = false;
     
-    // LOGIC FIX: "Borrowed" cards are temporary. 
-    // If I win, I keep ONLY the cards in my deck that are MINE.
-    // Borrowed cards return to the pool (which the loser takes).
+    // SCORE CARRY OVER:
+    // The winner keeps their CURRENT Score.
+    // The loser takes the rest (52 - WinnerScore).
     
-    let winnerCount = 0;
-
     if (winner === 'player') {
-        // Count only cards physically in deck AND owned by player
-        winnerCount = gameState.playerDeck.filter(c => c.owner === 'player').length;
-        
-        gameState.playerTotal = winnerCount;
-        gameState.aiTotal = 52 - winnerCount; // AI takes the rest
-        
-        showRoundMessage("ROUND WON!", `You kept ${winnerCount} cards (Borrowed returned).`);
+        // Player wins round. 
+        // gameState.playerTotal IS ALREADY CORRECT (it has been decrementing all game)
+        // We just need to calculate AI's new total for next round (remainder).
+        gameState.aiTotal = 52 - gameState.playerTotal;
+        showRoundMessage("ROUND WON!", `You start next round with ${gameState.playerTotal} cards.`);
     } else {
-        // Count only cards physically in deck AND owned by AI
-        winnerCount = gameState.aiDeck.filter(c => c.owner === 'ai').length;
-        
-        gameState.aiTotal = winnerCount;
-        gameState.playerTotal = 52 - winnerCount; // Player takes the rest
-        
-        showRoundMessage("ROUND LOST!", `AI kept ${winnerCount} cards.`);
+        // AI wins round.
+        gameState.playerTotal = 52 - gameState.aiTotal;
+        showRoundMessage("ROUND LOST!", `AI starts next round with ${gameState.aiTotal} cards.`);
     }
-    // Scores will update visually when startRound() triggers
 }
+
 // --- CARD HELPERS ---
 function setCardFaceUp(img, card, owner) {
     img.src = card.imgSrc;
@@ -327,21 +288,41 @@ function performReveal() {
     document.getElementById('player-draw-deck').classList.remove('deck-ready');
     document.getElementById('ai-draw-deck').classList.remove('deck-ready');
 
-    // --- BORROWING LOGIC (STOPPAGE) ---
+    // --- BORROWING LOGIC (Physical Only) ---
+    // If deck empty, move physical cards. NO SCORE CHANGE HERE.
+    let playerBorrowed = false;
+    let aiBorrowed = false;
+
     if (gameState.playerDeck.length === 0 && gameState.aiDeck.length > 0) {
         const stealAmount = Math.floor(gameState.aiDeck.length / 2);
         const stolen = gameState.aiDeck.splice(0, stealAmount);
         gameState.playerDeck = gameState.playerDeck.concat(stolen);
         document.getElementById('borrowed-player').classList.remove('hidden');
+        playerBorrowed = true;
     }
+
     if (gameState.aiDeck.length === 0 && gameState.playerDeck.length > 0) {
         const stealAmount = Math.floor(gameState.playerDeck.length / 2);
         const stolen = gameState.playerDeck.splice(0, stealAmount);
         gameState.aiDeck = gameState.aiDeck.concat(stolen);
         document.getElementById('borrowed-ai').classList.remove('hidden');
+        aiBorrowed = true;
     }
 
-    checkDeckVisibility();
+    // --- STRICT SCORING LOGIC ---
+    if (playerBorrowed) {
+        // Player Shortage: Player pays 0, AI pays 2
+        gameState.aiTotal -= 2;
+        // Player Score unchanged (-0)
+    } else if (aiBorrowed) {
+        // AI Shortage: AI pays 0, Player pays 2
+        gameState.playerTotal -= 2;
+        // AI Score unchanged (-0)
+    } else {
+        // Normal: Both pay 1
+        gameState.playerTotal--;
+        gameState.aiTotal--;
+    }
 
     // Reveal Cards
     if (gameState.playerDeck.length > 0) {
@@ -377,7 +358,7 @@ function renderCenterPile(side, card) {
     container.appendChild(img);
 }
 
-// --- AI BRAIN (SLOWED DOWN L1) ---
+// --- AI BRAIN ---
 function startAILoop() {
     gameState.aiLoopRunning = true;
     setInterval(() => {
@@ -388,7 +369,7 @@ function startAILoop() {
 
 function attemptAIMove() {
     const diff = gameState.difficulty;
-    // SLOWER MATH for Level 1: Starts at 4.5s -> 6.5s
+    // Slow L1: 4.5s
     const minTime = 4500 + (diff - 1) * -450; 
     const maxTime = 6500 + (diff - 1) * -550; 
     let reactionDelay = Math.random() * (maxTime - minTime) + minTime;
@@ -432,7 +413,7 @@ function attemptAIMove() {
 
     gameState.aiInChain = false; 
 
-    // 2. SORT (Blocker Logic)
+    // 2. SORT
     if (activeCards.length < 4) {
         let lanes = [[], [], [], []];
         gameState.aiHand.forEach(c => lanes[c.laneIndex].push(c));
@@ -603,25 +584,26 @@ function playCardToCenter(card, imgElement) {
     if (target) {
         target.push(card);
         
-        // REMOVE FROM HAND/DECK LOGIC
+        // REMOVE FROM HAND
         if (card.owner === 'player') {
             gameState.playerHand = gameState.playerHand.filter(c => c !== card);
+            gameState.playerTotal--; // THE -1 RULE
             if (gameState.playerHand.length === 0) endRound('player');
         } else {
             gameState.aiHand = gameState.aiHand.filter(c => c !== card);
+            gameState.aiTotal--; // THE -1 RULE
             if (gameState.aiHand.length === 0) endRound('ai');
         }
 
-        // --- THE FIX: RESET *BOTH* PLAYERS' READY STATUS ---
-        // This forces the AI (and you) to re-evaluate before drawing again.
+        // --- RESET READY STATUS (Fix for AI speed bug) ---
         gameState.playerReady = false;
         gameState.aiReady = false;
         document.getElementById('player-draw-deck').classList.remove('deck-ready');
         document.getElementById('ai-draw-deck').classList.remove('deck-ready');
 
+        checkDeckVisibility();
         imgElement.remove(); 
         renderCenterPile(side, card); 
-        checkDeckVisibility();
         updateScoreboard();
         return true; 
     }
