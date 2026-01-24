@@ -1,5 +1,5 @@
 /* =========================================
-   ISF MULTIPLAYER ENGINE v7.0 (Stable Physics & Mirroring)
+   ISF MULTIPLAYER ENGINE v8.0 (Perfect Foundation Mirroring)
    ========================================= */
 
 const gameState = {
@@ -98,7 +98,6 @@ function processNetworkData(data) {
             break;
 
         case 'OPPONENT_MOVE':
-            // MIRROR: If they played Left, I see Right
             const mirroredSide = (data.targetSide === 'left') ? 'right' : 'left';
             executeOpponentMove(data.cardId, mirroredSide);
             break;
@@ -185,7 +184,6 @@ function startRound() {
     dealSmartHand(aHandCards, 'ai');
     updateScoreboard();
 
-    // Helpers to sanitize data before sending
     const cleanDeck = (deck) => deck.map(c => ({suit:c.suit, rank:c.rank, value:c.value, id:c.id}));
     const cleanHand = (hand) => hand.map(c => ({suit:c.suit, rank:c.rank, value:c.value, id:c.id}));
 
@@ -203,7 +201,6 @@ function startRound() {
     });
 }
 
-// --- GUEST LOGIC ---
 function syncBoardState(data) {
     gameState.playerDeck = data.pDeck.map(d => new Card(d.suit, d.rank, d.value, d.id));
     gameState.aiDeck = data.aDeck.map(d => new Card(d.suit, d.rank, d.value, d.id));
@@ -234,27 +231,42 @@ function dealSmartHand(cards, owner) {
     if (cards.length >= 10) { [4,3,2,1].forEach((s, i) => { for(let j=0; j<s; j++) piles[i].push(cards[idx++]); }); } 
     else { cards.forEach(c => { piles[idx].push(c); idx = (idx+1)%4; }); }
 
-    let left = 5;
+    // --- MIRRORING FIX ---
+    // Player: 5 -> 29 -> 53 -> 77 (Left to Right)
+    // AI:     77 -> 53 -> 29 -> 5 (Right to Left, mirrored)
+    
     piles.forEach((pile, laneIdx) => {
-        if(pile.length===0) { left+=24; return; }
+        // Calculate Base Left %
+        let leftPos;
+        if (owner === 'player') {
+            leftPos = 5 + (laneIdx * 24);
+        } else {
+            // MIRROR: Start at 77 and go backwards
+            leftPos = 77 - (laneIdx * 24);
+        }
+
+        if(pile.length===0) return;
+
         pile.forEach((card, i) => {
             const img = document.createElement('img'); img.className = 'game-card';
             img.src = card.imgSrc;
             
             card.owner = owner; card.laneIndex = laneIdx; card.element = img;
             const isTop = (i === pile.length - 1);
-            img.style.left = `${left}%`; img.style.zIndex = i+10;
+            
+            img.style.left = `${leftPos}%`; 
+            img.style.zIndex = i+10;
+            
             if (owner === 'ai') img.style.top = `${10 + i*5}px`; else img.style.top = `${60 - i*5}px`;
             
             if (isTop) setCardFaceUp(img, card, owner); else setCardFaceDown(img, card, owner);
             container.appendChild(img);
             if(owner==='player') gameState.playerHand.push(card); else gameState.aiHand.push(card);
         });
-        left += 24;
     });
 }
 
-// --- PHYSICS (HARD STOP) & MIRRORED SYNC ---
+// --- PHYSICS: BOUNDARIES & SYNC ---
 function makeDraggable(img, cardData) {
     img.onmousedown = (e) => {
         e.preventDefault();
@@ -265,7 +277,6 @@ function makeDraggable(img, cardData) {
         cardData.originalLeft = img.style.left;
         cardData.originalTop = img.style.top;
 
-        // Mouse Offset relative to card
         let shiftX = e.clientX - img.getBoundingClientRect().left;
         let shiftY = e.clientY - img.getBoundingClientRect().top;
 
@@ -276,9 +287,7 @@ function makeDraggable(img, cardData) {
             let newLeft = pageX - shiftX - boxRect.left;
             let newTop = pageY - shiftY - boxRect.top;
 
-            // --- THE PHYSICAL STOPPER ---
-            // If dragging Up (negative Top), check if it's legal.
-            // If NOT legal, force newTop to 0 (hard stop at the boundary edge)
+            // Physical Stopper for Illegal Moves
             if (newTop < 0) { 
                 if (!gameState.gameActive || !checkLegalPlay(cardData)) {
                     newTop = 0; 
@@ -298,21 +307,18 @@ function makeDraggable(img, cardData) {
             document.removeEventListener('mouseup', onMouseUp);
             img.style.transition = 'all 0.1s ease-out';
 
-            // Play Attempt
             if (gameState.gameActive && parseInt(img.style.top) < -10) {
                 let success = playCardToCenter(cardData, img);
                 if (!success) {
-                    // Snap back if failed (shouldn't happen with hard stop, but safety)
                     img.style.left = cardData.originalLeft;
                     img.style.top = cardData.originalTop;
                 }
             } else {
-                // FREE MOVE (Reorganization) - SYNC TO OPPONENT
+                // SYNC FREE MOVE TO OPPONENT
                 const boxRect = box.getBoundingClientRect();
                 const currentLeftPx = parseFloat(img.style.left);
                 const currentTopPx = parseFloat(img.style.top);
                 
-                // Convert to %
                 const leftPct = (currentLeftPx / boxRect.width) * 100;
                 const topPct = (currentTopPx / boxRect.height) * 100;
 
@@ -328,7 +334,7 @@ function executeOpponentDrag(cardId, leftPct, topPct) {
     const card = gameState.aiHand.find(c => c.id === cardId);
     if (!card || !card.element) return;
 
-    // MIRROR LOGIC: Use Right/Bottom instead of Left/Top
+    // MIRROR: Use Right/Bottom for perfect mirroring
     card.element.style.left = 'auto';
     card.element.style.top = 'auto';
     card.element.style.right = leftPct + '%';
@@ -358,7 +364,6 @@ function playCardToCenter(card, imgElement) {
         gameState.playerHand = gameState.playerHand.filter(c => c.id !== card.id); 
         gameState.playerTotal--;
 
-        // Send 'left' or 'right' exactly as I see it. Receiver flips it.
         send({ type: 'OPPONENT_MOVE', cardId: card.id, targetSide: side });
 
         gameState.playerReady = false; gameState.aiReady = false;
@@ -409,7 +414,6 @@ function animateOpponentMove(card, side, callback) {
     const destX = targetRect.left + (targetRect.width/2) - (startRect.width/2);
     const destY = targetRect.top + (targetRect.height/2) - (startRect.height/2);
     
-    // Reset positioning to Fixed for animation
     el.style.position = 'fixed'; 
     el.style.left = destX + 'px'; 
     el.style.top = destY + 'px';
@@ -419,7 +423,6 @@ function animateOpponentMove(card, side, callback) {
     setTimeout(() => { el.remove(); callback(); }, 400);
 }
 
-// --- FLIPPING ---
 function tryFlipCard(img, card) {
     const live = gameState.playerHand.filter(c => c.isFaceUp).length;
     if (live < 4) {
@@ -438,7 +441,6 @@ function executeOpponentFlip(cardId) {
     }
 }
 
-// --- HELPERS ---
 function setCardFaceUp(img, card, owner) {
     img.src = card.imgSrc; img.classList.remove('card-face-down'); card.isFaceUp = true;
     if (owner === 'player') { img.classList.add('player-card'); img.onclick = null; makeDraggable(img, card); } 
