@@ -84,6 +84,8 @@
             document.getElementById('my-code').innerText = myId;
 
             // Initialize Peer Network
+            localStorage.setItem('isf_role', 'host');
+            localStorage.setItem('isf_code', myId);
             peer = new Peer(myId);
 
             peer.on('open', (id) => {
@@ -110,7 +112,10 @@
             isHost = false;
 
             const targetId = document.getElementById('join-code').value.toUpperCase();
+            localStorage.setItem('isf_role', 'join');
+            localStorage.setItem('isf_code', targetId);
             if(!targetId) return alert("Please enter a code!");
+            
 
             document.getElementById('status-join').classList.remove('hidden');
             
