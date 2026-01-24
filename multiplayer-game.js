@@ -1,5 +1,5 @@
 /* =========================================
-   ISF MULTIPLAYER ENGINE v15.0 (Restored Deck Click & Polling)
+   ISF MULTIPLAYER ENGINE v16.0 (Master Stability)
    ========================================= */
 
 const gameState = {
@@ -20,7 +20,7 @@ const gameState = {
     
     // NETWORK FLAGS
     roundInitialized: false, 
-    handshakeInterval: null,
+    handshakeInterval: null, // The Guest's "Ask for cards" timer
     
     slapActive: false,
     lastMoveTime: 0,
@@ -48,11 +48,13 @@ class Card {
 window.onload = function() {
     gameState.playerTotal = 26; gameState.aiTotal = 26;
     gameState.myName = localStorage.getItem('isf_my_name') || "Player";
+    
+    // INPUT LISTENERS
     document.addEventListener('keydown', handleInput);
     
-    // --- THE FIX: ADD DECK LISTENERS ---
-    document.getElementById('player-draw-deck').onclick = handlePlayerDeckClick;
-    // -----------------------------------
+    // DECK CLICK LISTENER (Fixes "Unable to click draw deck")
+    const pDeck = document.getElementById('player-draw-deck');
+    if(pDeck) pDeck.onclick = handlePlayerDeckClick;
 
     initNetwork();
 };
@@ -73,6 +75,7 @@ function initNetwork() {
     peer.on('open', (id) => {
         console.log("My Peer ID: " + id);
         if (!gameState.isHost) {
+            // Guest Connects with Reliable channel
             const conn = peer.connect(code, { reliable: true });
             setupGuestConnection(conn);
         }
@@ -91,12 +94,12 @@ function initNetwork() {
 function setupHostConnection(conn) {
     gameState.conn = conn;
     conn.on('open', () => {
-        console.log("HOST: Connected. Waiting for Request...");
+        console.log("HOST: Connected.");
     });
     conn.on('data', (data) => processNetworkData(data));
 }
 
-// --- GUEST CONNECTION (POLLING) ---
+// --- GUEST CONNECTION (POLLING FIX) ---
 function setupGuestConnection(conn) {
     gameState.conn = conn;
     conn.on('open', () => {
@@ -125,7 +128,7 @@ function processNetworkData(data) {
                 console.log("HOST: Received Request. Sending Deck...");
                 gameState.opponentName = data.name || "Opponent";
                 updateNamesUI();
-                startRound(); 
+                startRound(); // Deals or Resends existing deal
             }
             break;
 
@@ -211,6 +214,18 @@ function startRound() {
         let fullDeck = createDeck();
         shuffle(fullDeck);
         
+        // MATCH WIN CHECK
+        if (gameState.playerTotal <= 0) { 
+            sendGameOver(gameState.myName + " WINS!", false); 
+            showEndGame("YOU WIN!", true); 
+            return; 
+        }
+        if (gameState.aiTotal <= 0) { 
+            sendGameOver("YOU WIN THE MATCH!", true); 
+            showEndGame(gameState.opponentName + " WINS!", false); 
+            return; 
+        }
+
         const pTotal = gameState.playerTotal;
         const pAllCards = fullDeck.slice(0, pTotal);
         const aAllCards = fullDeck.slice(pTotal, 52);
@@ -314,8 +329,8 @@ function dealSmartHand(cards, owner) {
     });
 }
 
-// --- DECK INTERACTION (RESTORED) ---
-PlayerDeckClick() {
+// --- DECK INTERACTION ---
+function handlePlayerDeckClick() {
     if (!gameState.gameActive) {
         if (gameState.playerReady) return;
         gameState.playerReady = true; 
@@ -353,32 +368,7 @@ function startCountdown(broadcast) {
         }
     }, 800);
 }
-// --- RESTORED DECK LOGIC ---
-PlayerDeckClick() {
-    // 1. PRE-GAME READY
-    if (!gameState.gameActive) {
-        if (gameState.playerReady) return;
-        gameState.playerReady = true; 
-        document.getElementById('player-draw-deck').classList.add('deck-ready');
-        
-        // Notify Opponent
-        send({ type: 'OPPONENT_REVEAL_READY' });
 
-        checkDrawCondition();
-        return;
-    }
-
-    // 2. IN-GAME REVEAL (This was missing!)
-    if (gameState.gameActive && !gameState.playerReady) {
-        gameState.playerReady = true;
-        document.getElementById('player-draw-deck').classList.add('deck-ready');
-        
-        // Notify Opponent
-        send({ type: 'OPPONENT_REVEAL_READY' });
-        
-        checkDrawCondition();
-    }
-}
 // --- PHYSICS ---
 function makeDraggable(img, cardData) {
     img.onmousedown = (e) => {
@@ -490,40 +480,35 @@ function executeOpponentMove(cardId, side) {
     const card = gameState.aiHand.find(c => c.id === cardId);
     if (!card) return; 
     
-    // 1. Remove from Opponent Hand
+    // --- RACE CONDITION FIX ---
+    // Update data immediately before animation to prevent double-plays
+    const target = (side === 'left') ? gameState.centerPileLeft : gameState.centerPileRight;
+    target.push(card);
+    // --------------------------
+
     gameState.aiHand = gameState.aiHand.filter(c => c.id !== cardId);
     gameState.aiTotal--;
     gameState.lastMoveTime = Date.now(); 
 
-    // --- THE FIX: UPDATE LOGIC IMMEDIATELY ---
-    // We add the card to the pile DATA right now, before the animation starts.
-    // This prevents you from playing on the "old" card while this one is flying.
-    const target = (side === 'left') ? gameState.centerPileLeft : gameState.centerPileRight;
-    target.push(card);
-    // -----------------------------------------
-
     animateOpponentMove(card, side, () => {
-        // 2. RENDER VISUALS AFTER ANIMATION
-        // The data is already there, now we just show the card image in the pile
         renderCenterPile(side, card);
         updateScoreboard();
         
-        gameState.playerReady = false; 
-        gameState.aiReady = false;
+        gameState.playerReady = false; gameState.aiReady = false;
         document.getElementById('player-draw-deck').classList.remove('deck-ready');
         document.getElementById('ai-draw-deck').classList.remove('deck-ready');
-        
         checkSlapCondition();
     });
 }
 
-RoundOver(winner, myNextTotal, oppNextTotal) {
+function handleRoundOver(winner, myNextTotal, oppNextTotal) {
     gameState.gameActive = false;
     gameState.roundInitialized = false; 
 
     gameState.playerTotal = myNextTotal;
     gameState.aiTotal = oppNextTotal;
 
+    // CLEANUP FIX
     gameState.centerPileLeft = [];
     gameState.centerPileRight = [];
     document.getElementById('center-pile-left').innerHTML = '';
@@ -584,44 +569,32 @@ function performReveal() {
 }
 
 function handleInput(e) {
-    // Only react to Spacebar
     if (e.code === 'Space') {
         e.preventDefault();
-
-        // 0. SAFETY CHECK: Ignore inputs if game isn't running
+        
         if (!gameState.gameActive) return;
 
         const now = Date.now();
-
-        // 1. SPAM CHECK (Reduced to 400ms)
-        // Prevents accidental double-taps but allows follow-up attempts quickly
+        // 1. SPAM CHECK (400ms)
         if (now - gameState.lastSpacebarTime < 400) { 
             console.log("Ignored: Spam Protection");
-            // Optional: Issue penalty here if you want strict spam rules, 
-            // but for "unable to slap" issues, usually best to just ignore input.
-            // If you want the penalty back, uncomment the next line:
-            // issuePenalty('player', 'SPAM'); 
             return; 
         }
         gameState.lastSpacebarTime = now;
 
-        // 2. ANTICIPATION RULE (< 65ms reaction)
-        // If you slap faster than humanly possible after a move, it's a guess.
+        // 2. ANTICIPATION RULE (< 65ms)
         if (now - gameState.lastMoveTime < 65) { 
-            console.log("Penalty: Anticipation (Too Fast)");
             issuePenalty('player', 'ANTICIPATION'); 
             return; 
         }
 
-        // 3. BAD SLAP (No Match)
+        // 3. BAD SLAP
         if (!gameState.slapActive) { 
-            console.log("Penalty: Bad Slap (No Match)");
             issuePenalty('player', 'BAD SLAP'); 
             return; 
         }
 
         // 4. VALID SLAP
-        console.log("Slap Valid! Claiming...");
         send({ type: 'SLAP_CLAIM', timestamp: Date.now() });
         if (gameState.isHost) resolveSlapClaim('host', Date.now());
     }
@@ -742,6 +715,7 @@ function showEndGame(title, isWin) {
     const modal = document.getElementById('game-message');
     modal.querySelector('h1').innerText = title; modal.querySelector('h1').style.color = isWin ? '#66ff66' : '#ff7575';
     modal.querySelector('p').innerText = "Refresh to play again."; document.getElementById('msg-btn').classList.add('hidden'); modal.classList.remove('hidden');
+    // Tournament Hook
     setTimeout(() => {
         const myRole = localStorage.getItem('isf_role');
         const winnerRole = isWin ? myRole : (myRole === 'host' ? 'join' : 'host');
