@@ -238,15 +238,16 @@ function makeDraggable(img, cardData) {
     img.onmousedown = (e) => {
         e.preventDefault();
         
-        // Bring to front
+        // 1. Bring to Front
         gameState.globalZ = (gameState.globalZ || 200) + 1;
         img.style.zIndex = gameState.globalZ;
         img.style.transition = 'none'; 
         
+        // 2. Store Start Position (for Snapback on FAILED play only)
         cardData.originalLeft = img.style.left;
         cardData.originalTop = img.style.top;
 
-        // Container-Relative Drag (Reliable)
+        // 3. Container-Relative Drag
         const box = document.getElementById('player-foundation-area');
         let shiftX = e.clientX - img.getBoundingClientRect().left;
         let shiftY = e.clientY - img.getBoundingClientRect().top;
@@ -268,24 +269,23 @@ function makeDraggable(img, cardData) {
             document.removeEventListener('mouseup', onMouseUp);
             img.style.transition = 'all 0.1s ease-out'; 
             
-            // Check Play Zone (Top < -20)
+            // 4. Play Detection (Top < -20)
             if (gameState.gameActive && parseInt(img.style.top) < -20) {
                 let success = playCardToCenter(cardData, img); 
+                
                 if (!success) { 
+                    // FAILED PLAY: Snap Back
                     img.style.left = cardData.originalLeft;
                     img.style.top = cardData.originalTop;
                 }
-            } else { 
-                // SNAP BACK (Keeps it tidy, but physics now allow full drag)
-                img.style.left = cardData.originalLeft;
-                img.style.top = cardData.originalTop;
-            }
+            } 
+            // ELSE: DO NOTHING! 
+            // This allows "Free Move". If you drop it in the foundation, it stays there.
         }
         document.addEventListener('mousemove', onMouseMove); 
         document.addEventListener('mouseup', onMouseUp);
     };
 }
-
 // --- CARD PLAYING & SYNC ---
 function playCardToCenter(card, imgElement) {
     let target = null; let side = '';
