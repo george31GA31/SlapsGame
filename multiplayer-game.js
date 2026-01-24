@@ -1,5 +1,5 @@
 /* =========================================
-   ISF MULTIPLAYER ENGINE v14.0 (Polling/Retry Connection)
+   ISF MULTIPLAYER ENGINE v15.0 (Restored Deck Click & Polling)
    ========================================= */
 
 const gameState = {
@@ -19,8 +19,8 @@ const gameState = {
     myName: "ME",
     
     // NETWORK FLAGS
-    roundInitialized: false, // Prevents Host from reshuffling on retry
-    handshakeInterval: null, // The Guest's "Ask for cards" timer
+    roundInitialized: false, 
+    handshakeInterval: null,
     
     slapActive: false,
     lastMoveTime: 0,
@@ -101,7 +101,6 @@ function setupGuestConnection(conn) {
         send({ type: 'NAME_UPDATE', name: gameState.myName });
 
         // LOOP: Ask for cards every 1 second until we get them
-        // This ensures if the packet drops, we ask again.
         if (gameState.handshakeInterval) clearInterval(gameState.handshakeInterval);
         
         gameState.handshakeInterval = setInterval(() => {
@@ -117,23 +116,20 @@ function processNetworkData(data) {
     switch(data.type) {
         // --- HANDSHAKE LOGIC ---
         case 'REQUEST_DEAL':
-            // Host receives this from Guest loop
             if (gameState.isHost) {
                 console.log("HOST: Received Request. Sending Deck...");
                 gameState.opponentName = data.name || "Opponent";
                 updateNamesUI();
-                startRound(); // This will deal OR resend existing deal
+                startRound(); 
             }
             break;
 
         case 'INIT_ROUND':
-            // Guest receives this. STOP THE LOOP.
             console.log("GUEST: Deck Received! Stopping Loop.");
             if (gameState.handshakeInterval) {
                 clearInterval(gameState.handshakeInterval);
                 gameState.handshakeInterval = null;
             }
-            
             if(data.hostName) gameState.opponentName = data.hostName;
             updateNamesUI();
             syncBoardState(data);
@@ -210,7 +206,6 @@ function startRound() {
         let fullDeck = createDeck();
         shuffle(fullDeck);
         
-        // Splitting logic
         const pTotal = gameState.playerTotal;
         const pAllCards = fullDeck.slice(0, pTotal);
         const aAllCards = fullDeck.slice(pTotal, 52);
@@ -223,7 +218,6 @@ function startRound() {
         const aHandCards = aAllCards.splice(0, aHandSize);
         gameState.aiDeck = aAllCards;
 
-        // Borrow Logic
         let pBorrow = false, aBorrow = false;
         if (gameState.playerDeck.length === 0 && gameState.aiDeck.length > 1) {
             const steal = Math.floor(gameState.aiDeck.length / 2);
@@ -236,19 +230,16 @@ function startRound() {
             aBorrow = true;
         }
 
-        // Apply to Host UI
         document.getElementById('borrowed-player').classList.toggle('hidden', !pBorrow);
         document.getElementById('borrowed-ai').classList.toggle('hidden', !aBorrow);
         dealSmartHand(pHandCards, 'player');
         dealSmartHand(aHandCards, 'ai');
         updateScoreboard();
 
-        gameState.roundInitialized = true; // Mark as done so we don't reshuffle on retry
+        gameState.roundInitialized = true; 
     }
 
-    // 2. SEND STATE (Can be repeated if Guest asks again)
-    // We need to calculate pBorrow/aBorrow again for the packet or store it
-    // Simplest: Check the UI classes we just set
+    // 2. SEND STATE
     const pB = !document.getElementById('borrowed-player').classList.contains('hidden');
     const aB = !document.getElementById('borrowed-ai').classList.contains('hidden');
 
@@ -300,7 +291,7 @@ function dealSmartHand(cards, owner) {
     piles.forEach((pile, laneIdx) => {
         let leftPos;
         if (owner === 'player') leftPos = 5 + (laneIdx * 24);
-        else leftPos = 77 - (laneIdx * 24); // MIRRORED
+        else leftPos = 77 - (laneIdx * 24); 
 
         if(pile.length === 0) return;
 
@@ -316,6 +307,46 @@ function dealSmartHand(cards, owner) {
             if(owner === 'player') gameState.playerHand.push(card); else gameState.aiHand.push(card);
         });
     });
+}
+
+// --- DECK INTERACTION (RESTORED) ---
+function handlePlayerDeckClick() {
+    if (!gameState.gameActive) {
+        if (gameState.playerReady) return;
+        gameState.playerReady = true; 
+        document.getElementById('player-draw-deck').classList.add('deck-ready');
+        send({ type: 'OPPONENT_REVEAL_READY' });
+        checkDrawCondition();
+        return;
+    }
+    if (gameState.gameActive && !gameState.playerReady) {
+        gameState.playerReady = true; 
+        document.getElementById('player-draw-deck').classList.add('deck-ready');
+        send({ type: 'OPPONENT_REVEAL_READY' });
+        checkDrawCondition();
+    }
+}
+
+function checkDrawCondition() {
+    if (gameState.playerReady && gameState.aiReady) {
+        if (gameState.isHost) startCountdown(true);
+    }
+}
+
+function startCountdown(broadcast) {
+    if (broadcast) send({ type: 'SYNC_REVEAL' });
+    const overlay = document.getElementById('countdown-overlay');
+    overlay.classList.remove('hidden');
+    let count = 3; overlay.innerText = count;
+    const timer = setInterval(() => {
+        count--;
+        if (count > 0) {
+            overlay.innerText = count; 
+            overlay.style.animation = 'none'; overlay.offsetHeight; overlay.style.animation = 'popIn 0.5s ease';
+        } else {
+            clearInterval(timer); overlay.classList.add('hidden'); performReveal();
+        }
+    }, 800);
 }
 
 // --- PHYSICS ---
@@ -371,11 +402,8 @@ function makeDraggable(img, cardData) {
 function executeOpponentDrag(cardId, leftPct, topPct) {
     const card = gameState.aiHand.find(c => c.id === cardId);
     if (!card || !card.element) return;
-    // MIRROR Logic for visual sync
-    card.element.style.left = 'auto'; 
-    card.element.style.top = 'auto';
-    card.element.style.right = leftPct + '%'; 
-    card.element.style.bottom = topPct + '%';
+    card.element.style.left = 'auto'; card.element.style.top = 'auto';
+    card.element.style.right = leftPct + '%'; card.element.style.bottom = topPct + '%';
     card.element.style.zIndex = 200;
 }
 
@@ -410,14 +438,12 @@ function playCardToCenter(card, imgElement) {
         imgElement.remove(); renderCenterPile(side, card); updateScoreboard();
         checkSlapCondition(); 
 
-        // MATCH WIN
         if (gameState.playerTotal <= 0) {
             sendGameOver(gameState.myName + " WINS!", false);
             showEndGame("YOU WIN THE MATCH!", true);
             return true;
         }
 
-        // ROUND WIN
         if (gameState.playerHand.length === 0) {
             const nextPTotal = gameState.playerTotal;
             const nextATotal = 52 - gameState.playerTotal;
@@ -452,14 +478,11 @@ function executeOpponentMove(cardId, side) {
 
 function handleRoundOver(winner, myNextTotal, oppNextTotal) {
     gameState.gameActive = false;
-    
-    // Reset round initialization flag for next round
     gameState.roundInitialized = false; 
 
     gameState.playerTotal = myNextTotal;
     gameState.aiTotal = oppNextTotal;
 
-    // Clear Center
     gameState.centerPileLeft = [];
     gameState.centerPileRight = [];
     document.getElementById('center-pile-left').innerHTML = '';
@@ -490,7 +513,6 @@ function performReveal() {
     document.getElementById('player-draw-deck').classList.remove('deck-ready');
     document.getElementById('ai-draw-deck').classList.remove('deck-ready');
     
-    // Borrow Logic
     if (gameState.playerDeck.length === 0 && gameState.aiDeck.length > 0) {
         const steal = Math.floor(gameState.aiDeck.length / 2);
         gameState.playerDeck = gameState.playerDeck.concat(gameState.aiDeck.splice(0, steal));
@@ -502,7 +524,6 @@ function performReveal() {
         document.getElementById('borrowed-ai').classList.remove('hidden');
     }
 
-    // Scoring
     const pBorrow = !document.getElementById('borrowed-player').classList.contains('hidden') || gameState.playerTotal <= 10;
     const aBorrow = !document.getElementById('borrowed-ai').classList.contains('hidden') || gameState.aiTotal <= 10;
 
@@ -573,7 +594,6 @@ function renderBadges(who, y, r) {
 function animateOpponentMove(card, side, callback) {
     if(!card.element) return;
     const el = card.element;
-    // Mirrored for Animation
     const visualSide = (side === 'left') ? 'center-pile-left' : 'center-pile-right';
     const targetEl = document.getElementById(visualSide);
     el.style.zIndex = 2000;
@@ -639,53 +659,17 @@ function renderCenterPile(side, card) {
     const rot = Math.random() * 20 - 10; img.style.transform = `translate(-50%, -50%) rotate(${rot}deg)`;
     container.appendChild(img);
 }
-function checkDrawCondition() { if (gameState.playerReady && gameState.aiReady) { if (gameState.isHost) startCountdown(true); } }
-function startCountdown(broadcast) {
-    if (broadcast) send({ type: 'SYNC_REVEAL' });
-    const overlay = document.getElementById('countdown-overlay');
-    overlay.classList.remove('hidden');
-    let count = 3; overlay.innerText = count;
-    const timer = setInterval(() => {
-        count--;
-        if (count > 0) {
-            overlay.innerText = count; 
-            overlay.style.animation = 'none'; overlay.offsetHeight; overlay.style.animation = 'popIn 0.5s ease';
-        } else {
-            clearInterval(timer); overlay.classList.add('hidden'); performReveal();
-        }
-    }, 800);
-}
 function resolveSlapClaim(who, timestamp) {
     const winner = (who === 'host') ? 'player' : 'ai';
     const isHostWin = (who === 'host');
     applySlapResult(isHostWin ? 'player' : 'ai'); 
     send({ type: 'SLAP_RESULT', winner: isHostWin ? 'ai' : 'player' }); 
 }
-function applySlapResult(winner) {
-    gameState.slapActive = false;
-    const overlay = document.getElementById('slap-overlay');
-    const txt = document.getElementById('slap-text');
-    overlay.classList.remove('hidden');
-    const pileCount = gameState.centerPileLeft.length + gameState.centerPileRight.length;
-    if (winner === 'player') {
-        txt.innerText = "YOU WON THE SLAP!"; overlay.style.backgroundColor = "rgba(0, 200, 0, 0.9)"; gameState.aiTotal += pileCount; 
-    } else {
-        txt.innerText = gameState.opponentName + " WON THE SLAP!"; overlay.style.backgroundColor = "rgba(200, 0, 0, 0.9)"; gameState.playerTotal += pileCount; 
-    }
-    gameState.centerPileLeft = []; gameState.centerPileRight = [];
-    document.getElementById('center-pile-left').innerHTML = ''; document.getElementById('center-pile-right').innerHTML = '';
-    updateScoreboard();
-    setTimeout(() => {
-        overlay.classList.add('hidden'); gameState.playerReady = false; gameState.aiReady = false;
-        document.getElementById('player-draw-deck').classList.remove('deck-ready'); document.getElementById('ai-draw-deck').classList.remove('deck-ready');
-    }, 2000);
-}
 function sendGameOver(msg, isWin) { send({ type: 'GAME_OVER', msg: msg, isWin: isWin }); }
 function showEndGame(title, isWin) {
     const modal = document.getElementById('game-message');
     modal.querySelector('h1').innerText = title; modal.querySelector('h1').style.color = isWin ? '#66ff66' : '#ff7575';
     modal.querySelector('p').innerText = "Refresh to play again."; document.getElementById('msg-btn').classList.add('hidden'); modal.classList.remove('hidden');
-    // Tournament Hook
     setTimeout(() => {
         const myRole = localStorage.getItem('isf_role');
         const winnerRole = isWin ? myRole : (myRole === 'host' ? 'join' : 'host');
