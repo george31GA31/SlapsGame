@@ -1,5 +1,5 @@
 /* =========================================
-   ISF MULTIPLAYER ENGINE v16.0 (Master Stability)
+   ISF MULTIPLAYER ENGINE v17.0 (The "Nagging" Protocol)
    ========================================= */
 
 const gameState = {
@@ -18,9 +18,10 @@ const gameState = {
     opponentName: "OPPONENT",
     myName: "ME",
     
-    // NETWORK FLAGS
+    // NETWORK FLAGS & TIMERS
     roundInitialized: false, 
-    handshakeInterval: null, // The Guest's "Ask for cards" timer
+    dealInterval: null,      // Host: Resend deck until ACK
+    readyInterval: null,     // Player: Resend "I'm Ready" until game starts
     
     slapActive: false,
     lastMoveTime: 0,
@@ -49,12 +50,15 @@ window.onload = function() {
     gameState.playerTotal = 26; gameState.aiTotal = 26;
     gameState.myName = localStorage.getItem('isf_my_name') || "Player";
     
-    // INPUT LISTENERS
     document.addEventListener('keydown', handleInput);
     
-    // DECK CLICK LISTENER (Fixes "Unable to click draw deck")
-    const pDeck = document.getElementById('player-draw-deck');
-    if(pDeck) pDeck.onclick = handlePlayerDeckClick;
+    // EXPLICIT DECK LISTENER
+    const deckBtn = document.getElementById('player-draw-deck');
+    if (deckBtn) {
+        deckBtn.onclick = handlePlayerDeckClick;
+    } else {
+        console.error("CRITICAL ERROR: 'player-draw-deck' element not found!");
+    }
 
     initNetwork();
 };
@@ -75,14 +79,14 @@ function initNetwork() {
     peer.on('open', (id) => {
         console.log("My Peer ID: " + id);
         if (!gameState.isHost) {
-            // Guest Connects with Reliable channel
+            // Reliable: true helps, but we add manual ACKs anyway
             const conn = peer.connect(code, { reliable: true });
-            setupGuestConnection(conn);
+            setupConnection(conn);
         }
     });
 
     peer.on('connection', (conn) => {
-        if (gameState.isHost) setupHostConnection(conn);
+        if (gameState.isHost) setupConnection(conn);
     });
 
     peer.on('error', (err) => {
@@ -90,62 +94,73 @@ function initNetwork() {
     });
 }
 
-// --- HOST CONNECTION ---
-function setupHostConnection(conn) {
+function setupConnection(conn) {
     gameState.conn = conn;
     conn.on('open', () => {
-        console.log("HOST: Connected.");
-    });
-    conn.on('data', (data) => processNetworkData(data));
-}
-
-// --- GUEST CONNECTION (POLLING FIX) ---
-function setupGuestConnection(conn) {
-    gameState.conn = conn;
-    conn.on('open', () => {
-        console.log("GUEST: Connected. Starting Handshake Loop...");
-        
-        // IMMEDIATE: Send Name
+        console.log("CONNECTION ESTABLISHED");
+        // Exchange Names Immediately
         send({ type: 'NAME_UPDATE', name: gameState.myName });
-
-        // LOOP: Ask for cards every 1 second until we get them
-        if (gameState.handshakeInterval) clearInterval(gameState.handshakeInterval);
         
-        gameState.handshakeInterval = setInterval(() => {
-            console.log("GUEST: Requesting Deal...");
-            send({ type: 'REQUEST_DEAL', name: gameState.myName });
-        }, 1000);
+        if (gameState.isHost) {
+            // Host waits for "REQUEST_DEAL" or just starts "Nagging Deal" immediately?
+            // Better: Start Nagging Deal immediately upon connection
+            startNaggingDeal(); 
+        } else {
+            // Guest just listens
+        }
     });
-    
     conn.on('data', (data) => processNetworkData(data));
 }
 
 function processNetworkData(data) {
+    // console.log("Received:", data.type); // Uncomment for deep debugging
+
     switch(data.type) {
-        // --- HANDSHAKE LOGIC ---
-        case 'REQUEST_DEAL':
-            if (gameState.isHost) {
-                console.log("HOST: Received Request. Sending Deck...");
-                gameState.opponentName = data.name || "Opponent";
+        // --- DEALING HANDSHAKE ---
+        case 'INIT_ROUND':
+            // Guest received cards. 
+            // 1. Reply "GOT IT" so Host stops nagging
+            send({ type: 'DEAL_ACK' });
+            
+            // 2. Only process if we haven't already
+            if (!gameState.roundInitialized) {
+                console.log("GUEST: Deck Received & Initialized.");
+                if(data.hostName) gameState.opponentName = data.hostName;
                 updateNamesUI();
-                startRound(); // Deals or Resends existing deal
+                syncBoardState(data);
+                gameState.roundInitialized = true;
             }
             break;
 
-        case 'INIT_ROUND':
-            console.log("GUEST: Deck Received! Stopping Loop.");
-            if (gameState.handshakeInterval) {
-                clearInterval(gameState.handshakeInterval);
-                gameState.handshakeInterval = null;
+        case 'DEAL_ACK':
+            // Host received "GOT IT". Stop nagging.
+            if (gameState.isHost) {
+                console.log("HOST: Guest confirmed deal. Stopping Nag.");
+                clearInterval(gameState.dealInterval);
+                gameState.dealInterval = null;
             }
-            if(data.hostName) gameState.opponentName = data.hostName;
-            updateNamesUI();
-            syncBoardState(data);
             break;
 
         case 'NAME_UPDATE':
             gameState.opponentName = data.name;
             updateNamesUI();
+            break;
+
+        // --- REVEAL HANDSHAKE ---
+        case 'OPPONENT_REVEAL_READY':
+            // Opponent clicked their deck
+            gameState.aiReady = true;
+            document.getElementById('ai-draw-deck').classList.add('deck-ready');
+            checkDrawCondition();
+            break;
+
+        case 'SYNC_REVEAL':
+            // Countdown started. Stop nagging "I AM READY".
+            if (gameState.readyInterval) {
+                clearInterval(gameState.readyInterval);
+                gameState.readyInterval = null;
+            }
+            startCountdown(false);
             break;
 
         // --- GAMEPLAY ---
@@ -160,16 +175,6 @@ function processNetworkData(data) {
 
         case 'OPPONENT_DRAG':
             executeOpponentDrag(data.cardId, data.left, data.top);
-            break;
-
-        case 'OPPONENT_REVEAL_READY':
-            gameState.aiReady = true;
-            document.getElementById('ai-draw-deck').classList.add('deck-ready');
-            checkDrawCondition();
-            break;
-            
-        case 'SYNC_REVEAL':
-            startCountdown(false);
             break;
             
         case 'SLAP_CLAIM':
@@ -205,61 +210,64 @@ function updateNamesUI() {
     if(labels[0]) labels[0].innerText = gameState.opponentName;
 }
 
-// --- HOST LOGIC: SAFE DEALING ---
-function startRound() {
+// --- HOST LOGIC: NAGGING DEAL ---
+function startNaggingDeal() {
     if (!gameState.isHost) return;
-
-    // 1. INITIAL SETUP (Only run ONCE per round)
+    
+    // Prepare the deck ONCE
     if (!gameState.roundInitialized) {
-        let fullDeck = createDeck();
-        shuffle(fullDeck);
-        
-        // MATCH WIN CHECK
-        if (gameState.playerTotal <= 0) { 
-            sendGameOver(gameState.myName + " WINS!", false); 
-            showEndGame("YOU WIN!", true); 
-            return; 
-        }
-        if (gameState.aiTotal <= 0) { 
-            sendGameOver("YOU WIN THE MATCH!", true); 
-            showEndGame(gameState.opponentName + " WINS!", false); 
-            return; 
-        }
-
-        const pTotal = gameState.playerTotal;
-        const pAllCards = fullDeck.slice(0, pTotal);
-        const aAllCards = fullDeck.slice(pTotal, 52);
-
-        const pHandSize = Math.min(10, pTotal);
-        const aHandSize = Math.min(10, 52 - pTotal);
-
-        const pHandCards = pAllCards.splice(0, pHandSize);
-        gameState.playerDeck = pAllCards; 
-        const aHandCards = aAllCards.splice(0, aHandSize);
-        gameState.aiDeck = aAllCards;
-
-        let pBorrow = false, aBorrow = false;
-        if (gameState.playerDeck.length === 0 && gameState.aiDeck.length > 1) {
-            const steal = Math.floor(gameState.aiDeck.length / 2);
-            gameState.playerDeck = gameState.aiDeck.splice(0, steal);
-            pBorrow = true;
-        }
-        if (gameState.aiDeck.length === 0 && gameState.playerDeck.length > 1) {
-            const steal = Math.floor(gameState.playerDeck.length / 2);
-            gameState.aiDeck = gameState.playerDeck.splice(0, steal);
-            aBorrow = true;
-        }
-
-        document.getElementById('borrowed-player').classList.toggle('hidden', !pBorrow);
-        document.getElementById('borrowed-ai').classList.toggle('hidden', !aBorrow);
-        dealSmartHand(pHandCards, 'player');
-        dealSmartHand(aHandCards, 'ai');
-        updateScoreboard();
-
-        gameState.roundInitialized = true; 
+        prepareDeck();
+        gameState.roundInitialized = true;
     }
 
-    // 2. SEND STATE
+    // Start sending it repeatedly
+    if (gameState.dealInterval) clearInterval(gameState.dealInterval);
+    
+    console.log("HOST: Starting Nagging Deal...");
+    sendDealData(); // Send immediately
+    gameState.dealInterval = setInterval(() => {
+        console.log("HOST: Resending Deal...");
+        sendDealData();
+    }, 1000); // Retry every 1s
+}
+
+function prepareDeck() {
+    let fullDeck = createDeck();
+    shuffle(fullDeck);
+    
+    const pTotal = gameState.playerTotal;
+    const pAllCards = fullDeck.slice(0, pTotal);
+    const aAllCards = fullDeck.slice(pTotal, 52);
+
+    const pHandSize = Math.min(10, pTotal);
+    const aHandSize = Math.min(10, 52 - pTotal);
+
+    const pHandCards = pAllCards.splice(0, pHandSize);
+    gameState.playerDeck = pAllCards; 
+    const aHandCards = aAllCards.splice(0, aHandSize);
+    gameState.aiDeck = aAllCards;
+
+    let pBorrow = false, aBorrow = false;
+    if (gameState.playerDeck.length === 0 && gameState.aiDeck.length > 1) {
+        const steal = Math.floor(gameState.aiDeck.length / 2);
+        gameState.playerDeck = gameState.aiDeck.splice(0, steal);
+        pBorrow = true;
+    }
+    if (gameState.aiDeck.length === 0 && gameState.playerDeck.length > 1) {
+        const steal = Math.floor(gameState.playerDeck.length / 2);
+        gameState.aiDeck = gameState.playerDeck.splice(0, steal);
+        aBorrow = true;
+    }
+
+    document.getElementById('borrowed-player').classList.toggle('hidden', !pBorrow);
+    document.getElementById('borrowed-ai').classList.toggle('hidden', !aBorrow);
+    
+    dealSmartHand(pHandCards, 'player');
+    dealSmartHand(aHandCards, 'ai');
+    updateScoreboard();
+}
+
+function sendDealData() {
     const pB = !document.getElementById('borrowed-player').classList.contains('hidden');
     const aB = !document.getElementById('borrowed-ai').classList.contains('hidden');
 
@@ -329,22 +337,40 @@ function dealSmartHand(cards, owner) {
     });
 }
 
-// --- DECK INTERACTION ---
+// --- DECK CLICK (NAGGING READY) ---
 function handlePlayerDeckClick() {
+    console.log("DECK CLICKED");
+    
+    // 1. If Game is Idle (New Round)
     if (!gameState.gameActive) {
         if (gameState.playerReady) return;
         gameState.playerReady = true; 
         document.getElementById('player-draw-deck').classList.add('deck-ready');
-        send({ type: 'OPPONENT_REVEAL_READY' });
+        startNaggingReady();
         checkDrawCondition();
         return;
     }
+    
+    // 2. If Game is Active (Card Reveal)
     if (gameState.gameActive && !gameState.playerReady) {
         gameState.playerReady = true; 
         document.getElementById('player-draw-deck').classList.add('deck-ready');
-        send({ type: 'OPPONENT_REVEAL_READY' });
+        startNaggingReady();
         checkDrawCondition();
     }
+}
+
+function startNaggingReady() {
+    // Send "I am ready" immediately
+    send({ type: 'OPPONENT_REVEAL_READY' });
+    
+    // Keep sending it every 500ms until the Host sends SYNC_REVEAL
+    if (gameState.readyInterval) clearInterval(gameState.readyInterval);
+    
+    gameState.readyInterval = setInterval(() => {
+        console.log("Resending Ready Signal...");
+        send({ type: 'OPPONENT_REVEAL_READY' });
+    }, 500);
 }
 
 function checkDrawCondition() {
@@ -354,10 +380,18 @@ function checkDrawCondition() {
 }
 
 function startCountdown(broadcast) {
+    // Stop nagging
+    if (gameState.readyInterval) {
+        clearInterval(gameState.readyInterval);
+        gameState.readyInterval = null;
+    }
+
     if (broadcast) send({ type: 'SYNC_REVEAL' });
+    
     const overlay = document.getElementById('countdown-overlay');
     overlay.classList.remove('hidden');
     let count = 3; overlay.innerText = count;
+    
     const timer = setInterval(() => {
         count--;
         if (count > 0) {
@@ -480,11 +514,9 @@ function executeOpponentMove(cardId, side) {
     const card = gameState.aiHand.find(c => c.id === cardId);
     if (!card) return; 
     
-    // --- RACE CONDITION FIX ---
-    // Update data immediately before animation to prevent double-plays
+    // RACE CONDITION FIX
     const target = (side === 'left') ? gameState.centerPileLeft : gameState.centerPileRight;
     target.push(card);
-    // --------------------------
 
     gameState.aiHand = gameState.aiHand.filter(c => c.id !== cardId);
     gameState.aiTotal--;
@@ -508,7 +540,6 @@ function handleRoundOver(winner, myNextTotal, oppNextTotal) {
     gameState.playerTotal = myNextTotal;
     gameState.aiTotal = oppNextTotal;
 
-    // CLEANUP FIX
     gameState.centerPileLeft = [];
     gameState.centerPileRight = [];
     document.getElementById('center-pile-left').innerHTML = '';
@@ -529,7 +560,7 @@ function handleRoundOver(winner, myNextTotal, oppNextTotal) {
     btn.classList.remove('hidden');
     btn.onclick = function() {
         modal.classList.add('hidden');
-        if (gameState.isHost) startRound(); 
+        if (gameState.isHost) startNaggingDeal(); // Start new round sequence
     };
     modal.classList.remove('hidden');
 }
