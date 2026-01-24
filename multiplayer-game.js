@@ -629,13 +629,64 @@ function startCountdown(broadcast) {
 function performReveal() {
     document.getElementById('player-draw-deck').classList.remove('deck-ready');
     document.getElementById('ai-draw-deck').classList.remove('deck-ready');
-    gameState.playerTotal--; gameState.aiTotal--;
+    
+    // 1. PHYSICAL BORROW LOGIC (Essential to prevent running out of cards to draw)
+    // If Player has no cards in deck, steal half from Opponent
+    if (gameState.playerDeck.length === 0 && gameState.aiDeck.length > 0) {
+        const steal = Math.floor(gameState.aiDeck.length / 2);
+        gameState.playerDeck = gameState.playerDeck.concat(gameState.aiDeck.splice(0, steal));
+        document.getElementById('borrowed-player').classList.remove('hidden');
+    }
+    // If Opponent has no cards in deck, steal half from Player
+    if (gameState.aiDeck.length === 0 && gameState.playerDeck.length > 0) {
+        const steal = Math.floor(gameState.playerDeck.length / 2);
+        gameState.aiDeck = gameState.aiDeck.concat(gameState.playerDeck.splice(0, steal));
+        document.getElementById('borrowed-ai').classList.remove('hidden');
+    }
+
+    // 2. SCORING LOGIC (The Fix)
+    // Check if the "BORROWED" text is visible (or if deck was just refilled)
+    // We check the classes or the logic we just ran.
+    
+    // Note: updateScoreboard() handles the text visibility based on total < 10, 
+    // but here we check if we are physically relying on the other person.
+    
+    // Simplest check: If my total is very low (<=10), I am in "Borrow Mode"
+    // OR check the classes directly.
+    
+    const pBorrow = !document.getElementById('borrowed-player').classList.contains('hidden') || gameState.playerTotal <= 10;
+    const aBorrow = !document.getElementById('borrowed-ai').classList.contains('hidden') || gameState.aiTotal <= 10;
+
+    if (pBorrow) {
+        // Player is Borrowing: Opponent pays 2, Player pays 0
+        gameState.aiTotal = Math.max(0, gameState.aiTotal - 2);
+    } else if (aBorrow) {
+        // Opponent is Borrowing: Player pays 2, Opponent pays 0
+        gameState.playerTotal = Math.max(0, gameState.playerTotal - 2);
+    } else {
+        // Normal Case: Both pay 1
+        gameState.playerTotal--; 
+        gameState.aiTotal--;
+    }
+    
     gameState.lastMoveTime = Date.now(); 
-    if (gameState.playerDeck.length > 0) { let c = gameState.playerDeck.pop(); gameState.centerPileRight.push(c); renderCenterPile('right', c); }
-    if (gameState.aiDeck.length > 0) { let c = gameState.aiDeck.pop(); gameState.centerPileLeft.push(c); renderCenterPile('left', c); }
+
+    // 3. REVEAL CARDS
+    if (gameState.playerDeck.length > 0) { 
+        let c = gameState.playerDeck.pop(); 
+        gameState.centerPileRight.push(c); 
+        renderCenterPile('right', c); 
+    }
+    if (gameState.aiDeck.length > 0) { 
+        let c = gameState.aiDeck.pop(); 
+        gameState.centerPileLeft.push(c); 
+        renderCenterPile('left', c); 
+    }
+
     updateScoreboard();
     gameState.gameActive = true; 
-    gameState.playerReady = false; gameState.aiReady = false;
+    gameState.playerReady = false; 
+    gameState.aiReady = false;
     checkSlapCondition();
 }
 function resolveSlapClaim(who, timestamp) {
