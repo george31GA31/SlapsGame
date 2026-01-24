@@ -1,5 +1,5 @@
 /* =========================================
-   ISF MULTIPLAYER ENGINE v9.0 (Round Mechanics, Borrowed Text & Penalties)
+   ISF MULTIPLAYER ENGINE v10.0 (Names Fixed & Round Logic Reinforced)
    ========================================= */
 
 const gameState = {
@@ -78,6 +78,10 @@ function handleConnection(connection) {
     gameState.conn = connection;
     connection.on('open', () => {
         console.log("CONNECTED!");
+        
+        // FIX 1: IMMEDIATE NAME EXCHANGE
+        send({ type: 'NAME_UPDATE', name: gameState.myName });
+        
         if (gameState.isHost) startRound(); 
     });
     connection.on('data', (data) => processNetworkData(data));
@@ -85,16 +89,18 @@ function handleConnection(connection) {
 
 function processNetworkData(data) {
     switch(data.type) {
-        case 'INIT_ROUND':
-            gameState.opponentName = data.hostName;
-            updateNamesUI();
-            syncBoardState(data);
-            if(!gameState.isHost) send({ type: 'NAME_REPLY', name: gameState.myName });
-            break;
-            
-        case 'NAME_REPLY':
+        case 'NAME_UPDATE':
             gameState.opponentName = data.name;
             updateNamesUI();
+            break;
+
+        case 'INIT_ROUND':
+            // Host sends name in Init, but NAME_UPDATE handles it too.
+            // We prioritize NAME_UPDATE for consistency.
+            if(data.hostName) gameState.opponentName = data.hostName;
+            updateNamesUI();
+            
+            syncBoardState(data);
             break;
 
         case 'OPPONENT_MOVE':
@@ -129,7 +135,6 @@ function processNetworkData(data) {
             break;
             
         case 'PENALTY_UPDATE':
-            // Opponent received a penalty
             applyPenaltySync(data.target, data.reason, data.pTotal, data.aTotal, data.y, data.r);
             break;
 
@@ -149,6 +154,7 @@ function send(data) {
 
 function updateNamesUI() {
     const labels = document.querySelectorAll('.stat-label');
+    // Left Label is Opponent
     if(labels[0]) labels[0].innerText = gameState.opponentName;
 }
 
@@ -159,7 +165,7 @@ function startRound() {
     let fullDeck = createDeck();
     shuffle(fullDeck);
     
-    // MATCH WIN CHECK (0 Cards Total)
+    // MATCH WIN CHECK
     if (gameState.playerTotal <= 0) { sendGameOver("YOU WIN!", true); showEndGame("YOU WIN!", true); return; }
     if (gameState.aiTotal <= 0) { sendGameOver(gameState.opponentName + " WINS!", false); showEndGame(gameState.opponentName + " WINS!", false); return; }
 
@@ -175,7 +181,20 @@ function startRound() {
     const aHandCards = aAllCards.splice(0, aHandSize);
     gameState.aiDeck = aAllCards;
 
-    // Reset Penalties on new round? (Optional: User didn't specify, we'll keep them for the match)
+    let pBorrow = false, aBorrow = false;
+    if (gameState.playerDeck.length === 0 && gameState.aiDeck.length > 1) {
+        const steal = Math.floor(gameState.aiDeck.length / 2);
+        gameState.playerDeck = gameState.aiDeck.splice(0, steal);
+        pBorrow = true;
+    }
+    if (gameState.aiDeck.length === 0 && gameState.playerDeck.length > 1) {
+        const steal = Math.floor(gameState.playerDeck.length / 2);
+        gameState.aiDeck = gameState.playerDeck.splice(0, steal);
+        aBorrow = true;
+    }
+
+    document.getElementById('borrowed-player').classList.toggle('hidden', !pBorrow);
+    document.getElementById('borrowed-ai').classList.toggle('hidden', !aBorrow);
     
     dealSmartHand(pHandCards, 'player');
     dealSmartHand(aHandCards, 'ai');
@@ -300,7 +319,7 @@ function executeOpponentDrag(cardId, leftPct, topPct) {
     card.element.style.zIndex = 200;
 }
 
-// --- CARD PLAYING & ROUND WIN ---
+// --- CARD PLAYING & WIN CONDITIONS ---
 function playCardToCenter(card, imgElement) {
     let target = null; let side = '';
     const cardRect = imgElement.getBoundingClientRect(); 
@@ -318,10 +337,11 @@ function playCardToCenter(card, imgElement) {
 
     if (target) {
         target.push(card);
+        // REMOVE FROM HAND ARRAY
         gameState.playerHand = gameState.playerHand.filter(c => c.id !== card.id); 
         gameState.playerTotal--;
         
-        gameState.lastMoveTime = Date.now(); // Update timestamp for Penalty checks
+        gameState.lastMoveTime = Date.now(); 
 
         send({ type: 'OPPONENT_MOVE', cardId: card.id, targetSide: side });
 
@@ -332,36 +352,23 @@ function playCardToCenter(card, imgElement) {
         imgElement.remove(); renderCenterPile(side, card); updateScoreboard();
         checkSlapCondition(); 
 
-        // MATCH WIN CHECK
+        // 1. MATCH WIN CHECK (Score hits 0)
         if (gameState.playerTotal <= 0) {
             sendGameOver(gameState.opponentName + " WINS!", false);
             showEndGame("YOU WIN THE MATCH!", true);
             return true;
         }
 
-        // ROUND WIN CHECK (Foundation Empty)
+        // 2. ROUND WIN CHECK (Hand Empty, even if score > 0 due to slaps/borrow)
         if (gameState.playerHand.length === 0) {
-            // I won the round.
-            // In multiplayer, the HOST is usually the authority, but here we can claim it.
-            // Host will calculate the scores for next round.
-            if(gameState.isHost) {
-                // Host logic: I Won. Opponent gets 52 - MyTotal.
-                const nextPTotal = gameState.playerTotal;
-                const nextATotal = 52 - gameState.playerTotal;
-                handleRoundOver('player', nextPTotal, nextATotal);
-                send({ type: 'ROUND_OVER', winner: 'opponent', nextPTotal: nextATotal, nextATotal: nextPTotal });
-            } else {
-                // Guest logic: I emptied my hand. Wait for Host? 
-                // Better: I calculate and send "I WON" to Host?
-                // For simplicity in P2P: If I empty my hand, I tell opponent "ROUND_OVER".
-                const nextPTotal = gameState.playerTotal; // My new start
-                const nextATotal = 52 - gameState.playerTotal; // Opponent new start
-                
-                // Update local
-                handleRoundOver('player', nextPTotal, nextATotal);
-                // Tell Opponent (who sees me as 'opponent')
-                send({ type: 'ROUND_OVER', winner: 'opponent', nextPTotal: nextATotal, nextATotal: nextPTotal });
-            }
+            const nextPTotal = gameState.playerTotal;
+            const nextATotal = 52 - gameState.playerTotal;
+            
+            // Trigger Locally
+            handleRoundOver('player', nextPTotal, nextATotal);
+            
+            // Notify Opponent
+            send({ type: 'ROUND_OVER', winner: 'opponent', nextPTotal: nextATotal, nextATotal: nextPTotal });
         }
 
         return true; 
@@ -374,7 +381,7 @@ function executeOpponentMove(cardId, side) {
     if (!card) return; 
     gameState.aiHand = gameState.aiHand.filter(c => c.id !== cardId);
     gameState.aiTotal--;
-    gameState.lastMoveTime = Date.now(); // Update timestamp
+    gameState.lastMoveTime = Date.now(); 
 
     animateOpponentMove(card, side, () => {
         const target = (side === 'left') ? gameState.centerPileLeft : gameState.centerPileRight;
@@ -392,7 +399,6 @@ function executeOpponentMove(cardId, side) {
 function handleRoundOver(winner, myNextTotal, oppNextTotal) {
     gameState.gameActive = false;
     
-    // Update State for next round
     gameState.playerTotal = myNextTotal;
     gameState.aiTotal = oppNextTotal;
 
@@ -407,45 +413,27 @@ function handleRoundOver(winner, myNextTotal, oppNextTotal) {
         modal.querySelector('p').innerText = `${gameState.opponentName} starts next round with ${oppNextTotal} cards.`;
     }
 
-    // Host controls the "Continue" button effectively by just restarting
-    // Both players get the button.
     btn.innerText = "CONTINUE";
     btn.classList.remove('hidden');
     btn.onclick = function() {
         modal.classList.add('hidden');
-        if (gameState.isHost) startRound(); // Host deals new round
+        // Both click continue, but only Host triggers the deal
+        if (gameState.isHost) startRound(); 
     };
     
     modal.classList.remove('hidden');
 }
 
-// --- PENALTY SYSTEM (FIXED) ---
+// --- PENALTIES ---
 function handleInput(e) {
     if (e.code === 'Space') {
         e.preventDefault();
         const now = Date.now();
-
-        // 1. SPAM CHECK (2 presses < 1s)
-        if (now - gameState.lastSpacebarTime < 1000) { 
-            issuePenalty('player', 'SPAM'); 
-            return; 
-        }
+        if (now - gameState.lastSpacebarTime < 1000) { issuePenalty('player', 'SPAM'); return; }
         gameState.lastSpacebarTime = now;
+        if (!gameState.slapActive) { issuePenalty('player', 'BAD SLAP'); return; }
+        if (now - gameState.lastMoveTime < 100) { issuePenalty('player', 'IMPOSSIBLE'); return; }
 
-        // 2. TIMING CHECK
-        // If NO Slap active -> Penalty
-        if (!gameState.slapActive) { 
-            issuePenalty('player', 'BAD SLAP'); 
-            return; 
-        }
-        
-        // If Slap Active, but TOO FAST (Impossible < 100ms after move) -> Penalty
-        if (now - gameState.lastMoveTime < 100) {
-            issuePenalty('player', 'IMPOSSIBLE');
-            return;
-        }
-
-        // VALID SLAP
         send({ type: 'SLAP_CLAIM', timestamp: Date.now() });
         if (gameState.isHost) resolveSlapClaim('host', Date.now());
     }
@@ -454,7 +442,6 @@ function handleInput(e) {
 function issuePenalty(target, reason) {
     console.log(`PENALTY (${target}): ${reason}`);
     let yellows, reds;
-    
     if (target === 'player') {
         gameState.playerYellows++;
         yellows = gameState.playerYellows;
@@ -465,35 +452,27 @@ function issuePenalty(target, reason) {
         reds = gameState.aiReds;
     }
 
-    // UPGRADE YELLOW TO RED (2 Yellows = 1 Red)
     if (yellows >= 2) {
         if (target === 'player') { gameState.playerYellows = 0; gameState.playerReds++; }
         else { gameState.aiYellows = 0; gameState.aiReds++; }
-        
-        // RED CARD CONSEQUENCE: Transfer 3 Cards
         executeRedCardConsequence(target);
     }
 
     updatePenaltyUI();
-    
-    // SYNC TO OPPONENT
     if(target === 'player') {
         send({ 
             type: 'PENALTY_UPDATE', target: 'opponent', reason: reason, 
-            pTotal: gameState.aiTotal, aTotal: gameState.playerTotal, // Swap for opponent view
+            pTotal: gameState.aiTotal, aTotal: gameState.playerTotal, 
             y: gameState.playerYellows, r: gameState.playerReds 
         });
     }
 }
 
 function applyPenaltySync(target, reason, pTotal, aTotal, y, r) {
-    // Received penalty update from opponent
     if (target === 'opponent') {
-        // It says 'opponent', meaning THE OPPONENT got it.
-        // Update AI stats locally
         gameState.aiYellows = y;
         gameState.aiReds = r;
-        gameState.playerTotal = pTotal; // Sync scores
+        gameState.playerTotal = pTotal; 
         gameState.aiTotal = aTotal;
     }
     updatePenaltyUI();
@@ -501,19 +480,14 @@ function applyPenaltySync(target, reason, pTotal, aTotal, y, r) {
 }
 
 function executeRedCardConsequence(offender) {
-    // Offender gives 3 cards to Victim
     if (offender === 'player') {
-        // I lose 3, Opponent gains 3
         gameState.playerTotal = Math.max(0, gameState.playerTotal - 3);
         gameState.aiTotal += 3;
     } else {
-        // Opponent loses 3, I gain 3
         gameState.aiTotal = Math.max(0, gameState.aiTotal - 3);
         gameState.playerTotal += 3;
     }
     updateScoreboard();
-    
-    // Check Match Win via Penalty
     if (gameState.playerTotal <= 0) { sendGameOver("YOU WIN!", true); showEndGame("YOU WIN!", true); }
     if (gameState.aiTotal <= 0) { sendGameOver(gameState.opponentName + " WINS!", false); showEndGame(gameState.opponentName + " WINS!", false); }
 }
@@ -526,15 +500,12 @@ function updatePenaltyUI() {
 function renderBadges(who, y, r) {
     const container = document.getElementById(`${who}-penalties`);
     container.innerHTML = '';
-    
-    // Render Red
     if (r > 0) {
         const div = document.createElement('div');
         div.className = 'card-icon icon-red';
         if (r > 1) div.innerText = r; 
         container.appendChild(div);
     }
-    // Render Yellow
     if (y > 0) {
         const div = document.createElement('div');
         div.className = 'card-icon icon-yellow';
@@ -542,7 +513,7 @@ function renderBadges(who, y, r) {
     }
 }
 
-// --- STANDARD LOGIC ---
+// --- STANDARD ---
 function animateOpponentMove(card, side, callback) {
     if(!card.element) return;
     const el = card.element;
@@ -592,8 +563,6 @@ function shuffle(array) { for (let i = array.length - 1; i > 0; i--) { const j =
 function updateScoreboard() { 
     document.getElementById('score-player').innerText = gameState.playerTotal; 
     document.getElementById('score-ai').innerText = gameState.aiTotal; 
-    
-    // Borrowed Text Logic
     document.getElementById('borrowed-player').classList.toggle('hidden', gameState.playerTotal > 10);
     document.getElementById('borrowed-ai').classList.toggle('hidden', gameState.aiTotal > 10);
 }
@@ -660,12 +629,8 @@ function startCountdown(broadcast) {
 function performReveal() {
     document.getElementById('player-draw-deck').classList.remove('deck-ready');
     document.getElementById('ai-draw-deck').classList.remove('deck-ready');
-    
-    // Borrow Logic simply decrements counts
     gameState.playerTotal--; gameState.aiTotal--;
-    
-    gameState.lastMoveTime = Date.now(); // Update time for Penalty
-
+    gameState.lastMoveTime = Date.now(); 
     if (gameState.playerDeck.length > 0) { let c = gameState.playerDeck.pop(); gameState.centerPileRight.push(c); renderCenterPile('right', c); }
     if (gameState.aiDeck.length > 0) { let c = gameState.aiDeck.pop(); gameState.centerPileLeft.push(c); renderCenterPile('left', c); }
     updateScoreboard();
@@ -673,7 +638,6 @@ function performReveal() {
     gameState.playerReady = false; gameState.aiReady = false;
     checkSlapCondition();
 }
-
 function resolveSlapClaim(who, timestamp) {
     const winner = (who === 'host') ? 'player' : 'ai';
     const isHostWin = (who === 'host');
