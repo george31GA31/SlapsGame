@@ -59,39 +59,52 @@ function initNetwork() {
     }
 
     gameState.isHost = (role === 'host');
-    const peer = new Peer(gameState.isHost ? code : null);
+    // Important: Host uses specific ID, Guest uses random ID
+    const peer = new Peer(gameState.isHost ? code : undefined);
 
     peer.on('open', (id) => {
         console.log("My Peer ID: " + id);
         if (!gameState.isHost) {
+            // Guest initiates connection
             const conn = peer.connect(code);
-            handleConnection(conn);
+            // Wait for connection to actually open before handling
+            conn.on('open', () => {
+                handleConnection(conn);
+            });
         }
     });
 
     peer.on('connection', (conn) => {
+        // Host accepts connection
         if (gameState.isHost) handleConnection(conn);
     });
+    
+    peer.on('error', (err) => {
+        console.error("PeerJS Error:", err);
+        // Optional: Retry logic or alert
+    });
 }
-
 function handleConnection(connection) {
     gameState.conn = connection;
     connection.on('open', () => {
         console.log("CONNECTED!");
         
-        // FIX 1: IMMEDIATE NAME EXCHANGE
+        // IMMEDIATE NAME EXCHANGE
         send({ type: 'NAME_UPDATE', name: gameState.myName });
         
-        if (gameState.isHost) startRound(); 
+        // HANDSHAKE: If I am the Guest, tell Host I am ready to receive cards.
+        if (!gameState.isHost) {
+            send({ type: 'GUEST_READY' });
+        }
     });
     connection.on('data', (data) => processNetworkData(data));
 }
-
 function processNetworkData(data) {
     switch(data.type) {
-        case 'NAME_UPDATE':
-            gameState.opponentName = data.name;
-            updateNamesUI();
+        case 'GUEST_READY':
+            // HOST receives this when Guest is fully loaded.
+            // NOW we start the round.
+            if (gameState.isHost) startRound();
             break;
 
         case 'INIT_ROUND':
