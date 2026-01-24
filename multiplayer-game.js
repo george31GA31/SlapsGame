@@ -1,5 +1,5 @@
 /* =========================================
-   ISF MULTIPLAYER ENGINE v15.0 (Restored Deck Click & Polling)
+   ISF MULTIPLAYER ENGINE v15.1 (last working code)
    ========================================= */
 
 const gameState = {
@@ -49,9 +49,13 @@ window.onload = function() {
     gameState.playerTotal = 26; gameState.aiTotal = 26;
     gameState.myName = localStorage.getItem('isf_my_name') || "Player";
     document.addEventListener('keydown', handleInput);
+    
+    // --- THE FIX: ADD DECK LISTENERS ---
+    document.getElementById('player-draw-deck').onclick = handlePlayerDeckClick;
+    // -----------------------------------
+
     initNetwork();
 };
-
 function initNetwork() {
     const role = localStorage.getItem('isf_role');
     const code = localStorage.getItem('isf_code');
@@ -349,54 +353,31 @@ function startCountdown(broadcast) {
     }, 800);
 }
 
-// --- PHYSICS ---
-function makeDraggable(img, cardData) {
-    img.onmousedown = (e) => {
-        e.preventDefault();
-        gameState.globalZ = (gameState.globalZ || 200) + 1;
-        img.style.zIndex = gameState.globalZ;
-        img.style.transition = 'none';
+// --- RESTORED DECK LOGIC ---
+function handlePlayerDeckClick() {
+    // 1. PRE-GAME READY
+    if (!gameState.gameActive) {
+        if (gameState.playerReady) return;
+        gameState.playerReady = true; 
+        document.getElementById('player-draw-deck').classList.add('deck-ready');
+        
+        // Notify Opponent
+        send({ type: 'OPPONENT_REVEAL_READY' });
 
-        cardData.originalLeft = img.style.left;
-        cardData.originalTop = img.style.top;
+        checkDrawCondition();
+        return;
+    }
 
-        let shiftX = e.clientX - img.getBoundingClientRect().left;
-        let shiftY = e.clientY - img.getBoundingClientRect().top;
-        const box = document.getElementById('player-foundation-area');
-
-        function moveAt(pageX, pageY) {
-            const boxRect = box.getBoundingClientRect();
-            let newLeft = pageX - shiftX - boxRect.left;
-            let newTop = pageY - shiftY - boxRect.top;
-            if (newTop < 0) { 
-                if (!gameState.gameActive || !checkLegalPlay(cardData)) newTop = 0; 
-            }
-            img.style.left = newLeft + 'px';
-            img.style.top = newTop + 'px';
-        }
-        moveAt(e.pageX, e.pageY);
-
-        function onMouseMove(event) { moveAt(event.pageX, event.pageY); }
-
-        function onMouseUp(event) {
-            document.removeEventListener('mousemove', onMouseMove);
-            document.removeEventListener('mouseup', onMouseUp);
-            img.style.transition = 'all 0.1s ease-out';
-            if (gameState.gameActive && parseInt(img.style.top) < -10) {
-                let success = playCardToCenter(cardData, img);
-                if (!success) { img.style.left = cardData.originalLeft; img.style.top = cardData.originalTop; }
-            } else {
-                const boxRect = box.getBoundingClientRect();
-                const currentLeftPx = parseFloat(img.style.left);
-                const currentTopPx = parseFloat(img.style.top);
-                const leftPct = (currentLeftPx / boxRect.width) * 100;
-                const topPct = (currentTopPx / boxRect.height) * 100;
-                send({ type: 'OPPONENT_DRAG', cardId: cardData.id, left: leftPct, top: topPct });
-            }
-        }
-        document.addEventListener('mousemove', onMouseMove);
-        document.addEventListener('mouseup', onMouseUp);
-    };
+    // 2. IN-GAME REVEAL (This was missing!)
+    if (gameState.gameActive && !gameState.playerReady) {
+        gameState.playerReady = true;
+        document.getElementById('player-draw-deck').classList.add('deck-ready');
+        
+        // Notify Opponent
+        send({ type: 'OPPONENT_REVEAL_READY' });
+        
+        checkDrawCondition();
+    }
 }
 
 function executeOpponentDrag(cardId, leftPct, topPct) {
