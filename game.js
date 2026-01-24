@@ -288,17 +288,12 @@ function performReveal() {
     document.getElementById('player-draw-deck').classList.remove('deck-ready');
     document.getElementById('ai-draw-deck').classList.remove('deck-ready');
 
-    // --- BORROWING LOGIC (Physical Only) ---
-    // If deck empty, move physical cards. NO SCORE CHANGE HERE.
-    let playerBorrowed = false;
-    let aiBorrowed = false;
-
+    // 1. TRIGGER BORROWING (Physical Move)
     if (gameState.playerDeck.length === 0 && gameState.aiDeck.length > 0) {
         const stealAmount = Math.floor(gameState.aiDeck.length / 2);
         const stolen = gameState.aiDeck.splice(0, stealAmount);
         gameState.playerDeck = gameState.playerDeck.concat(stolen);
         document.getElementById('borrowed-player').classList.remove('hidden');
-        playerBorrowed = true;
     }
 
     if (gameState.aiDeck.length === 0 && gameState.playerDeck.length > 0) {
@@ -306,25 +301,26 @@ function performReveal() {
         const stolen = gameState.playerDeck.splice(0, stealAmount);
         gameState.aiDeck = gameState.aiDeck.concat(stolen);
         document.getElementById('borrowed-ai').classList.remove('hidden');
-        aiBorrowed = true;
     }
 
-    // --- STRICT SCORING LOGIC ---
-    if (playerBorrowed) {
-        // Player Shortage: Player pays 0, AI pays 2
+    // 2. APPLY SCORING RULES (Based on Persistent Status)
+    // We check the CLASS, because the deck might have cards now, but they are borrowed.
+    const isPlayerBorrowing = !document.getElementById('borrowed-player').classList.contains('hidden');
+    const isAiBorrowing = !document.getElementById('borrowed-ai').classList.contains('hidden');
+
+    if (isPlayerBorrowing) {
+        // Player is borrowing: AI pays 2, Player pays 0
         gameState.aiTotal -= 2;
-        // Player Score unchanged (-0)
-    } else if (aiBorrowed) {
-        // AI Shortage: AI pays 0, Player pays 2
+    } else if (isAiBorrowing) {
+        // AI is borrowing: Player pays 2, AI pays 0
         gameState.playerTotal -= 2;
-        // AI Score unchanged (-0)
     } else {
         // Normal: Both pay 1
         gameState.playerTotal--;
         gameState.aiTotal--;
     }
 
-    // Reveal Cards
+    // 3. EXECUTE REVEAL
     if (gameState.playerDeck.length > 0) {
         let pCard = gameState.playerDeck.pop();
         gameState.centerPileRight.push(pCard);
@@ -342,6 +338,7 @@ function performReveal() {
     gameState.gameActive = true;
     gameState.playerReady = false;
     gameState.aiReady = false;
+    
     if (!gameState.aiLoopRunning) startAILoop();
 }
 
@@ -368,17 +365,17 @@ function startAILoop() {
 }
 
 function attemptAIMove() {
+    // ADJUSTED SPEED: Level 1 is now significantly slower (5-7 seconds)
     const diff = gameState.difficulty;
-    // Slow L1: 4.5s
-    const minTime = 4500 + (diff - 1) * -450; 
-    const maxTime = 6500 + (diff - 1) * -550; 
-    let reactionDelay = Math.random() * (maxTime - minTime) + minTime;
+    const minTime = 5000 + (diff - 1) * -500; // L1: 5000ms, L10: ~500ms
+    const maxTime = 7000 + (diff - 1) * -600; // L1: 7000ms, L10: ~1600ms
     
+    let reactionDelay = Math.random() * (maxTime - minTime) + minTime;
     if (gameState.aiInChain) reactionDelay *= 0.5;
 
     const activeCards = gameState.aiHand.filter(c => c.isFaceUp);
 
-    // 1. PLAY
+    // 1. PLAY CARD
     let bestMove = null;
     for (let card of activeCards) {
         if (checkPileLogic(card, gameState.centerPileLeft)) { bestMove = { c: card, t: 'left' }; break; }
@@ -388,6 +385,7 @@ function attemptAIMove() {
     if (bestMove) {
         gameState.aiProcessing = true; 
         setTimeout(() => {
+            // Stale Check
             let targetPile = (bestMove.t === 'left') ? gameState.centerPileLeft : gameState.centerPileRight;
             if (!checkPileLogic(bestMove.c, targetPile)) { gameState.aiProcessing = false; return; }
 
@@ -413,7 +411,7 @@ function attemptAIMove() {
 
     gameState.aiInChain = false; 
 
-    // 2. SORT
+    // 2. SORT (Blocker Logic)
     if (activeCards.length < 4) {
         let lanes = [[], [], [], []];
         gameState.aiHand.forEach(c => lanes[c.laneIndex].push(c));
