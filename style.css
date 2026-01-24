@@ -161,17 +161,24 @@ body {
 /* This section restores your original sliders, game board, and card sizes */
 
 /* The main container for the actual game */
+/* =========================================
+   4. GAME BOARD (GREEN FELT RESTORED)
+   ========================================= */
 .game-board-area {
-    flex-grow: 1;
+    flex-grow: 1; 
+    width: 100%;
+    height: 100%;
     
-    /* REPLACE THE BACKGROUND LINE WITH THIS: */
-    background: radial-gradient(circle at center, #3a5e45 0%, #1e3324 100%);
+    /* FORCE GREEN GRADIENT OVERRIDE */
+    background: radial-gradient(circle at center, #3a5e45 0%, #1e3324 100%) !important;
+    background-color: #142819 !important; /* Fallback */
     
-    position: relative;
-    display: flex;
-    justify-content: center;
+    position: relative; 
+    display: flex; 
+    justify-content: center; 
     align-items: center;
     flex-direction: column;
+    overflow: hidden;
 }
 
 /* --- SETUP CARD & SLIDERS (Restored) --- */
