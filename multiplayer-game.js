@@ -166,8 +166,18 @@ function startRound() {
     shuffle(fullDeck);
     
     // MATCH WIN CHECK
-    if (gameState.playerTotal <= 0) { sendGameOver("YOU WIN!", true); showEndGame("YOU WIN!", true); return; }
-    if (gameState.aiTotal <= 0) { sendGameOver(gameState.opponentName + " WINS!", false); showEndGame(gameState.opponentName + " WINS!", false); return; }
+    if (gameState.playerTotal <= 0) { 
+        // I won, so I tell opponent "MY NAME wins"
+        sendGameOver(gameState.myName + " WINS!", false); 
+        showEndGame("YOU WIN!", true); 
+        return; 
+    }
+    if (gameState.aiTotal <= 0) { 
+        // Opponent won, so I tell them "YOU WIN"
+        sendGameOver("YOU WIN THE MATCH!", true); 
+        showEndGame(gameState.opponentName + " WINS!", false); 
+        return; 
+    }
 
     const pTotal = gameState.playerTotal;
     const pAllCards = fullDeck.slice(0, pTotal);
@@ -354,7 +364,9 @@ function playCardToCenter(card, imgElement) {
 
         // 1. MATCH WIN CHECK (Score hits 0)
         if (gameState.playerTotal <= 0) {
-            sendGameOver(gameState.opponentName + " WINS!", false);
+            // I played my last card. I win.
+            // Tell Opponent: "George WINS!"
+            sendGameOver(gameState.myName + " WINS!", false);
             showEndGame("YOU WIN THE MATCH!", true);
             return true;
         }
@@ -498,10 +510,17 @@ function executeRedCardConsequence(offender) {
         gameState.playerTotal += 3;
     }
     updateScoreboard();
-    if (gameState.playerTotal <= 0) { sendGameOver("YOU WIN!", true); showEndGame("YOU WIN!", true); }
-    if (gameState.aiTotal <= 0) { sendGameOver(gameState.opponentName + " WINS!", false); showEndGame(gameState.opponentName + " WINS!", false); }
-}
-
+    updateScoreboard();
+    
+    // Check Match Win via Penalty
+    if (gameState.playerTotal <= 0) { 
+        sendGameOver(gameState.myName + " WINS!", false); 
+        showEndGame("YOU WIN!", true); 
+    }
+    if (gameState.aiTotal <= 0) { 
+        sendGameOver("YOU WIN THE MATCH!", true); 
+        showEndGame(gameState.opponentName + " WINS!", false); 
+    }
 function updatePenaltyUI() {
     renderBadges('player', gameState.playerYellows, gameState.playerReds);
     renderBadges('ai', gameState.aiYellows, gameState.aiReds);
