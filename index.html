@@ -6,112 +6,77 @@
     <title>ISF - International Slaps Federation</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Montagu+Slab:wght@500;700&family=Segoe+UI:wght@400;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&family=Cinzel:wght@700&display=swap" rel="stylesheet">
 </head>
 <body>
 
-    <div class="app-container">
+    <div class="top-bar">
+        <div class="logo-area">
+            <img src="assets/ISF_pink.png" alt="ISF" class="isf-logo">
+            <span class="logo-text">SLAPS.com</span>
+        </div>
+        <div class="auth-buttons">
+            <button class="btn-join">Join</button>
+            <button class="btn-login">Log In</button>
+        </div>
+    </div>
+
+    <div class="main-container">
         
         <nav class="sidebar-left">
-            <div class="logo-area">
-                <img src="assets/ISF_pink.png" alt="ISF" class="isf-logo">
-            </div>
-
             <ul class="nav-links">
-                <li><a href="#" class="disabled"><i class="fa-solid fa-hand-paper"></i> Play</a></li>
-                <li><a href="#" class="disabled"><i class="fa-solid fa-puzzle-piece"></i> Puzzles</a></li>
-                <li><a href="#" class="disabled"><i class="fa-solid fa-graduation-cap"></i> Learn</a></li>
-                <li><a href="#" class="disabled"><i class="fa-solid fa-binoculars"></i> Watch</a></li>
-                <li><a href="#" class="disabled"><i class="fa-regular fa-newspaper"></i> News</a></li>
-                <li><a href="#" class="disabled"><i class="fa-solid fa-users"></i> Social</a></li>
-                <li><a href="#" class="disabled"><i class="fa-solid fa-ellipsis"></i> More</a></li>
+                <li class="active"><a href="#"><i class="fa-solid fa-house"></i> Home</a></li>
+                <li><a href="how-to-play.html"><i class="fa-solid fa-book-open"></i> How to Play</a></li>
+                <li><a href="https://sprucewilliams.github.io/Slaps-Online/matchtable.html"><i class="fa-solid fa-table-list"></i> Game History</a></li>
+                <li><a href="https://sprucewilliams.github.io/Slaps-Online/ratingtable.html"><i class="fa-solid fa-trophy"></i> Leaderboard</a></li>
+                <li><a href="rules.html"><i class="fa-solid fa-scale-balanced"></i> Rules & Regs</a></li>
             </ul>
 
-            <div class="nav-search">
-                <input type="text" placeholder="Search" disabled>
-                <i class="fa-solid fa-magnifying-glass search-icon"></i>
-            </div>
-
-            <div class="auth-buttons">
-                <button class="btn-signup disabled">Sign Up</button>
-                <button class="btn-login disabled">Log In</button>
-            </div>
-
-            <div class="sidebar-footer">
-                <div class="footer-item"><i class="fa-solid fa-globe"></i> English</div>
-                <div class="footer-item"><i class="fa-solid fa-circle-half-stroke"></i> Light UI</div>
-                <div class="footer-item"><i class="fa-solid fa-circle-question"></i> Support</div>
+            <div class="sidebar-bottom">
+                <li><a href="#"><i class="fa-solid fa-comments"></i> Forums</a></li>
+                <li><a href="#"><i class="fa-solid fa-gear"></i> Settings</a></li>
             </div>
         </nav>
 
-        <main class="game-board-area">
-            
-            <div class="player-profile opponent">
-                <div class="avatar"></div>
-                <span class="username">Opponent</span>
+        <main class="hero-area">
+            <div class="card-display">
+                <img src="assets/cards/ace_of_spades.png" alt="Ace of Spades" class="hero-card-img">
             </div>
-
-            <div class="board-center">
-                <img src="assets/hero-cards.png" alt="Slaps Table Cards" class="hero-cards">
-            </div>
-
-            <div class="player-profile player">
-                <div class="avatar"></div>
-                <span class="username">Player</span>
-            </div>
-
         </main>
 
-        <aside class="sidebar-right">
+        <aside class="game-modes-grid">
             
-            <div class="menu-header">
-                <i class="fa-solid fa-hand-back-fist icon-slap"></i>
-                <h1>Play Slaps</h1>
+            <div class="mode-card" onclick="window.location.href='multiplayer-setup.html'">
+                <div class="mode-icon"><img src="assets/cards/ace_of_hearts.png" alt="Friend"></div>
+                <div class="mode-info">
+                    <h3>Play a Friend</h3>
+                    <span>Host or Join</span>
+                </div>
             </div>
 
-            <div class="menu-options">
-                
-                <div class="menu-card" onclick="window.location.href='multiplayer-setup.html'" style="cursor: pointer;">
-    <div class="card-icon"><i class="fa-solid fa-bolt"></i></div>
-    <div class="card-text">
-        <h3>Play a Friend</h3>
-        <p>Host or Join using a code</p>
-    </div>
-</div>
-
-                <div class="menu-card" onclick="window.location.href='setup.html'" style="cursor: pointer;">
-    <div class="card-icon"><i class="fa-solid fa-robot"></i></div>
-    <div class="card-text">
-        <h3>Play Bots</h3>
-        <p>Challenge a bot from Easy to Master</p>
-    </div>
-</div>
-
-                <div class="menu-card disabled">
-                    <div class="card-icon"><i class="fa-solid fa-handshake-simple"></i></div>
-                    <div class="card-text">
-                        <h3>Play a Friend</h3>
-                        <p>Invite a friend to a game of Slaps</p>
-                    </div>
+            <div class="mode-card green" onclick="window.location.href='setup.html'">
+                <div class="mode-icon"><i class="fa-solid fa-robot"></i></div>
+                <div class="mode-info">
+                    <h3>Play Bots</h3>
+                    <span>Challenge AI</span>
                 </div>
-
-                <div class="menu-card disabled">
-                    <div class="card-icon"><i class="fa-solid fa-medal"></i></div>
-                    <div class="card-text">
-                        <h3>Tournaments</h3>
-                        <p>Join an Arena where anyone can win</p>
-                    </div>
-                </div>
-
             </div>
 
-           <a href="https://sprucewilliams.github.io/Slaps-Online/matchtable.html" class="menu-item" style="text-decoration: none; color: inherit; display: block; margin-bottom: 10px;">
-    <i class="fa-solid fa-table-list"></i> Game History
-</a>
+            <div class="mode-card blue disabled">
+                <div class="mode-icon"><i class="fa-solid fa-globe"></i></div>
+                <div class="mode-info">
+                    <h3>Play Online</h3>
+                    <span>Matchmaking</span>
+                </div>
+            </div>
 
-<a href="https://sprucewilliams.github.io/Slaps-Online/ratingtable.html" class="menu-item" style="text-decoration: none; color: inherit; display: block;">
-    <i class="fa-solid fa-chart-simple"></i> Leaderboard
-</a>
+            <div class="mode-card gold" onclick="window.location.href='tournament-setup.html'">
+                <div class="mode-icon"><i class="fa-solid fa-trophy"></i></div>
+                <div class="mode-info">
+                    <h3>Tournaments</h3>
+                    <span>Join Arena</span>
+                </div>
+            </div>
 
         </aside>
 
