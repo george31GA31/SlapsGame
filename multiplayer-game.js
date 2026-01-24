@@ -50,9 +50,8 @@ window.onload = function() {
     gameState.myName = localStorage.getItem('isf_my_name') || "Player";
     document.addEventListener('keydown', handleInput);
     
-    // --- THE FIX: ADD DECK LISTENERS ---
+    // THIS MUST BE HERE FOR DECK TO WORK
     document.getElementById('player-draw-deck').onclick = handlePlayerDeckClick;
-    // -----------------------------------
 
     initNetwork();
 };
@@ -118,25 +117,46 @@ function setupGuestConnection(conn) {
 
 function processNetworkData(data) {
     switch(data.type) {
-        // --- HANDSHAKE LOGIC ---
-        case 'REQUEST_DEAL':
-            if (gameState.isHost) {
-                console.log("HOST: Received Request. Sending Deck...");
-                gameState.opponentName = data.name || "Opponent";
-                updateNamesUI();
-                startRound(); 
-            }
-            break;
-
+        // --- 1. CONNECTION & HANDSHAKE (UPDATED) ---
+        
         case 'INIT_ROUND':
-            console.log("GUEST: Deck Received! Stopping Loop.");
+            // Guest received cards. 
+            // A. Tell Host to stop sending them ("I got it!")
+            send({ type: 'DEAL_ACK' });
+            
+            // B. Stop my own "Ask for cards" loop
             if (gameState.handshakeInterval) {
                 clearInterval(gameState.handshakeInterval);
                 gameState.handshakeInterval = null;
             }
-            if(data.hostName) gameState.opponentName = data.hostName;
-            updateNamesUI();
-            syncBoardState(data);
+
+            // C. Process the deck (Only once!)
+            if (!gameState.roundInitialized) {
+                console.log("GUEST: Deck Received.");
+                if(data.hostName) gameState.opponentName = data.hostName;
+                updateNamesUI();
+                syncBoardState(data);
+                gameState.roundInitialized = true;
+            }
+            break;
+
+        case 'DEAL_ACK':
+            // Host received "GOT IT" from Guest. Stop sending the deck.
+            if (gameState.isHost && gameState.dealInterval) {
+                console.log("HOST: Guest confirmed deal. Stopping loop.");
+                clearInterval(gameState.dealInterval);
+                gameState.dealInterval = null;
+            }
+            break;
+
+        case 'REQUEST_DEAL':
+            // Backup: If Guest asks manually, send the deck immediately
+            if (gameState.isHost) {
+                console.log("HOST: Manual Request Received.");
+                gameState.opponentName = data.name || "Opponent";
+                updateNamesUI();
+                startRound(); 
+            }
             break;
 
         case 'NAME_UPDATE':
@@ -144,7 +164,8 @@ function processNetworkData(data) {
             updateNamesUI();
             break;
 
-        // --- GAMEPLAY ---
+        // --- 2. GAMEPLAY LOGIC (EXISTING) ---
+
         case 'OPPONENT_MOVE':
             const mirroredSide = (data.targetSide === 'left') ? 'right' : 'left';
             executeOpponentMove(data.cardId, mirroredSide);
@@ -189,7 +210,6 @@ function processNetworkData(data) {
             break;
     }
 }
-
 function send(data) {
     if (gameState.conn && gameState.conn.open) {
         gameState.conn.send(data);
@@ -201,7 +221,7 @@ function updateNamesUI() {
     if(labels[0]) labels[0].innerText = gameState.opponentName;
 }
 
-// --- HOST LOGIC: SAFE DEALING ---
+// --- HOST LOGIC: NAGGING DEAL ---
 function startRound() {
     if (!gameState.isHost) return;
 
@@ -210,6 +230,18 @@ function startRound() {
         let fullDeck = createDeck();
         shuffle(fullDeck);
         
+        // Match Win Check
+        if (gameState.playerTotal <= 0) { 
+            sendGameOver(gameState.myName + " WINS!", false); 
+            showEndGame("YOU WIN!", true); 
+            return; 
+        }
+        if (gameState.aiTotal <= 0) { 
+            sendGameOver("YOU WIN THE MATCH!", true); 
+            showEndGame(gameState.opponentName + " WINS!", false); 
+            return; 
+        }
+
         const pTotal = gameState.playerTotal;
         const pAllCards = fullDeck.slice(0, pTotal);
         const aAllCards = fullDeck.slice(pTotal, 52);
@@ -236,34 +268,43 @@ function startRound() {
 
         document.getElementById('borrowed-player').classList.toggle('hidden', !pBorrow);
         document.getElementById('borrowed-ai').classList.toggle('hidden', !aBorrow);
+        
         dealSmartHand(pHandCards, 'player');
         dealSmartHand(aHandCards, 'ai');
         updateScoreboard();
 
-        gameState.roundInitialized = true; 
+        gameState.roundInitialized = true;
     }
 
-    // 2. SEND STATE
-    const pB = !document.getElementById('borrowed-player').classList.contains('hidden');
-    const aB = !document.getElementById('borrowed-ai').classList.contains('hidden');
+    // 2. SEND STATE (Repeatedly send until ACK received)
+    // Clear any existing interval to avoid duplicates
+    if (gameState.dealInterval) clearInterval(gameState.dealInterval);
 
-    const cleanDeck = (deck) => deck.map(c => ({suit:c.suit, rank:c.rank, value:c.value, id:c.id}));
-    const cleanHand = (hand) => hand.map(c => ({suit:c.suit, rank:c.rank, value:c.value, id:c.id}));
+    const sendDeal = () => {
+        console.log("HOST: Sending Deal Data...");
+        const pB = !document.getElementById('borrowed-player').classList.contains('hidden');
+        const aB = !document.getElementById('borrowed-ai').classList.contains('hidden');
 
-    send({
-        type: 'INIT_ROUND',
-        hostName: gameState.myName,
-        pDeck: cleanDeck(gameState.aiDeck), 
-        aDeck: cleanDeck(gameState.playerDeck),
-        pHand: cleanHand(gameState.aiHand), 
-        aHand: cleanHand(gameState.playerHand),
-        pTotal: gameState.aiTotal, 
-        aTotal: gameState.playerTotal,
-        pBorrow: aB, 
-        aBorrow: pB
-    });
+        const cleanDeck = (deck) => deck.map(c => ({suit:c.suit, rank:c.rank, value:c.value, id:c.id}));
+        const cleanHand = (hand) => hand.map(c => ({suit:c.suit, rank:c.rank, value:c.value, id:c.id}));
+
+        send({
+            type: 'INIT_ROUND',
+            hostName: gameState.myName,
+            pDeck: cleanDeck(gameState.aiDeck), 
+            aDeck: cleanDeck(gameState.playerDeck),
+            pHand: cleanHand(gameState.aiHand), 
+            aHand: cleanHand(gameState.playerHand),
+            pTotal: gameState.aiTotal, 
+            aTotal: gameState.playerTotal,
+            pBorrow: aB, 
+            aBorrow: pB
+        });
+    };
+
+    sendDeal(); // Send immediately
+    gameState.dealInterval = setInterval(sendDeal, 1000); // Repeat every 1s
 }
-
 function syncBoardState(data) {
     gameState.playerDeck = data.pDeck.map(d => new Card(d.suit, d.rank, d.value, d.id));
     gameState.aiDeck = data.aDeck.map(d => new Card(d.suit, d.rank, d.value, d.id));
@@ -440,19 +481,25 @@ function playCardToCenter(card, imgElement) {
 function executeOpponentMove(cardId, side) {
     const card = gameState.aiHand.find(c => c.id === cardId);
     if (!card) return; 
+    
+    // 1. UPDATE DATA IMMEDIATELY (Fixes double-play bug)
+    const target = (side === 'left') ? gameState.centerPileLeft : gameState.centerPileRight;
+    target.push(card);
+
     gameState.aiHand = gameState.aiHand.filter(c => c.id !== cardId);
     gameState.aiTotal--;
     gameState.lastMoveTime = Date.now(); 
 
+    // 2. ANIMATE VISUALS
     animateOpponentMove(card, side, () => {
-        const target = (side === 'left') ? gameState.centerPileLeft : gameState.centerPileRight;
-        target.push(card);
         renderCenterPile(side, card);
         updateScoreboard();
         
-        gameState.playerReady = false; gameState.aiReady = false;
+        gameState.playerReady = false; 
+        gameState.aiReady = false;
         document.getElementById('player-draw-deck').classList.remove('deck-ready');
         document.getElementById('ai-draw-deck').classList.remove('deck-ready');
+        
         checkSlapCondition();
     });
 }
