@@ -399,8 +399,15 @@ function executeOpponentMove(cardId, side) {
 function handleRoundOver(winner, myNextTotal, oppNextTotal) {
     gameState.gameActive = false;
     
+    // Update State
     gameState.playerTotal = myNextTotal;
     gameState.aiTotal = oppNextTotal;
+
+    // --- THE FIX: CLEAR CENTER PILE ---
+    gameState.centerPileLeft = [];
+    gameState.centerPileRight = [];
+    document.getElementById('center-pile-left').innerHTML = '';
+    document.getElementById('center-pile-right').innerHTML = '';
 
     const modal = document.getElementById('game-message');
     const btn = document.getElementById('msg-btn');
@@ -417,7 +424,6 @@ function handleRoundOver(winner, myNextTotal, oppNextTotal) {
     btn.classList.remove('hidden');
     btn.onclick = function() {
         modal.classList.add('hidden');
-        // Both click continue, but only Host triggers the deal
         if (gameState.isHost) startRound(); 
     };
     
@@ -629,13 +635,54 @@ function startCountdown(broadcast) {
 function performReveal() {
     document.getElementById('player-draw-deck').classList.remove('deck-ready');
     document.getElementById('ai-draw-deck').classList.remove('deck-ready');
-    gameState.playerTotal--; gameState.aiTotal--;
+    
+    // 1. PHYSICAL BORROW (Move cards if empty)
+    if (gameState.playerDeck.length === 0 && gameState.aiDeck.length > 0) {
+        const steal = Math.floor(gameState.aiDeck.length / 2);
+        gameState.playerDeck = gameState.playerDeck.concat(gameState.aiDeck.splice(0, steal));
+        document.getElementById('borrowed-player').classList.remove('hidden');
+    }
+    if (gameState.aiDeck.length === 0 && gameState.playerDeck.length > 0) {
+        const steal = Math.floor(gameState.playerDeck.length / 2);
+        gameState.aiDeck = gameState.aiDeck.concat(gameState.playerDeck.splice(0, steal));
+        document.getElementById('borrowed-ai').classList.remove('hidden');
+    }
+
+    // 2. SCORING LOGIC (The Fix)
+    // Check if the "BORROWED" text is visible on screen
+    const pBorrow = !document.getElementById('borrowed-player').classList.contains('hidden');
+    const aBorrow = !document.getElementById('borrowed-ai').classList.contains('hidden');
+
+    if (pBorrow) {
+        // Player Borrowing: Player pays 0, Opponent pays 2
+        gameState.aiTotal -= 2;
+    } else if (aBorrow) {
+        // Opponent Borrowing: Opponent pays 0, Player pays 2
+        gameState.playerTotal -= 2;
+    } else {
+        // Normal: Both pay 1
+        gameState.playerTotal--;
+        gameState.aiTotal--;
+    }
+    
     gameState.lastMoveTime = Date.now(); 
-    if (gameState.playerDeck.length > 0) { let c = gameState.playerDeck.pop(); gameState.centerPileRight.push(c); renderCenterPile('right', c); }
-    if (gameState.aiDeck.length > 0) { let c = gameState.aiDeck.pop(); gameState.centerPileLeft.push(c); renderCenterPile('left', c); }
+
+    // 3. RENDER CARDS
+    if (gameState.playerDeck.length > 0) { 
+        let c = gameState.playerDeck.pop(); 
+        gameState.centerPileRight.push(c); 
+        renderCenterPile('right', c); 
+    }
+    if (gameState.aiDeck.length > 0) { 
+        let c = gameState.aiDeck.pop(); 
+        gameState.centerPileLeft.push(c); 
+        renderCenterPile('left', c); 
+    }
+
     updateScoreboard();
     gameState.gameActive = true; 
-    gameState.playerReady = false; gameState.aiReady = false;
+    gameState.playerReady = false; 
+    gameState.aiReady = false;
     checkSlapCondition();
 }
 function resolveSlapClaim(who, timestamp) {
