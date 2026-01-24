@@ -48,14 +48,25 @@ class Card {
 window.onload = function() {
     gameState.playerTotal = 26; gameState.aiTotal = 26;
     gameState.myName = localStorage.getItem('isf_my_name') || "Player";
+    
     document.addEventListener('keydown', handleInput);
     
-    // THIS MUST BE HERE FOR DECK TO WORK
-    document.getElementById('player-draw-deck').onclick = handlePlayerDeckClick;
+    // Explicit Deck Listener
+    const pDeck = document.getElementById('player-draw-deck');
+    if(pDeck) pDeck.onclick = handlePlayerDeckClick;
 
     initNetwork();
-};
-function initNetwork() {
+
+    // --- THE FIX: EMPTY HAND PANIC LOOP ---
+    // Every 1 second, check if we are the Guest and have no cards.
+    // If so, demand a deal.
+    setInterval(() => {
+        if (!gameState.isHost && gameState.playerHand.length === 0 && gameState.conn && gameState.conn.open) {
+            console.warn("PANIC: Hand is empty! Requesting deal...");
+            send({ type: 'REQUEST_DEAL', name: gameState.myName });
+        }
+    }, 1000);
+};function initNetwork() {
     const role = localStorage.getItem('isf_role');
     const code = localStorage.getItem('isf_code');
     
@@ -117,45 +128,29 @@ function setupGuestConnection(conn) {
 
 function processNetworkData(data) {
     switch(data.type) {
-        // --- 1. CONNECTION & HANDSHAKE (UPDATED) ---
-        
-        case 'INIT_ROUND':
-            // Guest received cards. 
-            // A. Tell Host to stop sending them ("I got it!")
-            send({ type: 'DEAL_ACK' });
-            
-            // B. Stop my own "Ask for cards" loop
-            if (gameState.handshakeInterval) {
-                clearInterval(gameState.handshakeInterval);
-                gameState.handshakeInterval = null;
-            }
-
-            // C. Process the deck (Only once!)
-            if (!gameState.roundInitialized) {
-                console.log("GUEST: Deck Received.");
-                if(data.hostName) gameState.opponentName = data.hostName;
-                updateNamesUI();
-                syncBoardState(data);
-                gameState.roundInitialized = true;
-            }
-            break;
-
-        case 'DEAL_ACK':
-            // Host received "GOT IT" from Guest. Stop sending the deck.
-            if (gameState.isHost && gameState.dealInterval) {
-                console.log("HOST: Guest confirmed deal. Stopping loop.");
-                clearInterval(gameState.dealInterval);
-                gameState.dealInterval = null;
-            }
-            break;
-
+        // --- CONNECTION & SYNC ---
         case 'REQUEST_DEAL':
-            // Backup: If Guest asks manually, send the deck immediately
+            // Host received the "Panic" signal. 
+            // Send the deck data immediately.
             if (gameState.isHost) {
-                console.log("HOST: Manual Request Received.");
+                console.log("HOST: Guest requested deal (Panic Mode). Sending data...");
                 gameState.opponentName = data.name || "Opponent";
                 updateNamesUI();
-                startRound(); 
+                // Force a resend of the current state
+                sendCurrentState(); 
+            }
+            break;
+
+        case 'INIT_ROUND':
+            // Guest received the deck.
+            console.log("GUEST: Deck Received!");
+            if(data.hostName) gameState.opponentName = data.hostName;
+            updateNamesUI();
+            
+            // Only sync if we are actually empty or it's a new round
+            if (gameState.playerHand.length === 0 || !gameState.roundInitialized) {
+                syncBoardState(data);
+                gameState.roundInitialized = true;
             }
             break;
 
@@ -164,8 +159,7 @@ function processNetworkData(data) {
             updateNamesUI();
             break;
 
-        // --- 2. GAMEPLAY LOGIC (EXISTING) ---
-
+        // --- GAMEPLAY ---
         case 'OPPONENT_MOVE':
             const mirroredSide = (data.targetSide === 'left') ? 'right' : 'left';
             executeOpponentMove(data.cardId, mirroredSide);
@@ -222,10 +216,11 @@ function updateNamesUI() {
 }
 
 // --- HOST LOGIC: NAGGING DEAL ---
+// --- HOST LOGIC ---
 function startRound() {
     if (!gameState.isHost) return;
 
-    // 1. INITIAL SETUP (Only run ONCE per round)
+    // Only shuffle if it's actually a new round
     if (!gameState.roundInitialized) {
         let fullDeck = createDeck();
         shuffle(fullDeck);
@@ -276,34 +271,30 @@ function startRound() {
         gameState.roundInitialized = true;
     }
 
-    // 2. SEND STATE (Repeatedly send until ACK received)
-    // Clear any existing interval to avoid duplicates
-    if (gameState.dealInterval) clearInterval(gameState.dealInterval);
+    // Always attempt to send state
+    sendCurrentState();
+}
 
-    const sendDeal = () => {
-        console.log("HOST: Sending Deal Data...");
-        const pB = !document.getElementById('borrowed-player').classList.contains('hidden');
-        const aB = !document.getElementById('borrowed-ai').classList.contains('hidden');
+// NEW HELPER FUNCTION: Sends the current board state without reshuffling
+function sendCurrentState() {
+    const pB = !document.getElementById('borrowed-player').classList.contains('hidden');
+    const aB = !document.getElementById('borrowed-ai').classList.contains('hidden');
 
-        const cleanDeck = (deck) => deck.map(c => ({suit:c.suit, rank:c.rank, value:c.value, id:c.id}));
-        const cleanHand = (hand) => hand.map(c => ({suit:c.suit, rank:c.rank, value:c.value, id:c.id}));
+    const cleanDeck = (deck) => deck.map(c => ({suit:c.suit, rank:c.rank, value:c.value, id:c.id}));
+    const cleanHand = (hand) => hand.map(c => ({suit:c.suit, rank:c.rank, value:c.value, id:c.id}));
 
-        send({
-            type: 'INIT_ROUND',
-            hostName: gameState.myName,
-            pDeck: cleanDeck(gameState.aiDeck), 
-            aDeck: cleanDeck(gameState.playerDeck),
-            pHand: cleanHand(gameState.aiHand), 
-            aHand: cleanHand(gameState.playerHand),
-            pTotal: gameState.aiTotal, 
-            aTotal: gameState.playerTotal,
-            pBorrow: aB, 
-            aBorrow: pB
-        });
-    };
-
-    sendDeal(); // Send immediately
-    gameState.dealInterval = setInterval(sendDeal, 1000); // Repeat every 1s
+    send({
+        type: 'INIT_ROUND',
+        hostName: gameState.myName,
+        pDeck: cleanDeck(gameState.aiDeck), 
+        aDeck: cleanDeck(gameState.playerDeck),
+        pHand: cleanHand(gameState.aiHand), 
+        aHand: cleanHand(gameState.playerHand),
+        pTotal: gameState.aiTotal, 
+        aTotal: gameState.playerTotal,
+        pBorrow: aB, 
+        aBorrow: pB
+    });
 }
 function syncBoardState(data) {
     gameState.playerDeck = data.pDeck.map(d => new Card(d.suit, d.rank, d.value, d.id));
