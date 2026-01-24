@@ -237,52 +237,61 @@ function dealSmartHand(cards, owner) {
 function makeDraggable(img, cardData) {
     img.onmousedown = (e) => {
         e.preventDefault();
-        
+
         // 1. Bring to Front
         gameState.globalZ = (gameState.globalZ || 200) + 1;
         img.style.zIndex = gameState.globalZ;
-        img.style.transition = 'none'; 
-        
-        // 2. Store Start Position (for Snapback on FAILED play only)
+        img.style.transition = 'none';
+
+        // 2. Store Original Position (Only needed if a play FAILS)
         cardData.originalLeft = img.style.left;
         cardData.originalTop = img.style.top;
 
-        // 3. Container-Relative Drag
-        const box = document.getElementById('player-foundation-area');
+        // 3. Calculate Click Offset relative to the Card
         let shiftX = e.clientX - img.getBoundingClientRect().left;
         let shiftY = e.clientY - img.getBoundingClientRect().top;
 
+        const box = document.getElementById('player-foundation-area');
+
         function moveAt(pageX, pageY) {
+            // 4. Move relative to the Foundation Box (Standard CSS positioning)
             const boxRect = box.getBoundingClientRect();
             let newLeft = pageX - shiftX - boxRect.left;
             let newTop = pageY - shiftY - boxRect.top;
+
             img.style.left = newLeft + 'px';
             img.style.top = newTop + 'px';
         }
-        
+
+        // Initial move to catch up with cursor
         moveAt(e.pageX, e.pageY);
 
-        function onMouseMove(event) { moveAt(event.pageX, event.pageY); }
-        
+        function onMouseMove(event) {
+            moveAt(event.pageX, event.pageY);
+        }
+
         function onMouseUp(event) {
-            document.removeEventListener('mousemove', onMouseMove); 
+            document.removeEventListener('mousemove', onMouseMove);
             document.removeEventListener('mouseup', onMouseUp);
-            img.style.transition = 'all 0.1s ease-out'; 
-            
-            // 4. Play Detection (Top < -20)
-            if (gameState.gameActive && parseInt(img.style.top) < -20) {
-                let success = playCardToCenter(cardData, img); 
-                
-                if (!success) { 
-                    // FAILED PLAY: Snap Back
+
+            img.style.transition = 'all 0.1s ease-out';
+
+            // 5. Check for Play (Dragging above the box)
+            if (gameState.gameActive && parseInt(img.style.top) < -10) {
+                // Attempt to Play
+                let success = playCardToCenter(cardData, img);
+
+                if (!success) {
+                    // Invalid Move -> Snap Back
                     img.style.left = cardData.originalLeft;
                     img.style.top = cardData.originalTop;
                 }
-            } 
-            // ELSE: DO NOTHING! 
-            // This allows "Free Move". If you drop it in the foundation, it stays there.
+            }
+            // 6. IF DROPPED INSIDE BOX: Do nothing!
+            // The card stays exactly where you left it.
         }
-        document.addEventListener('mousemove', onMouseMove); 
+
+        document.addEventListener('mousemove', onMouseMove);
         document.addEventListener('mouseup', onMouseUp);
     };
 }
