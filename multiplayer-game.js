@@ -489,19 +489,30 @@ function playCardToCenter(card, imgElement) {
 function executeOpponentMove(cardId, side) {
     const card = gameState.aiHand.find(c => c.id === cardId);
     if (!card) return; 
+    
+    // 1. Remove from Opponent Hand
     gameState.aiHand = gameState.aiHand.filter(c => c.id !== cardId);
     gameState.aiTotal--;
     gameState.lastMoveTime = Date.now(); 
 
+    // --- THE FIX: UPDATE LOGIC IMMEDIATELY ---
+    // We add the card to the pile DATA right now, before the animation starts.
+    // This prevents you from playing on the "old" card while this one is flying.
+    const target = (side === 'left') ? gameState.centerPileLeft : gameState.centerPileRight;
+    target.push(card);
+    // -----------------------------------------
+
     animateOpponentMove(card, side, () => {
-        const target = (side === 'left') ? gameState.centerPileLeft : gameState.centerPileRight;
-        target.push(card);
+        // 2. RENDER VISUALS AFTER ANIMATION
+        // The data is already there, now we just show the card image in the pile
         renderCenterPile(side, card);
         updateScoreboard();
         
-        gameState.playerReady = false; gameState.aiReady = false;
+        gameState.playerReady = false; 
+        gameState.aiReady = false;
         document.getElementById('player-draw-deck').classList.remove('deck-ready');
         document.getElementById('ai-draw-deck').classList.remove('deck-ready');
+        
         checkSlapCondition();
     });
 }
