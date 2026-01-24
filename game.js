@@ -1,5 +1,5 @@
 /* =========================================
-   SLAPS ENGINE v16.0 - FINAL LOGIC & VISUALS
+   ISF SINGLE PLAYER ENGINE v17.0 (Fixed Spacebar & Anticipation)
    ========================================= */
 
 const gameState = {
@@ -16,6 +16,7 @@ const gameState = {
     slapActive: false,
     lastMoveTime: 0,
     lastSpacebarTime: 0,
+    lastMoveType: 'none', // 'reveal' or 'play' (Controls Anticipation Rule)
     
     playerYellows: 0, playerReds: 0,
     aiYellows: 0, aiReds: 0,
@@ -41,38 +42,40 @@ window.onload = function() {
     const storedDiff = localStorage.getItem('slapsDifficulty');
     if (storedDiff) gameState.difficulty = parseInt(storedDiff);
     gameState.playerTotal = 26; gameState.aiTotal = 26;
+    
+    // INPUT LISTENERS
     document.addEventListener('keydown', handleInput);
+    
+    // DECK CLICK LISTENER
+    const pDeck = document.getElementById('player-draw-deck');
+    if(pDeck) pDeck.onclick = handlePlayerDeckClick;
+
     startRound();
 };
 
 function handleInput(e) {
-    // Only react to Spacebar
     if (e.code === 'Space') {
         e.preventDefault();
 
-        // 0. SAFETY CHECK: Ignore inputs if game isn't running
+        // 0. SAFETY CHECK
         if (!gameState.gameActive) return;
 
         const now = Date.now();
 
-        // 1. SPAM CHECK (Reduced to 400ms)
-        // Prevents accidental double-taps but allows follow-up attempts quickly
+        // 1. SPAM CHECK (400ms)
         if (now - gameState.lastSpacebarTime < 400) { 
             console.log("Ignored: Spam Protection");
-            // Optional: Issue penalty here if you want strict spam rules, 
-            // but for "unable to slap" issues, usually best to just ignore input.
-            // If you want the penalty back, uncomment the next line:
-            // issuePenalty('player', 'SPAM'); 
             return; 
         }
         gameState.lastSpacebarTime = now;
 
-        // 2. ANTICIPATION RULE (< 65ms reaction)
-        // If you slap faster than humanly possible after a move, it's a guess.
-        if (now - gameState.lastMoveTime < 65) { 
-            console.log("Penalty: Anticipation (Too Fast)");
-            issuePenalty('player', 'ANTICIPATION'); 
-            return; 
+        // 2. ANTICIPATION RULE (Only on REVEALS)
+        if (gameState.lastMoveType === 'reveal') {
+            if (now - gameState.lastMoveTime < 65) { 
+                console.log("Penalty: Anticipation on Reveal (<65ms)");
+                issuePenalty('player', 'ANTICIPATION'); 
+                return; 
+            }
         }
 
         // 3. BAD SLAP (No Match)
@@ -82,11 +85,12 @@ function handleInput(e) {
             return; 
         }
 
-        // 4. VALID SLAP (Single Player)
-console.log("Slap Valid! Player Wins!");
-resolveSlap('player');
+        // 4. VALID SLAP (FIXED: Direct Call)
+        console.log("Slap Valid! Player Wins!");
+        resolveSlap('player');
     }
 }
+
 function issuePenalty(target, reason) {
     console.log(`${target} Penalty: ${reason}`);
     
@@ -108,14 +112,11 @@ function issuePenalty(target, reason) {
 }
 
 function executeRedCardPenalty(offender) {
-    // LOGIC: Offender is PUNISHED by taking 3 cards FROM the victim.
-    // Offender Score +3 (Bad)
-    // Victim Score -3 (Good)
-    
+    // Penalty: Offender gets +3 cards (Bad), Victim gets -3 cards (Good)
     const victim = (offender === 'player') ? 'ai' : 'player';
     let penaltyAmount = 3;
     
-    // VISUALS: Remove cards from VICTIM (since they are losing them to the offender)
+    // Visual cleanup of victim's cards (simulated)
     let victimHand = (victim === 'player') ? gameState.playerHand : gameState.aiHand;
     let victimDeck = (victim === 'player') ? gameState.playerDeck : gameState.aiDeck;
     
@@ -128,7 +129,7 @@ function executeRedCardPenalty(offender) {
         }
     }
 
-    // SCORING:
+    // Score Update
     if (offender === 'player') {
         gameState.playerTotal += 3;
         gameState.aiTotal = Math.max(0, gameState.aiTotal - 3);
@@ -137,7 +138,6 @@ function executeRedCardPenalty(offender) {
         gameState.playerTotal = Math.max(0, gameState.playerTotal - 3);
     }
 
-    // Check Win (If victim hits 0 because of this)
     if (gameState.playerTotal <= 0) showEndGame("YOU WIN THE MATCH!", true);
     if (gameState.aiTotal <= 0) showEndGame("AI WINS THE MATCH!", false);
 
@@ -153,14 +153,12 @@ function renderBadges(who, y, r) {
     const container = document.getElementById(`${who}-penalties`);
     container.innerHTML = '';
     
-    // Render Red (Single Card with Count)
     if (r > 0) {
         const div = document.createElement('div');
         div.className = 'card-icon icon-red';
-        if (r > 1) div.innerText = r; // Count inside
+        if (r > 1) div.innerText = r; 
         container.appendChild(div);
     }
-    // Render Yellow
     if (y > 0) {
         const div = document.createElement('div');
         div.className = 'card-icon icon-yellow';
@@ -169,7 +167,7 @@ function renderBadges(who, y, r) {
 }
 
 function checkSlapCondition() {
-    gameState.lastMoveTime = Date.now();
+    // Update Move Time is handled in playCardToCenter/performReveal
     
     if (gameState.centerPileLeft.length === 0 || gameState.centerPileRight.length === 0) {
         gameState.slapActive = false;
@@ -189,12 +187,13 @@ function checkSlapCondition() {
 
 function triggerAISlap() {
     const diff = gameState.difficulty;
+    // Difficulty Scaling: 1 (Easy) to 10 (Impossible)
     const minTime = 3000 - ((diff - 1) * 280); 
     const maxTime = 5000 - ((diff - 1) * 450);
     const reaction = Math.random() * (maxTime - minTime) + minTime;
     
     setTimeout(() => {
-        if (gameState.slapActive) resolveSlap('ai');
+        if (gameState.slapActive && gameState.gameActive) resolveSlap('ai');
     }, reaction);
 }
 
@@ -208,21 +207,18 @@ function resolveSlap(winner) {
     
     const pilesTotal = gameState.centerPileLeft.length + gameState.centerPileRight.length;
 
-    // LOGIC INVERSION: 
-    // Winner forces LOSER to pickup.
+    // Winner forces LOSER to pickup cards
     if (winner === 'player') {
         txt.innerText = "PLAYER SLAPS WON!";
         overlay.style.backgroundColor = "rgba(0, 200, 0, 0.9)"; 
-        // AI Picks up (Bad for AI)
         gameState.aiTotal += pilesTotal;
     } else {
         txt.innerText = "AI SLAPS WON!";
         overlay.style.backgroundColor = "rgba(200, 0, 0, 0.9)"; 
-        // Player Picks up (Bad for Player)
         gameState.playerTotal += pilesTotal;
     }
 
-    // Clear Board
+    // Clear Board Arrays & Visuals
     gameState.centerPileLeft = []; gameState.centerPileRight = [];
     document.getElementById('center-pile-left').innerHTML = '';
     document.getElementById('center-pile-right').innerHTML = '';
@@ -234,6 +230,11 @@ function resolveSlap(winner) {
         gameState.playerReady = false; gameState.aiReady = false;
         document.getElementById('player-draw-deck').classList.remove('deck-ready');
         document.getElementById('ai-draw-deck').classList.remove('deck-ready');
+        
+        // Check Win Condition after Slap
+        if (gameState.playerTotal <= 0) showEndGame("YOU WIN THE MATCH!", true);
+        if (gameState.aiTotal <= 0) showEndGame("AI WINS THE MATCH!", false);
+        
     }, 2000);
 }
 
@@ -241,6 +242,8 @@ function resolveSlap(winner) {
 function startRound() {
     let fullDeck = createDeck();
     shuffle(fullDeck);
+    
+    // Win Checks
     if (gameState.playerTotal <= 0) { showEndGame("YOU WIN THE MATCH!", true); return; }
     if (gameState.aiTotal <= 0) { showEndGame("AI WINS THE MATCH!", false); return; }
 
@@ -256,6 +259,7 @@ function startRound() {
     const aHandCards = aAllCards.splice(0, aHandSize);
     gameState.aiDeck = aAllCards;
 
+    // Borrow Logic
     if (gameState.playerDeck.length === 0 && gameState.aiDeck.length > 1) {
         const steal = Math.floor(gameState.aiDeck.length / 2);
         gameState.playerDeck = gameState.aiDeck.splice(0, steal);
@@ -323,7 +327,10 @@ function createDeck() {
     return deck;
 }
 function shuffle(array) { for (let i = array.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [array[i], array[j]] = [array[j], array[i]]; } }
-function updateScoreboard() { document.getElementById('score-player').innerText = gameState.playerTotal; document.getElementById('score-ai').innerText = gameState.aiTotal; }
+function updateScoreboard() { 
+    document.getElementById('score-player').innerText = gameState.playerTotal; 
+    document.getElementById('score-ai').innerText = gameState.aiTotal; 
+}
 function checkDeckVisibility() {
     document.getElementById('player-draw-deck').classList.remove('hidden');
     document.getElementById('ai-draw-deck').classList.remove('hidden');
@@ -376,6 +383,11 @@ function startCountdown() {
 function performReveal() {
     document.getElementById('player-draw-deck').classList.remove('deck-ready');
     document.getElementById('ai-draw-deck').classList.remove('deck-ready');
+    
+    // REVEAL LOGIC
+    gameState.lastMoveTime = Date.now();
+    gameState.lastMoveType = 'reveal'; // TURN ON ANTICIPATION RULE
+
     let playerBorrowed = false; let aiBorrowed = false;
     if (gameState.playerDeck.length === 0 && gameState.aiDeck.length > 0) {
         const stealAmount = Math.floor(gameState.aiDeck.length / 2); const stolen = gameState.aiDeck.splice(0, stealAmount);
@@ -541,7 +553,12 @@ function playCardToCenter(card, imgElement) {
     if (intendedSide === 'left' && isLeftLegal) { target = gameState.centerPileLeft; side = 'left'; }
     else if (intendedSide === 'right' && isRightLegal) { target = gameState.centerPileRight; side = 'right'; }
     else { if (isLeftLegal) { target = gameState.centerPileLeft; side = 'left'; } else if (isRightLegal) { target = gameState.centerPileRight; side = 'right'; } }
+    
     if (target) {
+        // --- MOVE LOGIC ---
+        gameState.lastMoveTime = Date.now();
+        gameState.lastMoveType = 'play'; // TURN OFF ANTICIPATION RULE
+
         target.push(card);
         if (card.owner === 'player') {
             gameState.playerHand = gameState.playerHand.filter(c => c !== card); gameState.playerTotal--; 
