@@ -87,14 +87,17 @@ function processNetworkData(data) {
             break;
             
         case 'OPPONENT_MOVE':
-            // THE MIRROR FIX: Invert the side received
             const mirroredSide = (data.targetSide === 'left') ? 'right' : 'left';
             executeOpponentMove(data.cardId, mirroredSide);
             break;
-            
+
         case 'OPPONENT_FLIP':
-            // NEW: Handle Flip Sync
             executeOpponentFlip(data.cardId);
+            break;
+
+        // NEW: Handle Dragging
+        case 'OPPONENT_DRAG':
+            executeOpponentDrag(data.cardId, data.left, data.top);
             break;
 
         case 'OPPONENT_REVEAL_READY':
@@ -120,7 +123,6 @@ function processNetworkData(data) {
             break;
     }
 }
-
 function send(data) {
     if (gameState.conn) gameState.conn.send(data);
 }
@@ -243,18 +245,16 @@ function makeDraggable(img, cardData) {
         img.style.zIndex = gameState.globalZ;
         img.style.transition = 'none';
 
-        // 2. Store Original Position (Only needed if a play FAILS)
+        // 2. Store Original (Pixels for local snap, but we mostly just leave it)
         cardData.originalLeft = img.style.left;
         cardData.originalTop = img.style.top;
 
-        // 3. Calculate Click Offset relative to the Card
+        // 3. Container Logic
+        const box = document.getElementById('player-foundation-area');
         let shiftX = e.clientX - img.getBoundingClientRect().left;
         let shiftY = e.clientY - img.getBoundingClientRect().top;
 
-        const box = document.getElementById('player-foundation-area');
-
         function moveAt(pageX, pageY) {
-            // 4. Move relative to the Foundation Box (Standard CSS positioning)
             const boxRect = box.getBoundingClientRect();
             let newLeft = pageX - shiftX - boxRect.left;
             let newTop = pageY - shiftY - boxRect.top;
@@ -263,7 +263,6 @@ function makeDraggable(img, cardData) {
             img.style.top = newTop + 'px';
         }
 
-        // Initial move to catch up with cursor
         moveAt(e.pageX, e.pageY);
 
         function onMouseMove(event) {
@@ -276,19 +275,36 @@ function makeDraggable(img, cardData) {
 
             img.style.transition = 'all 0.1s ease-out';
 
-            // 5. Check for Play (Dragging above the box)
+            // 4. Play Detection
             if (gameState.gameActive && parseInt(img.style.top) < -10) {
-                // Attempt to Play
                 let success = playCardToCenter(cardData, img);
-
                 if (!success) {
-                    // Invalid Move -> Snap Back
                     img.style.left = cardData.originalLeft;
                     img.style.top = cardData.originalTop;
                 }
+            } else {
+                // 5. DROPPED IN FOUNDATION (Reorganization)
+                // We must sync this new position to the opponent.
+                // Convert PX to % so it works on their screen size.
+                
+                const boxRect = box.getBoundingClientRect();
+                
+                // Current Left/Top in Pixels
+                const currentLeftPx = parseFloat(img.style.left);
+                const currentTopPx = parseFloat(img.style.top);
+                
+                // Convert to Percentage
+                const leftPct = (currentLeftPx / boxRect.width) * 100;
+                const topPct = (currentTopPx / boxRect.height) * 100;
+
+                // Send Network Update
+                send({ 
+                    type: 'OPPONENT_DRAG', 
+                    cardId: cardData.id, 
+                    left: leftPct, 
+                    top: topPct 
+                });
             }
-            // 6. IF DROPPED INSIDE BOX: Do nothing!
-            // The card stays exactly where you left it.
         }
 
         document.addEventListener('mousemove', onMouseMove);
@@ -355,6 +371,20 @@ function executeOpponentMove(cardId, side) {
         document.getElementById('ai-draw-deck').classList.remove('deck-ready');
         checkSlapCondition();
     });
+}
+
+function executeOpponentDrag(cardId, leftPct, topPct) {
+    // Find the card in the Opponent's hand (aiHand)
+    const card = gameState.aiHand.find(c => c.id === cardId);
+    if (!card || !card.element) return;
+
+    // Apply the new position
+    // Note: We don't mirror Left/Right for reorganization. 
+    // If you move it to YOUR Left, I see it move to MY Left (Screen-wise).
+    // This keeps it simple and consistent with how the deal renders.
+    
+    card.element.style.left = leftPct + '%';
+    card.element.style.top = topPct + '%';
 }
 
 function animateOpponentMove(card, side, callback) {
