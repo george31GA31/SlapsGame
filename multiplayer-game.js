@@ -1,5 +1,5 @@
 /* =========================================
-   ISF MULTIPLAYER ENGINE v6.0 (Physics & Mirroring Fixed)
+   ISF MULTIPLAYER ENGINE v7.0 (Stable Physics & Mirroring)
    ========================================= */
 
 const gameState = {
@@ -98,6 +98,7 @@ function processNetworkData(data) {
             break;
 
         case 'OPPONENT_MOVE':
+            // MIRROR: If they played Left, I see Right
             const mirroredSide = (data.targetSide === 'left') ? 'right' : 'left';
             executeOpponentMove(data.cardId, mirroredSide);
             break;
@@ -184,6 +185,7 @@ function startRound() {
     dealSmartHand(aHandCards, 'ai');
     updateScoreboard();
 
+    // Helpers to sanitize data before sending
     const cleanDeck = (deck) => deck.map(c => ({suit:c.suit, rank:c.rank, value:c.value, id:c.id}));
     const cleanHand = (hand) => hand.map(c => ({suit:c.suit, rank:c.rank, value:c.value, id:c.id}));
 
@@ -201,6 +203,7 @@ function startRound() {
     });
 }
 
+// --- GUEST LOGIC ---
 function syncBoardState(data) {
     gameState.playerDeck = data.pDeck.map(d => new Card(d.suit, d.rank, d.value, d.id));
     gameState.aiDeck = data.aDeck.map(d => new Card(d.suit, d.rank, d.value, d.id));
@@ -251,7 +254,7 @@ function dealSmartHand(cards, owner) {
     });
 }
 
-// --- PHYSICS: BOUNDARIES & MIRROR SYNC ---
+// --- PHYSICS (HARD STOP) & MIRRORED SYNC ---
 function makeDraggable(img, cardData) {
     img.onmousedown = (e) => {
         e.preventDefault();
@@ -259,11 +262,10 @@ function makeDraggable(img, cardData) {
         img.style.zIndex = gameState.globalZ;
         img.style.transition = 'none';
 
-        // Store Start Pos
         cardData.originalLeft = img.style.left;
         cardData.originalTop = img.style.top;
 
-        // Offset
+        // Mouse Offset relative to card
         let shiftX = e.clientX - img.getBoundingClientRect().left;
         let shiftY = e.clientY - img.getBoundingClientRect().top;
 
@@ -274,21 +276,14 @@ function makeDraggable(img, cardData) {
             let newLeft = pageX - shiftX - boxRect.left;
             let newTop = pageY - shiftY - boxRect.top;
 
-            // --- THE FIX: PHYSICAL STOPPER ---
-            // If dragging UP (negative), check legality immediately? 
-            // The user requested: "boundary pile boundary is still not physically stopping cards if theyre not legal"
-            // The code snippet provided logic: if (newTop < 0) checkLegalPlay.
-            
+            // --- THE PHYSICAL STOPPER ---
+            // If dragging Up (negative Top), check if it's legal.
+            // If NOT legal, force newTop to 0 (hard stop at the boundary edge)
             if (newTop < 0) { 
                 if (!gameState.gameActive || !checkLegalPlay(cardData)) {
-                    newTop = 0; // PHYSICALLY STOP at the boundary
+                    newTop = 0; 
                 }
             }
-            
-            // Allow side-to-side (bounded by box width if desired, or free)
-            // Let's keep it free within reason or strict box? 
-            // The user snippet didn't restrict Left/Right, so we leave X free-floating relative to box.
-            // But let's prevent dragging it completely off screen.
             
             img.style.left = newLeft + 'px';
             img.style.top = newTop + 'px';
@@ -305,20 +300,19 @@ function makeDraggable(img, cardData) {
 
             // Play Attempt
             if (gameState.gameActive && parseInt(img.style.top) < -10) {
-                // We know it's legal because the physics allowed it up here
-                // But double check playCardToCenter logic
                 let success = playCardToCenter(cardData, img);
                 if (!success) {
+                    // Snap back if failed (shouldn't happen with hard stop, but safety)
                     img.style.left = cardData.originalLeft;
                     img.style.top = cardData.originalTop;
                 }
             } else {
-                // REORGANIZE (Free Move)
-                // Sync to opponent using MIRRORED coordinates
+                // FREE MOVE (Reorganization) - SYNC TO OPPONENT
                 const boxRect = box.getBoundingClientRect();
                 const currentLeftPx = parseFloat(img.style.left);
                 const currentTopPx = parseFloat(img.style.top);
                 
+                // Convert to %
                 const leftPct = (currentLeftPx / boxRect.width) * 100;
                 const topPct = (currentTopPx / boxRect.height) * 100;
 
@@ -334,27 +328,16 @@ function executeOpponentDrag(cardId, leftPct, topPct) {
     const card = gameState.aiHand.find(c => c.id === cardId);
     if (!card || !card.element) return;
 
-    // MIRROR LOGIC
-    // If Player sets LEFT: 10%, Opponent sees RIGHT: 10%
-    // If Player sets TOP: 10%, Opponent sees BOTTOM: 10%
-    // This flips the layout perfectly across the center axis.
-    
-    // Reset Left/Top to auto/unset to avoid conflict
+    // MIRROR LOGIC: Use Right/Bottom instead of Left/Top
     card.element.style.left = 'auto';
     card.element.style.top = 'auto';
-    
     card.element.style.right = leftPct + '%';
     card.element.style.bottom = topPct + '%';
     
     card.element.style.zIndex = 200;
 }
 
-// --- HELPERS ---
-function checkLegalPlay(card) { 
-    if (!gameState.gameActive) return false; 
-    return checkPileLogic(card, gameState.centerPileLeft) || checkPileLogic(card, gameState.centerPileRight); 
-}
-
+// --- CARD PLAYING ---
 function playCardToCenter(card, imgElement) {
     let target = null; let side = '';
     const cardRect = imgElement.getBoundingClientRect(); 
@@ -375,6 +358,7 @@ function playCardToCenter(card, imgElement) {
         gameState.playerHand = gameState.playerHand.filter(c => c.id !== card.id); 
         gameState.playerTotal--;
 
+        // Send 'left' or 'right' exactly as I see it. Receiver flips it.
         send({ type: 'OPPONENT_MOVE', cardId: card.id, targetSide: side });
 
         gameState.playerReady = false; gameState.aiReady = false;
@@ -420,23 +404,22 @@ function animateOpponentMove(card, side, callback) {
     const targetEl = document.getElementById(visualSide);
     el.style.zIndex = 2000;
     
-    // Since we messed with Right/Bottom, reset to Top/Left for animation calculation
-    // Actually, fixed positioning ignores parent, so we calculate rects.
     const targetRect = targetEl.getBoundingClientRect();
     const startRect = el.getBoundingClientRect();
     const destX = targetRect.left + (targetRect.width/2) - (startRect.width/2);
     const destY = targetRect.top + (targetRect.height/2) - (startRect.height/2);
     
+    // Reset positioning to Fixed for animation
     el.style.position = 'fixed'; 
     el.style.left = destX + 'px'; 
     el.style.top = destY + 'px';
-    // Clear Right/Bottom so Left/Top takes precedence
-    el.style.right = 'auto';
+    el.style.right = 'auto'; 
     el.style.bottom = 'auto';
 
     setTimeout(() => { el.remove(); callback(); }, 400);
 }
 
+// --- FLIPPING ---
 function tryFlipCard(img, card) {
     const live = gameState.playerHand.filter(c => c.isFaceUp).length;
     if (live < 4) {
@@ -455,6 +438,7 @@ function executeOpponentFlip(cardId) {
     }
 }
 
+// --- HELPERS ---
 function setCardFaceUp(img, card, owner) {
     img.src = card.imgSrc; img.classList.remove('card-face-down'); card.isFaceUp = true;
     if (owner === 'player') { img.classList.add('player-card'); img.onclick = null; makeDraggable(img, card); } 
@@ -476,6 +460,10 @@ function checkPileLogic(card, targetPile) {
     const targetCard = targetPile[targetPile.length - 1]; 
     const diff = Math.abs(card.value - targetCard.value); 
     return (diff === 1 || diff === 12);
+}
+function checkLegalPlay(card) {
+    if (!gameState.gameActive) return false;
+    return checkPileLogic(card, gameState.centerPileLeft) || checkPileLogic(card, gameState.centerPileRight);
 }
 function checkSlapCondition() {
     if (gameState.centerPileLeft.length === 0 || gameState.centerPileRight.length === 0) { gameState.slapActive = false; return; }
