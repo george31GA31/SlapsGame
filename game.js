@@ -48,29 +48,31 @@ window.onload = function() {
 function handleInput(e) {
     if (e.code === 'Space') {
         e.preventDefault();
+        if (!gameState.gameActive) return; // Ignore if game hasn't started
+
         const now = Date.now();
-        
-        // Spam Check
-        if (now - gameState.lastSpacebarTime < 1000) {
-            issuePenalty('player', 'SPAM');
-            return;
+
+        // 1. SPAM CHECK
+        if (now - gameState.lastSpacebarTime < 1000) { 
+            issuePenalty('player', 'SPAM'); 
+            return; 
         }
         gameState.lastSpacebarTime = now;
 
-        // Validity Check
-        if (!gameState.slapActive) {
-            issuePenalty('player', 'INVALID');
-            return;
-        } 
-        
-        // Human Speed Limit Check
-        if (now - gameState.lastMoveTime < 100) { 
-            issuePenalty('player', 'IMPOSSIBLE');
-            return;
+        // 2. ANTICIPATION RULE (< 65ms)
+        if (now - gameState.lastMoveTime < 65) { 
+            issuePenalty('player', 'ANTICIPATION'); 
+            return; 
         }
 
-        // Valid Slap
-        resolveSlap('player');
+        // 3. BAD SLAP
+        if (!gameState.slapActive) { 
+            issuePenalty('player', 'BAD SLAP'); 
+            return; 
+        }
+
+        // 4. VALID SLAP (Player Wins)
+        slapSuccess('player');
     }
 }
 
