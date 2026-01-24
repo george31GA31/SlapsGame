@@ -1,5 +1,5 @@
 /* =========================================
-   SLAPS ENGINE v15.0 - SLAPS, LAWS & PENALTIES
+   SLAPS ENGINE v16.0 - FINAL LOGIC & VISUALS
    ========================================= */
 
 const gameState = {
@@ -13,10 +13,9 @@ const gameState = {
     playerReady: false, aiReady: false,
     aiLoopRunning: false, aiProcessing: false, aiInChain: false,
     
-    // SLAP & PENALTY STATES
     slapActive: false,
-    lastMoveTime: 0,        // Timestamp of last card reveal/play
-    lastSpacebarTime: 0,    // Timestamp of player's last spacebar
+    lastMoveTime: 0,
+    lastSpacebarTime: 0,
     
     playerYellows: 0, playerReds: 0,
     aiYellows: 0, aiReds: 0,
@@ -42,111 +41,92 @@ window.onload = function() {
     const storedDiff = localStorage.getItem('slapsDifficulty');
     if (storedDiff) gameState.difficulty = parseInt(storedDiff);
     gameState.playerTotal = 26; gameState.aiTotal = 26;
-    
-    // INPUT LISTENER FOR SLAP
     document.addEventListener('keydown', handleInput);
-    
     startRound();
 };
 
-// --- INPUT HANDLING (SPACEBAR) ---
 function handleInput(e) {
     if (e.code === 'Space') {
         e.preventDefault();
         const now = Date.now();
         
-        // 1. SPAM CHECK (2 presses < 1 second)
+        // Spam Check
         if (now - gameState.lastSpacebarTime < 1000) {
             issuePenalty('player', 'SPAM');
             return;
         }
         gameState.lastSpacebarTime = now;
 
-        // 2. IMPOSSIBLE REACTION CHECK (< 100ms after move)
-        // If Slap is active, but you hit it INSTANTLY after render, it's suspicious/premature
-        // OR if you hit it when NO Slap is active.
-        
+        // Validity Check
         if (!gameState.slapActive) {
-            // Premature / Invalid Slap
             issuePenalty('player', 'INVALID');
             return;
         } 
         
+        // Human Speed Limit Check
         if (now - gameState.lastMoveTime < 100) { 
-            // Too fast for human (Impossible)
             issuePenalty('player', 'IMPOSSIBLE');
             return;
         }
 
-        // 3. VALID SLAP
+        // Valid Slap
         resolveSlap('player');
     }
 }
 
-// --- PENALTY SYSTEM ---
 function issuePenalty(target, reason) {
     console.log(`${target} Penalty: ${reason}`);
     
-    let yellows, reds;
+    let yellows;
     if (target === 'player') {
         gameState.playerYellows++;
         yellows = gameState.playerYellows;
-        reds = gameState.playerReds;
     } else {
         gameState.aiYellows++;
         yellows = gameState.aiYellows;
-        reds = gameState.aiReds;
     }
 
-    // CHECK UPGRADE TO RED
     if (yellows >= 2) {
         if (target === 'player') { gameState.playerYellows = 0; gameState.playerReds++; }
         else { gameState.aiYellows = 0; gameState.aiReds++; }
-        
         executeRedCardPenalty(target);
     }
-    
     updatePenaltyUI();
 }
 
 function executeRedCardPenalty(offender) {
+    // LOGIC: Offender is PUNISHED by taking 3 cards FROM the victim.
+    // Offender Score +3 (Bad)
+    // Victim Score -3 (Good)
+    
     const victim = (offender === 'player') ? 'ai' : 'player';
-    
-    // PENALTY: Offender gives 3 cards to Victim.
-    // LOGIC: Remove from Foundation if Short (<10), otherwise just Math.
-    
     let penaltyAmount = 3;
     
-    // 1. Remove Physical Cards if Short (Foundation/Hand)
-    // We check the offender's hand/deck arrays
-    let offenderHand = (offender === 'player') ? gameState.playerHand : gameState.aiHand;
-    let offenderDeck = (offender === 'player') ? gameState.playerDeck : gameState.aiDeck;
-    
-    // Logic: Try to remove from Deck first (hidden penalty), then Hand (visible penalty)
+    // VISUALS: Remove cards from VICTIM (since they are losing them to the offender)
+    let victimHand = (victim === 'player') ? gameState.playerHand : gameState.aiHand;
+    let victimDeck = (victim === 'player') ? gameState.playerDeck : gameState.aiDeck;
     
     for (let i = 0; i < penaltyAmount; i++) {
-        if (offenderDeck.length > 0) {
-            // Remove from Deck (Invisible)
-            offenderDeck.pop();
-        } else if (offenderHand.length > 0) {
-            // Remove from Hand (Visible!)
-            let cardToRemove = offenderHand.pop();
+        if (victimDeck.length > 0) {
+            victimDeck.pop();
+        } else if (victimHand.length > 0) {
+            let cardToRemove = victimHand.pop();
             if (cardToRemove && cardToRemove.element) cardToRemove.element.remove();
         }
     }
 
-    // 2. Update Scores
+    // SCORING:
     if (offender === 'player') {
-        gameState.playerTotal = Math.max(0, gameState.playerTotal - 3);
-        gameState.aiTotal += 3;
-    } else {
-        gameState.aiTotal = Math.max(0, gameState.aiTotal - 3);
         gameState.playerTotal += 3;
+        gameState.aiTotal = Math.max(0, gameState.aiTotal - 3);
+    } else {
+        gameState.aiTotal += 3;
+        gameState.playerTotal = Math.max(0, gameState.playerTotal - 3);
     }
 
-    // Check Immediate Loss
-    if (gameState.playerTotal <= 0) showEndGame("AI WINS (PENALTY)", false);
-    if (gameState.aiTotal <= 0) showEndGame("YOU WIN (PENALTY)", true);
+    // Check Win (If victim hits 0 because of this)
+    if (gameState.playerTotal <= 0) showEndGame("YOU WIN THE MATCH!", true);
+    if (gameState.aiTotal <= 0) showEndGame("AI WINS THE MATCH!", false);
 
     updateScoreboard();
 }
@@ -160,11 +140,11 @@ function renderBadges(who, y, r) {
     const container = document.getElementById(`${who}-penalties`);
     container.innerHTML = '';
     
-    // Render Reds
-    for (let i = 0; i < r; i++) {
+    // Render Red (Single Card with Count)
+    if (r > 0) {
         const div = document.createElement('div');
         div.className = 'card-icon icon-red';
-        if (r > 1) div.innerText = r; // Show count if multiple
+        if (r > 1) div.innerText = r; // Count inside
         container.appendChild(div);
     }
     // Render Yellow
@@ -175,7 +155,6 @@ function renderBadges(who, y, r) {
     }
 }
 
-// --- SLAP LOGIC ---
 function checkSlapCondition() {
     gameState.lastMoveTime = Date.now();
     
@@ -189,9 +168,6 @@ function checkSlapCondition() {
 
     if (topL.rank === topR.rank) {
         gameState.slapActive = true;
-        // console.log("SLAP OPPORTUNITY!");
-        
-        // TRIGGER AI REACTION
         triggerAISlap();
     } else {
         gameState.slapActive = false;
@@ -199,66 +175,56 @@ function checkSlapCondition() {
 }
 
 function triggerAISlap() {
-    // AI Reaction Speed based on difficulty
-    // High difficulty = fast slap. Low = slow/miss.
     const diff = gameState.difficulty;
-    const minTime = 3000 - ((diff - 1) * 280); // L1: 3000ms, L10: ~500ms
+    const minTime = 3000 - ((diff - 1) * 280); 
     const maxTime = 5000 - ((diff - 1) * 450);
-    
     const reaction = Math.random() * (maxTime - minTime) + minTime;
     
     setTimeout(() => {
-        // If slap still active (player didn't hit it yet)
-        if (gameState.slapActive) {
-            resolveSlap('ai');
-        }
+        if (gameState.slapActive) resolveSlap('ai');
     }, reaction);
 }
 
 function resolveSlap(winner) {
     gameState.slapActive = false;
-    gameState.gameActive = false; // Pause game
+    gameState.gameActive = false; 
     
-    // VISUALS
     const overlay = document.getElementById('slap-overlay');
     const txt = document.getElementById('slap-text');
     overlay.classList.remove('hidden');
     
+    const pilesTotal = gameState.centerPileLeft.length + gameState.centerPileRight.length;
+
+    // LOGIC INVERSION: 
+    // Winner forces LOSER to pickup.
     if (winner === 'player') {
         txt.innerText = "PLAYER SLAPS WON!";
-        overlay.style.backgroundColor = "rgba(0, 200, 0, 0.9)"; // Greenish
-        gameState.playerTotal += (gameState.centerPileLeft.length + gameState.centerPileRight.length);
+        overlay.style.backgroundColor = "rgba(0, 200, 0, 0.9)"; 
+        // AI Picks up (Bad for AI)
+        gameState.aiTotal += pilesTotal;
     } else {
         txt.innerText = "AI SLAPS WON!";
-        overlay.style.backgroundColor = "rgba(200, 0, 0, 0.9)"; // Reddish
-        gameState.aiTotal += (gameState.centerPileLeft.length + gameState.centerPileRight.length);
+        overlay.style.backgroundColor = "rgba(200, 0, 0, 0.9)"; 
+        // Player Picks up (Bad for Player)
+        gameState.playerTotal += pilesTotal;
     }
 
-    // CLEAR CENTER PILES (Burned for round)
-    gameState.centerPileLeft = [];
-    gameState.centerPileRight = [];
+    // Clear Board
+    gameState.centerPileLeft = []; gameState.centerPileRight = [];
     document.getElementById('center-pile-left').innerHTML = '';
     document.getElementById('center-pile-right').innerHTML = '';
     
     updateScoreboard();
 
-    // RESUME AFTER DELAY
     setTimeout(() => {
         overlay.classList.add('hidden');
-        // Reset readiness to force new reveal
-        gameState.playerReady = false;
-        gameState.aiReady = false;
+        gameState.playerReady = false; gameState.aiReady = false;
         document.getElementById('player-draw-deck').classList.remove('deck-ready');
         document.getElementById('ai-draw-deck').classList.remove('deck-ready');
-        
-        // If AI won slap, it might need to restart its brain loop? 
-        // No, loop checks gameActive. But gameActive is false.
-        // Users must click Draw Deck to resume.
     }, 2000);
 }
 
-
-// --- ROUND & GAME LOOP (v14 Basis) ---
+// --- STANDARD GAME ENGINE ---
 function startRound() {
     let fullDeck = createDeck();
     shuffle(fullDeck);
@@ -277,7 +243,6 @@ function startRound() {
     const aHandCards = aAllCards.splice(0, aHandSize);
     gameState.aiDeck = aAllCards;
 
-    // IMMEDIATE SHORTAGE CHECK
     if (gameState.playerDeck.length === 0 && gameState.aiDeck.length > 1) {
         const steal = Math.floor(gameState.aiDeck.length / 2);
         gameState.playerDeck = gameState.aiDeck.splice(0, steal);
@@ -296,9 +261,6 @@ function startRound() {
     document.getElementById('center-pile-left').innerHTML = '';
     document.getElementById('center-pile-right').innerHTML = '';
     document.getElementById('game-message').classList.add('hidden');
-    
-    // RESET PENALTIES ON NEW ROUND? Rules didn't say. Let's keep them for the match.
-    // RESET SLAP STATE
     gameState.slapActive = false;
 
     checkDeckVisibility();
@@ -411,7 +373,6 @@ function performReveal() {
         gameState.aiDeck = gameState.aiDeck.concat(stolen); document.getElementById('borrowed-ai').classList.remove('hidden'); aiBorrowed = true;
     }
     
-    // PERSISTENT BORROW STATUS
     const isPlayerBorrowing = !document.getElementById('borrowed-player').classList.contains('hidden');
     const isAiBorrowing = !document.getElementById('borrowed-ai').classList.contains('hidden');
 
@@ -422,12 +383,9 @@ function performReveal() {
     if (gameState.playerDeck.length > 0) { let pCard = gameState.playerDeck.pop(); gameState.centerPileRight.push(pCard); renderCenterPile('right', pCard); }
     if (gameState.aiDeck.length > 0) { let aCard = gameState.aiDeck.pop(); gameState.centerPileLeft.push(aCard); renderCenterPile('left', aCard); }
     
-    updateScoreboard();
+    checkDeckVisibility(); updateScoreboard();
     gameState.gameActive = true; gameState.playerReady = false; gameState.aiReady = false;
-    
-    // CHECK SLAP
     checkSlapCondition();
-
     if (!gameState.aiLoopRunning) startAILoop();
 }
 
@@ -583,7 +541,7 @@ function playCardToCenter(card, imgElement) {
         }
         gameState.playerReady = false; gameState.aiReady = false; document.getElementById('player-draw-deck').classList.remove('deck-ready'); document.getElementById('ai-draw-deck').classList.remove('deck-ready');
         checkDeckVisibility(); imgElement.remove(); renderCenterPile(side, card); updateScoreboard();
-        checkSlapCondition(); // CHECK SLAP AFTER PLAY
+        checkSlapCondition(); 
         return true; 
     }
     return false; 
