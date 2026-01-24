@@ -565,11 +565,33 @@ function checkPileLogic(card, targetPile) {
 function playCardToCenter(card, imgElement) {
     let target = null;
     let side = '';
+    
+    // 1. CALCULATE DROP POSITION (Where did the user drop it?)
+    // We get the horizontal center of the card
+    const cardRect = imgElement.getBoundingClientRect();
+    const cardCenterX = cardRect.left + (cardRect.width / 2);
+    const screenCenterX = window.innerWidth / 2;
+    
+    // Determine Intended Side based on screen position
+    const intendedSide = (cardCenterX < screenCenterX) ? 'left' : 'right';
+
+    // 2. CHECK LEGALITY
     const isLeftLegal = checkPileLogic(card, gameState.centerPileLeft);
     const isRightLegal = checkPileLogic(card, gameState.centerPileRight);
 
-    if (isLeftLegal) { target = gameState.centerPileLeft; side = 'left'; }
-    else if (isRightLegal) { target = gameState.centerPileRight; side = 'right'; }
+    // 3. PRIORITIZE INTENDED SIDE
+    if (intendedSide === 'left' && isLeftLegal) {
+        target = gameState.centerPileLeft;
+        side = 'left';
+    } else if (intendedSide === 'right' && isRightLegal) {
+        target = gameState.centerPileRight;
+        side = 'right';
+    } else {
+        // Fallback: If dropped on wrong side but valid on other, auto-correct?
+        // OR adhere strictly. Let's auto-correct to be nice.
+        if (isLeftLegal) { target = gameState.centerPileLeft; side = 'left'; }
+        else if (isRightLegal) { target = gameState.centerPileRight; side = 'right'; }
+    }
 
     if (target) {
         target.push(card);
