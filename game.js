@@ -46,36 +46,48 @@ window.onload = function() {
 };
 
 function handleInput(e) {
+    // Only react to Spacebar
     if (e.code === 'Space') {
         e.preventDefault();
-        if (!gameState.gameActive) return; // Ignore if game hasn't started
+
+        // 0. SAFETY CHECK: Ignore inputs if game isn't running
+        if (!gameState.gameActive) return;
 
         const now = Date.now();
 
-        // 1. SPAM CHECK
-        if (now - gameState.lastSpacebarTime < 1000) { 
-            issuePenalty('player', 'SPAM'); 
+        // 1. SPAM CHECK (Reduced to 400ms)
+        // Prevents accidental double-taps but allows follow-up attempts quickly
+        if (now - gameState.lastSpacebarTime < 400) { 
+            console.log("Ignored: Spam Protection");
+            // Optional: Issue penalty here if you want strict spam rules, 
+            // but for "unable to slap" issues, usually best to just ignore input.
+            // If you want the penalty back, uncomment the next line:
+            // issuePenalty('player', 'SPAM'); 
             return; 
         }
         gameState.lastSpacebarTime = now;
 
-        // 2. ANTICIPATION RULE (< 65ms)
+        // 2. ANTICIPATION RULE (< 65ms reaction)
+        // If you slap faster than humanly possible after a move, it's a guess.
         if (now - gameState.lastMoveTime < 65) { 
+            console.log("Penalty: Anticipation (Too Fast)");
             issuePenalty('player', 'ANTICIPATION'); 
             return; 
         }
 
-        // 3. BAD SLAP
+        // 3. BAD SLAP (No Match)
         if (!gameState.slapActive) { 
+            console.log("Penalty: Bad Slap (No Match)");
             issuePenalty('player', 'BAD SLAP'); 
             return; 
         }
 
-        // 4. VALID SLAP (Player Wins)
-        slapSuccess('player');
+        // 4. VALID SLAP
+        console.log("Slap Valid! Claiming...");
+        send({ type: 'SLAP_CLAIM', timestamp: Date.now() });
+        if (gameState.isHost) resolveSlapClaim('host', Date.now());
     }
 }
-
 function issuePenalty(target, reason) {
     console.log(`${target} Penalty: ${reason}`);
     
