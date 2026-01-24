@@ -49,6 +49,11 @@ window.onload = function() {
     gameState.playerTotal = 26; gameState.aiTotal = 26;
     gameState.myName = localStorage.getItem('isf_my_name') || "Player";
     document.addEventListener('keydown', handleInput);
+    
+    // --- THE FIX: ADD DECK LISTENERS ---
+    document.getElementById('player-draw-deck').onclick = handlePlayerDeckClick;
+    // -----------------------------------
+
     initNetwork();
 };
 
@@ -348,7 +353,32 @@ function startCountdown(broadcast) {
         }
     }, 800);
 }
+// --- RESTORED DECK LOGIC ---
+function handlePlayerDeckClick() {
+    // 1. PRE-GAME READY
+    if (!gameState.gameActive) {
+        if (gameState.playerReady) return;
+        gameState.playerReady = true; 
+        document.getElementById('player-draw-deck').classList.add('deck-ready');
+        
+        // Notify Opponent
+        send({ type: 'OPPONENT_REVEAL_READY' });
 
+        checkDrawCondition();
+        return;
+    }
+
+    // 2. IN-GAME REVEAL (This was missing!)
+    if (gameState.gameActive && !gameState.playerReady) {
+        gameState.playerReady = true;
+        document.getElementById('player-draw-deck').classList.add('deck-ready');
+        
+        // Notify Opponent
+        send({ type: 'OPPONENT_REVEAL_READY' });
+        
+        checkDrawCondition();
+    }
+}
 // --- PHYSICS ---
 function makeDraggable(img, cardData) {
     img.onmousedown = (e) => {
