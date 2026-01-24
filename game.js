@@ -60,16 +60,14 @@ function startRound() {
     let fullDeck = createDeck();
     shuffle(fullDeck);
 
-    // MATCH WIN CHECK
+    // WIN CONDITION: Immediate check
     if (gameState.playerTotal <= 0) { showEndGame("YOU WIN THE MATCH!", true); return; }
     if (gameState.aiTotal <= 0) { showEndGame("AI WINS THE MATCH!", false); return; }
 
-    // 1. Setup Decks based on Totals
     const pTotal = gameState.playerTotal;
     const pAllCards = fullDeck.slice(0, pTotal);
     const aAllCards = fullDeck.slice(pTotal, 52);
 
-    // 2. Foundation Split (<10 check)
     const pHandSize = Math.min(10, pTotal);
     const aHandSize = Math.min(10, 52 - pTotal);
 
@@ -79,8 +77,7 @@ function startRound() {
     const aHandCards = aAllCards.splice(0, aHandSize);
     gameState.aiDeck = aAllCards;
 
-    // 3. IMMEDIATE SHORTAGE CHECK (Start of Round)
-    // Borrowing happens physically, but DOES NOT CHANGE SCORE
+    // BORROW CHECK
     if (gameState.playerDeck.length === 0 && gameState.aiDeck.length > 1) {
         const steal = Math.floor(gameState.aiDeck.length / 2);
         gameState.playerDeck = gameState.aiDeck.splice(0, steal);
@@ -93,11 +90,9 @@ function startRound() {
         document.getElementById('borrowed-ai').classList.remove('hidden');
     }
 
-    // 4. Deal
     dealSmartHand(pHandCards, 'player');
     dealSmartHand(aHandCards, 'ai');
     
-    // Reset Board
     gameState.centerPileLeft = [];
     gameState.centerPileRight = [];
     document.getElementById('center-pile-left').innerHTML = '';
@@ -106,9 +101,8 @@ function startRound() {
 
     checkDeckVisibility();
     gameState.gameActive = false;
-    updateScoreboard(); // Shows the starting totals
+    updateScoreboard();
 }
-
 function dealSmartHand(cards, owner) {
     const container = document.getElementById(`${owner}-foundation-area`);
     container.innerHTML = ''; 
@@ -187,13 +181,11 @@ function updateScoreboard() {
 }
 
 function checkDeckVisibility() {
-    if (gameState.playerDeck.length === 0) document.getElementById('player-draw-deck').classList.add('hidden');
-    else document.getElementById('player-draw-deck').classList.remove('hidden');
-
-    if (gameState.aiDeck.length === 0) document.getElementById('ai-draw-deck').classList.add('hidden');
-    else document.getElementById('ai-draw-deck').classList.remove('hidden');
+    // We no longer hide the deck. It stays visible.
+    // The "BORROWED" text will indicate status.
+    document.getElementById('player-draw-deck').classList.remove('hidden');
+    document.getElementById('ai-draw-deck').classList.remove('hidden');
 }
-
 function endRound(winner) {
     gameState.gameActive = false;
     
@@ -582,18 +574,31 @@ function playCardToCenter(card, imgElement) {
     if (target) {
         target.push(card);
         
-        // REMOVE FROM HAND
         if (card.owner === 'player') {
             gameState.playerHand = gameState.playerHand.filter(c => c !== card);
-            gameState.playerTotal--; // THE -1 RULE
+            gameState.playerTotal--; 
+            
+            // IMMEDIATE MATCH WIN CHECK
+            if (gameState.playerTotal <= 0) {
+                showEndGame("YOU WIN THE MATCH!", true);
+                return true; 
+            }
+            
             if (gameState.playerHand.length === 0) endRound('player');
+
         } else {
             gameState.aiHand = gameState.aiHand.filter(c => c !== card);
-            gameState.aiTotal--; // THE -1 RULE
+            gameState.aiTotal--; 
+            
+            // IMMEDIATE MATCH WIN CHECK
+            if (gameState.aiTotal <= 0) {
+                showEndGame("AI WINS THE MATCH!", false);
+                return true; 
+            }
+            
             if (gameState.aiHand.length === 0) endRound('ai');
         }
 
-        // --- RESET READY STATUS (Fix for AI speed bug) ---
         gameState.playerReady = false;
         gameState.aiReady = false;
         document.getElementById('player-draw-deck').classList.remove('deck-ready');
@@ -607,7 +612,6 @@ function playCardToCenter(card, imgElement) {
     }
     return false; 
 }
-
 // UI HELPERS
 function showRoundMessage(title, sub) {
     const modal = document.getElementById('game-message');
