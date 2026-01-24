@@ -1,5 +1,5 @@
 /* =========================================
-   ISF SINGLE PLAYER ENGINE v17.0 (Fixed Spacebar & Anticipation)
+   ISF SINGLE PLAYER ENGINE v18.0 (Fixed Spacebar & Anticipation)
    ========================================= */
 
 const gameState = {
@@ -14,9 +14,11 @@ const gameState = {
     aiLoopRunning: false, aiProcessing: false, aiInChain: false,
     
     slapActive: false,
+    
+    // TIMING & RULES
     lastMoveTime: 0,
-    lastSpacebarTime: 0,
     lastMoveType: 'none', // 'reveal' or 'play' (Controls Anticipation Rule)
+    lastSpacebarTime: 0,
     
     playerYellows: 0, playerReds: 0,
     aiYellows: 0, aiReds: 0,
@@ -62,17 +64,18 @@ function handleInput(e) {
 
         const now = Date.now();
 
-        // 1. SPAM CHECK (400ms)
+        // 1. SPAM CHECK (400ms lockout)
         if (now - gameState.lastSpacebarTime < 400) { 
             console.log("Ignored: Spam Protection");
             return; 
         }
         gameState.lastSpacebarTime = now;
 
-        // 2. ANTICIPATION RULE (Only on REVEALS)
+        // 2. ANTICIPATION RULE (Only applies to 'reveal' moves)
+        // If the cards just flipped automatically, you must wait 65ms
         if (gameState.lastMoveType === 'reveal') {
             if (now - gameState.lastMoveTime < 65) { 
-                console.log("Penalty: Anticipation on Reveal (<65ms)");
+                console.log("Penalty: Anticipation (<65ms)");
                 issuePenalty('player', 'ANTICIPATION'); 
                 return; 
             }
@@ -80,20 +83,18 @@ function handleInput(e) {
 
         // 3. BAD SLAP (No Match)
         if (!gameState.slapActive) { 
-            console.log("Penalty: Bad Slap (No Match)");
+            console.log("Penalty: Bad Slap");
             issuePenalty('player', 'BAD SLAP'); 
             return; 
         }
 
-        // 4. VALID SLAP (FIXED: Direct Call)
+        // 4. VALID SLAP (Player Wins Immediately)
         console.log("Slap Valid! Player Wins!");
         resolveSlap('player');
     }
 }
 
 function issuePenalty(target, reason) {
-    console.log(`${target} Penalty: ${reason}`);
-    
     let yellows;
     if (target === 'player') {
         gameState.playerYellows++;
@@ -112,11 +113,10 @@ function issuePenalty(target, reason) {
 }
 
 function executeRedCardPenalty(offender) {
-    // Penalty: Offender gets +3 cards (Bad), Victim gets -3 cards (Good)
+    // Offender +3, Victim -3
     const victim = (offender === 'player') ? 'ai' : 'player';
     let penaltyAmount = 3;
     
-    // Visual cleanup of victim's cards (simulated)
     let victimHand = (victim === 'player') ? gameState.playerHand : gameState.aiHand;
     let victimDeck = (victim === 'player') ? gameState.playerDeck : gameState.aiDeck;
     
@@ -129,7 +129,6 @@ function executeRedCardPenalty(offender) {
         }
     }
 
-    // Score Update
     if (offender === 'player') {
         gameState.playerTotal += 3;
         gameState.aiTotal = Math.max(0, gameState.aiTotal - 3);
@@ -152,7 +151,6 @@ function updatePenaltyUI() {
 function renderBadges(who, y, r) {
     const container = document.getElementById(`${who}-penalties`);
     container.innerHTML = '';
-    
     if (r > 0) {
         const div = document.createElement('div');
         div.className = 'card-icon icon-red';
@@ -167,8 +165,7 @@ function renderBadges(who, y, r) {
 }
 
 function checkSlapCondition() {
-    // Update Move Time is handled in playCardToCenter/performReveal
-    
+    // FIX: Do NOT reset lastMoveTime here. That broke the logic.
     if (gameState.centerPileLeft.length === 0 || gameState.centerPileRight.length === 0) {
         gameState.slapActive = false;
         return;
@@ -187,7 +184,6 @@ function checkSlapCondition() {
 
 function triggerAISlap() {
     const diff = gameState.difficulty;
-    // Difficulty Scaling: 1 (Easy) to 10 (Impossible)
     const minTime = 3000 - ((diff - 1) * 280); 
     const maxTime = 5000 - ((diff - 1) * 450);
     const reaction = Math.random() * (maxTime - minTime) + minTime;
@@ -207,7 +203,6 @@ function resolveSlap(winner) {
     
     const pilesTotal = gameState.centerPileLeft.length + gameState.centerPileRight.length;
 
-    // Winner forces LOSER to pickup cards
     if (winner === 'player') {
         txt.innerText = "PLAYER SLAPS WON!";
         overlay.style.backgroundColor = "rgba(0, 200, 0, 0.9)"; 
@@ -218,7 +213,6 @@ function resolveSlap(winner) {
         gameState.playerTotal += pilesTotal;
     }
 
-    // Clear Board Arrays & Visuals
     gameState.centerPileLeft = []; gameState.centerPileRight = [];
     document.getElementById('center-pile-left').innerHTML = '';
     document.getElementById('center-pile-right').innerHTML = '';
@@ -231,7 +225,6 @@ function resolveSlap(winner) {
         document.getElementById('player-draw-deck').classList.remove('deck-ready');
         document.getElementById('ai-draw-deck').classList.remove('deck-ready');
         
-        // Check Win Condition after Slap
         if (gameState.playerTotal <= 0) showEndGame("YOU WIN THE MATCH!", true);
         if (gameState.aiTotal <= 0) showEndGame("AI WINS THE MATCH!", false);
         
@@ -243,7 +236,6 @@ function startRound() {
     let fullDeck = createDeck();
     shuffle(fullDeck);
     
-    // Win Checks
     if (gameState.playerTotal <= 0) { showEndGame("YOU WIN THE MATCH!", true); return; }
     if (gameState.aiTotal <= 0) { showEndGame("AI WINS THE MATCH!", false); return; }
 
@@ -259,7 +251,6 @@ function startRound() {
     const aHandCards = aAllCards.splice(0, aHandSize);
     gameState.aiDeck = aAllCards;
 
-    // Borrow Logic
     if (gameState.playerDeck.length === 0 && gameState.aiDeck.length > 1) {
         const steal = Math.floor(gameState.aiDeck.length / 2);
         gameState.playerDeck = gameState.aiDeck.splice(0, steal);
@@ -384,9 +375,9 @@ function performReveal() {
     document.getElementById('player-draw-deck').classList.remove('deck-ready');
     document.getElementById('ai-draw-deck').classList.remove('deck-ready');
     
-    // REVEAL LOGIC
+    // --- REVEAL LOGIC (With Anticipation Flag) ---
     gameState.lastMoveTime = Date.now();
-    gameState.lastMoveType = 'reveal'; // TURN ON ANTICIPATION RULE
+    gameState.lastMoveType = 'reveal'; // ENFORCE 65ms Rule
 
     let playerBorrowed = false; let aiBorrowed = false;
     if (gameState.playerDeck.length === 0 && gameState.aiDeck.length > 0) {
@@ -410,6 +401,7 @@ function performReveal() {
     
     checkDeckVisibility(); updateScoreboard();
     gameState.gameActive = true; gameState.playerReady = false; gameState.aiReady = false;
+    
     checkSlapCondition();
     if (!gameState.aiLoopRunning) startAILoop();
 }
@@ -555,9 +547,9 @@ function playCardToCenter(card, imgElement) {
     else { if (isLeftLegal) { target = gameState.centerPileLeft; side = 'left'; } else if (isRightLegal) { target = gameState.centerPileRight; side = 'right'; } }
     
     if (target) {
-        // --- MOVE LOGIC ---
+        // --- MOVE LOGIC (Correct Timing Update) ---
         gameState.lastMoveTime = Date.now();
-        gameState.lastMoveType = 'play'; // TURN OFF ANTICIPATION RULE
+        gameState.lastMoveType = 'play'; // DISABLE ANTICIPATION RULE for drag/drop plays
 
         target.push(card);
         if (card.owner === 'player') {
