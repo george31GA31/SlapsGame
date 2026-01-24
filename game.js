@@ -615,6 +615,14 @@ function showRoundMessage(title, sub) {
     const modal = document.getElementById('game-message');
     modal.querySelector('h1').innerText = title;
     modal.querySelector('p').innerText = sub;
+    
+    // THE FIX: Explicitly wire the button to startRound() every time
+    const btn = document.getElementById('msg-btn');
+    btn.innerText = "CONTINUE";
+    btn.onclick = function() {
+        startRound();
+    };
+    
     modal.classList.remove('hidden');
 }
 function showEndGame(title, isWin) {
