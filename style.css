@@ -162,13 +162,16 @@ body {
 
 /* The main container for the actual game */
 .game-board-area {
-    flex-grow: 1; 
-    background-color: var(--old-bg-green); /* Restores the Green Felt */
-    position: relative; 
-    display: flex; 
-    justify-content: center; 
+    flex-grow: 1;
+    
+    /* REPLACE THE BACKGROUND LINE WITH THIS: */
+    background: radial-gradient(circle at center, #3a5e45 0%, #1e3324 100%);
+    
+    position: relative;
+    display: flex;
+    justify-content: center;
     align-items: center;
-    flex-direction: column; /* Ensure stacked layout for setup/game */
+    flex-direction: column;
 }
 
 /* --- SETUP CARD & SLIDERS (Restored) --- */
