@@ -399,9 +399,20 @@ function executeOpponentMove(cardId, side) {
 function handleRoundOver(winner, myNextTotal, oppNextTotal) {
     gameState.gameActive = false;
     
+    // 1. UPDATE SCORES FOR NEXT ROUND
     gameState.playerTotal = myNextTotal;
     gameState.aiTotal = oppNextTotal;
 
+    // 2. CLEAR CENTER PILE (The Fix)
+    // Reset the internal arrays so the game knows they are empty
+    gameState.centerPileLeft = [];
+    gameState.centerPileRight = [];
+    
+    // Wipe the visual cards from the screen
+    document.getElementById('center-pile-left').innerHTML = '';
+    document.getElementById('center-pile-right').innerHTML = '';
+
+    // 3. SHOW ROUND OVER POPUP
     const modal = document.getElementById('game-message');
     const btn = document.getElementById('msg-btn');
     
@@ -417,13 +428,12 @@ function handleRoundOver(winner, myNextTotal, oppNextTotal) {
     btn.classList.remove('hidden');
     btn.onclick = function() {
         modal.classList.add('hidden');
-        // Both click continue, but only Host triggers the deal
+        // Both players click continue, but only Host triggers the deal for the new round
         if (gameState.isHost) startRound(); 
     };
     
     modal.classList.remove('hidden');
 }
-
 // --- PENALTIES ---
 function handleInput(e) {
     if (e.code === 'Space') {
