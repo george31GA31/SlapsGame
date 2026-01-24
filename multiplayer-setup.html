@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ISF - Multiplayer Lobby</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700;900&display=swap" rel="stylesheet">
+</head>
+<body>
+
+    <div class="app-container">
+        
+        <nav class="sidebar-left">
+            <div class="logo-area"><img src="assets/ISF_pink.png" alt="ISF" class="isf-logo"></div>
+            <ul class="nav-links">
+               <li><a href="index.html"><i class="fa-solid fa-arrow-left"></i> Back to Home</a></li>
+           </ul>
+        </nav>
+
+        <main class="game-board-area" style="flex-direction: column;">
+            
+            <div class="setup-card" id="lobby-card">
+                
+                <div class="setup-header">
+                    <i class="fa-solid fa-users" style="color: #3498db;"></i>
+                    <h1>PLAY A FRIEND</h1>
+                </div>
+
+                <div class="input-group">
+                    <label>ENTER YOUR NICKNAME</label>
+                    <input type="text" id="nickname" class="lobby-input" placeholder="e.g. George" maxlength="10">
+                </div>
+
+                <div class="lobby-actions">
+                    <div class="lobby-col">
+                        <button class="btn-lobby" id="btn-host" onclick="hostGame()">
+                            <i class="fa-solid fa-server"></i> HOST MATCH
+                        </button>
+                        <div id="host-area" class="hidden">
+                            <p>SHARE THIS CODE:</p>
+                            <div class="code-display" id="my-code">Generating...</div>
+                            <div id="status-host" class="status-text">Waiting for friend...</div>
+                        </div>
+                    </div>
+
+                    <div class="divider">OR</div>
+
+                    <div class="lobby-col">
+                        <input type="text" id="join-code" class="lobby-input small" placeholder="Enter ISF-XXXX Code">
+                        <button class="btn-lobby secondary" id="btn-join" onclick="joinGame()">
+                            <i class="fa-solid fa-plug"></i> JOIN MATCH
+                        </button>
+                        <div id="status-join" class="status-text hidden">Connecting...</div>
+                    </div>
+                </div>
+
+                <button class="btn-start hidden" id="btn-start-multi" onclick="launchGame()">START MATCH</button>
+            </div>
+
+        </main>
+    </div>
+
+    <script>
+        let peer = null;
+        let conn = null;
+        let myId = "";
+        let isHost = false;
+
+        // 1. HOST LOGIC
+        function hostGame() {
+            const name = document.getElementById('nickname').value || "Player 1";
+            localStorage.setItem('isf_my_name', name);
+            isHost = true;
+
+            // Generate Random ID: ISF-XXXX
+            const randomCode = Math.floor(1000 + Math.random() * 9000);
+            myId = `ISF-${randomCode}`;
+
+            document.getElementById('btn-host').classList.add('disabled');
+            document.getElementById('host-area').classList.remove('hidden');
+            document.getElementById('my-code').innerText = myId;
+
+            // Initialize Peer Network
+            peer = new Peer(myId);
+
+            peer.on('open', (id) => {
+                console.log('My peer ID is: ' + id);
+            });
+
+            peer.on('connection', (c) => {
+                // WHEN SOMEONE JOINS:
+                conn = c;
+                setupConnection();
+                document.getElementById('status-host').innerText = "FRIEND CONNECTED!";
+                document.getElementById('status-host').style.color = "#66ff66";
+                
+                // TRIGGER GREEN GLOW
+                document.getElementById('lobby-card').classList.add('glow-green');
+                document.getElementById('btn-start-multi').classList.remove('hidden');
+            });
+        }
+
+        // 2. JOIN LOGIC
+        function joinGame() {
+            const name = document.getElementById('nickname').value || "Player 2";
+            localStorage.setItem('isf_my_name', name);
+            isHost = false;
+
+            const targetId = document.getElementById('join-code').value.toUpperCase();
+            if(!targetId) return alert("Please enter a code!");
+
+            document.getElementById('status-join').classList.remove('hidden');
+            
+            // Create Peer with random ID (we don't care about our own ID when joining)
+            peer = new Peer(); 
+
+            peer.on('open', (id) => {
+                // Connect to Host
+                conn = peer.connect(targetId);
+                
+                conn.on('open', () => {
+                    document.getElementById('status-join').innerText = "CONNECTED!";
+                    document.getElementById('status-join').style.color = "#66ff66";
+                    document.getElementById('lobby-card').classList.add('glow-green');
+                    
+                    // Wait for Host to start
+                    setupConnection();
+                });
+            });
+        }
+
+        // 3. COMMON CONNECTION HANDLER
+        function setupConnection() {
+            // Listen for data (like "START_GAME")
+            conn.on('data', (data) => {
+                if(data.type === 'START') {
+                    window.location.href = 'multiplayer-game.html';
+                }
+            });
+        }
+
+        // 4. LAUNCH (Host Only)
+        function launchGame() {
+            if(conn && isHost) {
+                // Tell the other player to start
+                conn.send({type: 'START'});
+                // Start myself
+                window.location.href = 'multiplayer-game.html';
+            }
+        }
+    </script>
+</body>
+</html>
