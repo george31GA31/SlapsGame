@@ -230,51 +230,80 @@ function dealSmartHand(cards, owner) {
 // --- PHYSICS (FIX 2: SCREEN-SPACE DRAGGING) ---
 function makeDraggable(img, cardData) {
     img.onmousedown = (e) => {
-        e.preventDefault(); 
+        e.preventDefault();
         
-        // 1. Switch to Fixed Positioning for total freedom
-        const rect = img.getBoundingClientRect();
-        const startLeft = rect.left;
-        const startTop = rect.top;
-        
-        // Offset from mouse to top-left corner of card
-        const shiftX = e.clientX - startLeft;
-        const shiftY = e.clientY - startTop;
-
-        // Visual Pop
-        gameState.globalZ = (gameState.globalZ || 200) + 1;
+        // 1. Bring to Front
+        gameState.globalZ = (gameState.globalZ || 100) + 1;
         img.style.zIndex = gameState.globalZ;
-        img.style.position = 'fixed';
-        img.style.left = startLeft + 'px';
-        img.style.top = startTop + 'px';
-        img.style.transition = 'none'; 
+        img.style.transition = 'none'; // Disable smooth transition while dragging
+        
+        // 2. Store Original Position (for Snapback)
+        cardData.originalLeft = img.style.left;
+        cardData.originalTop = img.style.top;
+
+        // 3. Calculate Offset relative to the CARD, not the screen
+        let shiftX = e.clientX - img.getBoundingClientRect().left;
+        let shiftY = e.clientY - img.getBoundingClientRect().top;
+        
+        const box = document.getElementById('player-foundation-area');
         
         function moveAt(pageX, pageY) {
-            img.style.left = (pageX - shiftX) + 'px';
-            img.style.top = (pageY - shiftY) + 'px';
-        }
-        
-        function onMouseMove(event) { moveAt(event.clientX, event.clientY); }
-        
-        function onMouseUp(event) {
-            document.removeEventListener('mousemove', onMouseMove); 
-            document.removeEventListener('mouseup', onMouseUp);
-            img.style.transition = 'all 0.1s ease-out'; 
+            // Calculate position relative to the CONTAINER (box)
+            const boxRect = box.getBoundingClientRect();
+            let newLeft = pageX - shiftX - boxRect.left;
+            let newTop = pageY - shiftY - boxRect.top;
+
+            // Optional: Constraint to stop dragging too far up (unless playing)
+            // But you asked for "Freely Move", so we allow it.
+            // We only check limits if you want to stop them dragging off-screen.
             
-            // Check Play Zone (Screen Y < 40% typically means center/top area)
-            // Or just check if card center is roughly in middle
-            const cardRect = img.getBoundingClientRect();
-            if (gameState.gameActive && cardRect.top < (window.innerHeight * 0.6)) {
-                let success = playCardToCenter(cardData, img); 
-                if (!success) { 
-                    // Snap Back to container-relative
-                    snapBack(img, cardData);
+            img.style.left = newLeft + 'px';
+            img.style.top = newTop + 'px';
+        }
+
+        // Initial move to sync
+        moveAt(e.pageX, e.pageY);
+
+        function onMouseMove(event) {
+            moveAt(event.pageX, event.pageY);
+        }
+
+        function onMouseUp(event) {
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+
+            img.style.transition = 'all 0.1s ease-out'; 
+
+            // 4. Play Detection (Threshold: Dragged significantly upwards)
+            // In CSS, 'top' inside the box starts at roughly 10px-60px.
+            // If top is negative (above the box), it's a play attempt.
+            if (gameState.gameActive && parseInt(img.style.top) < -20) {
+                let success = playCardToCenter(cardData, img);
+                
+                if (!success) {
+                    // Failed Play: Snap back
+                    img.style.left = cardData.originalLeft;
+                    img.style.top = cardData.originalTop;
                 }
-            } else { 
-                snapBack(img, cardData);
+            } else {
+                // Just moving around/organizing? Leave it there?
+                // OR Snap back?
+                // In Single Player, if you didn't play, it stayed where you dropped it 
+                // ONLY if it was within bounds, otherwise it snapped back.
+                // Actually, the AI version usually snapped back if not played.
+                // If you want "Free Move" (reorganize), we simply DON'T snap back
+                // unless it's in a "Play Zone" but invalid.
+                
+                // Let's stick to the AI behavior: If not played, Snap Back.
+                // If you want to reorganize, we need logic to update the laneIndex.
+                // For now, let's just make it Playable first.
+                
+                img.style.left = cardData.originalLeft;
+                img.style.top = cardData.originalTop;
             }
         }
-        document.addEventListener('mousemove', onMouseMove); 
+
+        document.addEventListener('mousemove', onMouseMove);
         document.addEventListener('mouseup', onMouseUp);
     };
 }
