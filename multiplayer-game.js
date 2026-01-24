@@ -315,7 +315,7 @@ function dealSmartHand(cards, owner) {
 }
 
 // --- DECK INTERACTION (RESTORED) ---
-function handlePlayerDeckClick() {
+PlayerDeckClick() {
     if (!gameState.gameActive) {
         if (gameState.playerReady) return;
         gameState.playerReady = true; 
@@ -354,7 +354,7 @@ function startCountdown(broadcast) {
     }, 800);
 }
 // --- RESTORED DECK LOGIC ---
-function handlePlayerDeckClick() {
+PlayerDeckClick() {
     // 1. PRE-GAME READY
     if (!gameState.gameActive) {
         if (gameState.playerReady) return;
@@ -506,7 +506,7 @@ function executeOpponentMove(cardId, side) {
     });
 }
 
-function handleRoundOver(winner, myNextTotal, oppNextTotal) {
+RoundOver(winner, myNextTotal, oppNextTotal) {
     gameState.gameActive = false;
     gameState.roundInitialized = false; 
 
@@ -576,10 +576,29 @@ function handleInput(e) {
     if (e.code === 'Space') {
         e.preventDefault();
         const now = Date.now();
-        if (now - gameState.lastSpacebarTime < 1000) { issuePenalty('player', 'SPAM'); return; }
+
+        // 1. SPAM CHECK (2 presses in < 1 second)
+        // Prevents mashing the key
+        if (now - gameState.lastSpacebarTime < 1000) { 
+            issuePenalty('player', 'SPAM'); 
+            return; 
+        }
         gameState.lastSpacebarTime = now;
-        if (!gameState.slapActive) { issuePenalty('player', 'BAD SLAP'); return; }
-        if (now - gameState.lastMoveTime < 100) { issuePenalty('player', 'IMPOSSIBLE'); return; }
+
+        // 2. ANTICIPATION RULE (< 65ms reaction)
+        // If you slap instantly after a card lands, it was a guess, not a reaction.
+        if (now - gameState.lastMoveTime < 65) { 
+            issuePenalty('player', 'ANTICIPATION'); 
+            return; 
+        }
+
+        // 3. BAD SLAP (No Match)
+        if (!gameState.slapActive) { 
+            issuePenalty('player', 'BAD SLAP'); 
+            return; 
+        }
+
+        // 4. VALID SLAP
         send({ type: 'SLAP_CLAIM', timestamp: Date.now() });
         if (gameState.isHost) resolveSlapClaim('host', Date.now());
     }
