@@ -1,5 +1,5 @@
 /* =========================================
-   ISF MULTIPLAYER ENGINE v3.0 (Clean Data & Fixed Physics)
+   ISF MULTIPLAYER ENGINE v4.0 (Mirrors & Flips)
    ========================================= */
 
 const gameState = {
@@ -28,7 +28,6 @@ const gameState = {
 const SUITS = ['hearts', 'diamonds', 'clubs', 'spades'];
 const RANKS = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'jack', 'queen', 'king', 'ace'];
 const CARD_BACK_SRC = 'assets/cards/back_of_card.png'; 
-const AI_LANES = [5, 29, 53, 77]; 
 
 class Card {
     constructor(suit, rank, value, id) {
@@ -86,23 +85,36 @@ function processNetworkData(data) {
         case 'INIT_ROUND':
             syncBoardState(data);
             break;
+            
         case 'OPPONENT_MOVE':
-            executeOpponentMove(data.cardId, data.targetSide);
+            // THE MIRROR FIX: Invert the side received
+            const mirroredSide = (data.targetSide === 'left') ? 'right' : 'left';
+            executeOpponentMove(data.cardId, mirroredSide);
             break;
+            
+        case 'OPPONENT_FLIP':
+            // NEW: Handle Flip Sync
+            executeOpponentFlip(data.cardId);
+            break;
+
         case 'OPPONENT_REVEAL_READY':
             gameState.aiReady = true;
             document.getElementById('ai-draw-deck').classList.add('deck-ready');
             checkDrawCondition();
             break;
+            
         case 'SYNC_REVEAL':
             startCountdown(false);
             break;
+            
         case 'SLAP_CLAIM':
             if (gameState.isHost) resolveSlapClaim('opponent', data.timestamp);
             break;
+            
         case 'SLAP_RESULT':
             applySlapResult(data.winner);
             break;
+            
         case 'GAME_OVER':
             showEndGame(data.msg, data.isWin);
             break;
@@ -154,15 +166,11 @@ function startRound() {
     dealSmartHand(aHandCards, 'ai');
     updateScoreboard();
 
-    // --- FIX 1: SANITIZE DATA BEFORE SENDING ---
-    // We cannot send circular structures (DOM elements) over PeerJS.
-    // We map the objects to pure data.
     const cleanDeck = (deck) => deck.map(c => ({suit:c.suit, rank:c.rank, value:c.value, id:c.id}));
     const cleanHand = (hand) => hand.map(c => ({suit:c.suit, rank:c.rank, value:c.value, id:c.id}));
 
     send({
         type: 'INIT_ROUND',
-        // Swap perspectives for Guest
         pDeck: cleanDeck(gameState.aiDeck), 
         aDeck: cleanDeck(gameState.playerDeck),
         pHand: cleanHand(gameState.aiHand), 
@@ -176,7 +184,6 @@ function startRound() {
 
 // --- GUEST LOGIC ---
 function syncBoardState(data) {
-    // Rebuild Decks (Pure Data -> Card Objects)
     gameState.playerDeck = data.pDeck.map(d => new Card(d.suit, d.rank, d.value, d.id));
     gameState.aiDeck = data.aDeck.map(d => new Card(d.suit, d.rank, d.value, d.id));
     
@@ -186,7 +193,6 @@ function syncBoardState(data) {
     document.getElementById('borrowed-player').classList.toggle('hidden', !data.pBorrow);
     document.getElementById('borrowed-ai').classList.toggle('hidden', !data.aBorrow);
 
-    // Rebuild Hands and Render
     dealSyncedHand(data.pHand, 'player');
     dealSyncedHand(data.aHand, 'ai');
     updateScoreboard();
@@ -227,113 +233,60 @@ function dealSmartHand(cards, owner) {
     });
 }
 
-// --- PHYSICS (FIX 2: SCREEN-SPACE DRAGGING) ---
+// --- PHYSICS (IMPROVED) ---
 function makeDraggable(img, cardData) {
     img.onmousedown = (e) => {
         e.preventDefault();
         
-        // 1. Bring to Front
-        gameState.globalZ = (gameState.globalZ || 100) + 1;
+        // Bring to front
+        gameState.globalZ = (gameState.globalZ || 200) + 1;
         img.style.zIndex = gameState.globalZ;
-        img.style.transition = 'none'; // Disable smooth transition while dragging
+        img.style.transition = 'none'; 
         
-        // 2. Store Original Position (for Snapback)
         cardData.originalLeft = img.style.left;
         cardData.originalTop = img.style.top;
 
-        // 3. Calculate Offset relative to the CARD, not the screen
+        // Container-Relative Drag (Reliable)
+        const box = document.getElementById('player-foundation-area');
         let shiftX = e.clientX - img.getBoundingClientRect().left;
         let shiftY = e.clientY - img.getBoundingClientRect().top;
-        
-        const box = document.getElementById('player-foundation-area');
-        
+
         function moveAt(pageX, pageY) {
-            // Calculate position relative to the CONTAINER (box)
             const boxRect = box.getBoundingClientRect();
             let newLeft = pageX - shiftX - boxRect.left;
             let newTop = pageY - shiftY - boxRect.top;
-
-            // Optional: Constraint to stop dragging too far up (unless playing)
-            // But you asked for "Freely Move", so we allow it.
-            // We only check limits if you want to stop them dragging off-screen.
-            
             img.style.left = newLeft + 'px';
             img.style.top = newTop + 'px';
         }
-
-        // Initial move to sync
+        
         moveAt(e.pageX, e.pageY);
 
-        function onMouseMove(event) {
-            moveAt(event.pageX, event.pageY);
-        }
-
+        function onMouseMove(event) { moveAt(event.pageX, event.pageY); }
+        
         function onMouseUp(event) {
-            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mousemove', onMouseMove); 
             document.removeEventListener('mouseup', onMouseUp);
-
             img.style.transition = 'all 0.1s ease-out'; 
-
-            // 4. Play Detection (Threshold: Dragged significantly upwards)
-            // In CSS, 'top' inside the box starts at roughly 10px-60px.
-            // If top is negative (above the box), it's a play attempt.
+            
+            // Check Play Zone (Top < -20)
             if (gameState.gameActive && parseInt(img.style.top) < -20) {
-                let success = playCardToCenter(cardData, img);
-                
-                if (!success) {
-                    // Failed Play: Snap back
+                let success = playCardToCenter(cardData, img); 
+                if (!success) { 
                     img.style.left = cardData.originalLeft;
                     img.style.top = cardData.originalTop;
                 }
-            } else {
-                // Just moving around/organizing? Leave it there?
-                // OR Snap back?
-                // In Single Player, if you didn't play, it stayed where you dropped it 
-                // ONLY if it was within bounds, otherwise it snapped back.
-                // Actually, the AI version usually snapped back if not played.
-                // If you want "Free Move" (reorganize), we simply DON'T snap back
-                // unless it's in a "Play Zone" but invalid.
-                
-                // Let's stick to the AI behavior: If not played, Snap Back.
-                // If you want to reorganize, we need logic to update the laneIndex.
-                // For now, let's just make it Playable first.
-                
+            } else { 
+                // SNAP BACK (Keeps it tidy, but physics now allow full drag)
                 img.style.left = cardData.originalLeft;
                 img.style.top = cardData.originalTop;
             }
         }
-
-        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mousemove', onMouseMove); 
         document.addEventListener('mouseup', onMouseUp);
     };
 }
 
-function snapBack(img, cardData) {
-    // Revert to Absolute positioning within container
-    // This requires calculating where it SHOULD be.
-    // Simple way: rely on the original styles set during deal.
-    // But those were %.
-    
-    // Easier way for MVP: Just reload the hand render to ensure perfect reset
-    // Or, quick hack:
-    const container = document.getElementById('player-foundation-area');
-    // We need to put it back into the flow.
-    img.style.position = 'absolute';
-    // Recalculate original % or px? 
-    // We stored laneIndex. We can re-render just this card's pile? 
-    // Simplest is to call a partial refresh or just reset visual properties if we stored them.
-    // Since we didn't store original % in cardData, let's just re-render the Player Hand.
-    
-    // Re-rendering hand ensures it snaps back perfectly
-    const pile = gameState.playerHand.filter(c => c.laneIndex === cardData.laneIndex);
-    // Find visual props
-    // This is getting complex. Let's just visually transition to "roughly" the right spot?
-    // No, re-rendering is safest to fix z-indexes and positions.
-    dealSmartHand(gameState.playerHand, 'player');
-}
-
-
-// --- GAMEPLAY ACTIONS ---
+// --- CARD PLAYING & SYNC ---
 function playCardToCenter(card, imgElement) {
     let target = null; let side = '';
     const cardRect = imgElement.getBoundingClientRect(); 
@@ -354,6 +307,8 @@ function playCardToCenter(card, imgElement) {
         gameState.playerHand = gameState.playerHand.filter(c => c.id !== card.id); 
         gameState.playerTotal--;
 
+        // Send 'left' or 'right' exactly as I see it. 
+        // Receiver will flip it.
         send({ type: 'OPPONENT_MOVE', cardId: card.id, targetSide: side });
 
         gameState.playerReady = false; gameState.aiReady = false;
@@ -373,6 +328,7 @@ function playCardToCenter(card, imgElement) {
 }
 
 function executeOpponentMove(cardId, side) {
+    // Note: 'side' has already been mirrored by processNetworkData
     const card = gameState.aiHand.find(c => c.id === cardId);
     if (!card) return; 
 
@@ -392,70 +348,49 @@ function executeOpponentMove(cardId, side) {
     });
 }
 
-function handlePlayerDeckClick() {
-    if (!gameState.gameActive) {
-        if (gameState.playerReady) return;
-        gameState.playerReady = true; 
-        document.getElementById('player-draw-deck').classList.add('deck-ready');
-        send({ type: 'OPPONENT_REVEAL_READY' });
-        checkDrawCondition();
-        return;
-    }
-    if (gameState.gameActive && !gameState.playerReady) {
-        gameState.playerReady = true; 
-        document.getElementById('player-draw-deck').classList.add('deck-ready');
-        send({ type: 'OPPONENT_REVEAL_READY' });
-        checkDrawCondition();
-    }
-}
-
-function checkDrawCondition() {
-    if (gameState.playerReady && gameState.aiReady) {
-        if (gameState.isHost) startCountdown(true);
-    }
-}
-
-function startCountdown(broadcast) {
-    if (broadcast) send({ type: 'SYNC_REVEAL' });
-    const overlay = document.getElementById('countdown-overlay');
-    overlay.classList.remove('hidden');
-    let count = 3; overlay.innerText = count;
-    const timer = setInterval(() => {
-        count--;
-        if (count > 0) {
-            overlay.innerText = count; 
-            overlay.style.animation = 'none'; overlay.offsetHeight; overlay.style.animation = 'popIn 0.5s ease';
-        } else {
-            clearInterval(timer); overlay.classList.add('hidden'); performReveal();
-        }
-    }, 800);
-}
-
-function performReveal() {
-    document.getElementById('player-draw-deck').classList.remove('deck-ready');
-    document.getElementById('ai-draw-deck').classList.remove('deck-ready');
+function animateOpponentMove(card, side, callback) {
+    if(!card.element) return;
+    const el = card.element;
     
-    // Simplified Borrow Logic for MVP Sync
-    if (gameState.playerDeck.length === 0 && gameState.aiDeck.length > 0) {
-        const steal = Math.floor(gameState.aiDeck.length / 2);
-        gameState.playerDeck = gameState.playerDeck.concat(gameState.aiDeck.splice(0, steal));
-        document.getElementById('borrowed-player').classList.remove('hidden');
+    // VISUAL TARGET: Since we already swapped 'side' in processData,
+    // 'left' means "MY Left Pile" (which is correct).
+    const visualSide = (side === 'left') ? 'center-pile-left' : 'center-pile-right';
+    const targetEl = document.getElementById(visualSide);
+    
+    el.style.zIndex = 2000;
+    const targetRect = targetEl.getBoundingClientRect();
+    const startRect = el.getBoundingClientRect();
+    const destX = targetRect.left + (targetRect.width/2) - (startRect.width/2);
+    const destY = targetRect.top + (targetRect.height/2) - (startRect.height/2);
+    
+    el.style.position = 'fixed';
+    el.style.left = destX + 'px';
+    el.style.top = destY + 'px';
+    
+    setTimeout(() => { el.remove(); callback(); }, 400);
+}
+
+// --- FLIPPING LOGIC (NEW SYNC) ---
+function tryFlipCard(img, card) {
+    const live = gameState.playerHand.filter(c => c.isFaceUp).length;
+    if (live < 4) {
+        setCardFaceUp(img, card, 'player');
+        // NOTIFY OPPONENT
+        send({ type: 'OPPONENT_FLIP', cardId: card.id });
     }
-    if (gameState.aiDeck.length === 0 && gameState.playerDeck.length > 0) {
-        const steal = Math.floor(gameState.playerDeck.length / 2);
-        gameState.aiDeck = gameState.aiDeck.concat(gameState.playerDeck.splice(0, steal));
-        document.getElementById('borrowed-ai').classList.remove('hidden');
+}
+
+function executeOpponentFlip(cardId) {
+    const card = gameState.aiHand.find(c => c.id === cardId);
+    if (!card) return;
+    
+    // Visually flip it
+    card.isFaceUp = true;
+    if (card.element) {
+        card.element.src = card.imgSrc;
+        card.element.classList.remove('card-face-down');
+        card.element.classList.add('opponent-card'); // Ensure styling
     }
-
-    gameState.playerTotal--; gameState.aiTotal--;
-
-    if (gameState.playerDeck.length > 0) { let c = gameState.playerDeck.pop(); gameState.centerPileRight.push(c); renderCenterPile('right', c); }
-    if (gameState.aiDeck.length > 0) { let c = gameState.aiDeck.pop(); gameState.centerPileLeft.push(c); renderCenterPile('left', c); }
-
-    updateScoreboard();
-    gameState.gameActive = true; 
-    gameState.playerReady = false; gameState.aiReady = false;
-    checkSlapCondition();
 }
 
 // --- UTILITIES ---
@@ -467,10 +402,6 @@ function setCardFaceUp(img, card, owner) {
 function setCardFaceDown(img, card, owner) {
     img.src = CARD_BACK_SRC; img.classList.add('card-face-down'); card.isFaceUp = false;
     if (owner === 'player') img.onclick = () => tryFlipCard(img, card);
-}
-function tryFlipCard(img, card) {
-    const live = gameState.playerHand.filter(c => c.isFaceUp).length;
-    if (live < 4) setCardFaceUp(img, card, 'player');
 }
 function createDeck() {
     let deck = [];
@@ -499,18 +430,63 @@ function renderCenterPile(side, card) {
     const rot = Math.random() * 20 - 10; img.style.transform = `translate(-50%, -50%) rotate(${rot}deg)`;
     container.appendChild(img);
 }
-function animateOpponentMove(card, side, callback) {
-    if(!card.element) return;
-    const el = card.element;
-    const visualSide = (side === 'left') ? 'center-pile-right' : 'center-pile-left';
-    const targetEl = document.getElementById(visualSide);
-    el.style.zIndex = 2000;
-    const targetRect = targetEl.getBoundingClientRect();
-    const startRect = el.getBoundingClientRect();
-    const destX = targetRect.left + (targetRect.width/2) - (startRect.width/2);
-    const destY = targetRect.top + (targetRect.height/2) - (startRect.height/2);
-    el.style.position = 'fixed'; el.style.left = destX + 'px'; el.style.top = destY + 'px';
-    setTimeout(() => { el.remove(); callback(); }, 400);
+function handlePlayerDeckClick() {
+    if (!gameState.gameActive) {
+        if (gameState.playerReady) return;
+        gameState.playerReady = true; 
+        document.getElementById('player-draw-deck').classList.add('deck-ready');
+        send({ type: 'OPPONENT_REVEAL_READY' });
+        checkDrawCondition();
+        return;
+    }
+    if (gameState.gameActive && !gameState.playerReady) {
+        gameState.playerReady = true; 
+        document.getElementById('player-draw-deck').classList.add('deck-ready');
+        send({ type: 'OPPONENT_REVEAL_READY' });
+        checkDrawCondition();
+    }
+}
+function checkDrawCondition() {
+    if (gameState.playerReady && gameState.aiReady) {
+        if (gameState.isHost) startCountdown(true);
+    }
+}
+function startCountdown(broadcast) {
+    if (broadcast) send({ type: 'SYNC_REVEAL' });
+    const overlay = document.getElementById('countdown-overlay');
+    overlay.classList.remove('hidden');
+    let count = 3; overlay.innerText = count;
+    const timer = setInterval(() => {
+        count--;
+        if (count > 0) {
+            overlay.innerText = count; 
+            overlay.style.animation = 'none'; overlay.offsetHeight; overlay.style.animation = 'popIn 0.5s ease';
+        } else {
+            clearInterval(timer); overlay.classList.add('hidden'); performReveal();
+        }
+    }, 800);
+}
+function performReveal() {
+    document.getElementById('player-draw-deck').classList.remove('deck-ready');
+    document.getElementById('ai-draw-deck').classList.remove('deck-ready');
+    
+    if (gameState.playerDeck.length === 0 && gameState.aiDeck.length > 0) {
+        const steal = Math.floor(gameState.aiDeck.length / 2);
+        gameState.playerDeck = gameState.playerDeck.concat(gameState.aiDeck.splice(0, steal));
+        document.getElementById('borrowed-player').classList.remove('hidden');
+    }
+    if (gameState.aiDeck.length === 0 && gameState.playerDeck.length > 0) {
+        const steal = Math.floor(gameState.playerDeck.length / 2);
+        gameState.aiDeck = gameState.aiDeck.concat(gameState.playerDeck.splice(0, steal));
+        document.getElementById('borrowed-ai').classList.remove('hidden');
+    }
+    gameState.playerTotal--; gameState.aiTotal--;
+    if (gameState.playerDeck.length > 0) { let c = gameState.playerDeck.pop(); gameState.centerPileRight.push(c); renderCenterPile('right', c); }
+    if (gameState.aiDeck.length > 0) { let c = gameState.aiDeck.pop(); gameState.centerPileLeft.push(c); renderCenterPile('left', c); }
+    updateScoreboard();
+    gameState.gameActive = true; 
+    gameState.playerReady = false; gameState.aiReady = false;
+    checkSlapCondition();
 }
 function handleInput(e) {
     if (e.code === 'Space') {
