@@ -1,5 +1,5 @@
 /* =========================================
-   ISF MULTIPLAYER ENGINE v4.0 (Mirrors & Flips)
+   ISF MULTIPLAYER ENGINE v5.0 (Nicknames, Boundaries & Sync)
    ========================================= */
 
 const gameState = {
@@ -15,6 +15,9 @@ const gameState = {
     
     isHost: false,
     conn: null,
+    
+    opponentName: "OPPONENT", // New: Stores the other player's name
+    myName: "ME",
     
     slapActive: false,
     lastMoveTime: 0,
@@ -41,6 +44,7 @@ class Card {
 
 window.onload = function() {
     gameState.playerTotal = 26; gameState.aiTotal = 26;
+    gameState.myName = localStorage.getItem('isf_my_name') || "Player";
     document.addEventListener('keydown', handleInput);
     initNetwork();
 };
@@ -74,7 +78,8 @@ function initNetwork() {
 function handleConnection(connection) {
     gameState.conn = connection;
     connection.on('open', () => {
-        console.log("CONNECTED TO OPPONENT!");
+        console.log("CONNECTED!");
+        // Host starts round immediately
         if (gameState.isHost) startRound(); 
     });
     connection.on('data', (data) => processNetworkData(data));
@@ -83,9 +88,23 @@ function handleConnection(connection) {
 function processNetworkData(data) {
     switch(data.type) {
         case 'INIT_ROUND':
+            // SAVE NICKNAME
+            gameState.opponentName = data.hostName; // If I am Joiner, I get Host Name
+            updateNamesUI();
             syncBoardState(data);
+            
+            // If I am Joiner, I must reply with MY name
+            if(!gameState.isHost) {
+                send({ type: 'NAME_REPLY', name: gameState.myName });
+            }
             break;
             
+        case 'NAME_REPLY':
+            // Host receives Joiner's name
+            gameState.opponentName = data.name;
+            updateNamesUI();
+            break;
+
         case 'OPPONENT_MOVE':
             const mirroredSide = (data.targetSide === 'left') ? 'right' : 'left';
             executeOpponentMove(data.cardId, mirroredSide);
@@ -95,7 +114,6 @@ function processNetworkData(data) {
             executeOpponentFlip(data.cardId);
             break;
 
-        // NEW: Handle Dragging
         case 'OPPONENT_DRAG':
             executeOpponentDrag(data.cardId, data.left, data.top);
             break;
@@ -123,8 +141,17 @@ function processNetworkData(data) {
             break;
     }
 }
+
 function send(data) {
     if (gameState.conn) gameState.conn.send(data);
+}
+
+// --- UI UPDATES ---
+function updateNamesUI() {
+    // Update the label on the left
+    // HTML: <span class="stat-label">OPPONENT</span> -> change to Name
+    const labels = document.querySelectorAll('.stat-label');
+    if(labels[0]) labels[0].innerText = gameState.opponentName; // Left Widget (Opponent)
 }
 
 // --- HOST LOGIC ---
@@ -134,8 +161,9 @@ function startRound() {
     let fullDeck = createDeck();
     shuffle(fullDeck);
     
+    // Win Check logic
     if (gameState.playerTotal <= 0) { sendGameOver("YOU WIN!", true); showEndGame("YOU WIN!", true); return; }
-    if (gameState.aiTotal <= 0) { sendGameOver("OPPONENT WINS!", false); showEndGame("OPPONENT WINS!", false); return; }
+    if (gameState.aiTotal <= 0) { sendGameOver(gameState.opponentName + " WINS!", false); showEndGame(gameState.opponentName + " WINS!", false); return; }
 
     const pTotal = gameState.playerTotal;
     const pAllCards = fullDeck.slice(0, pTotal);
@@ -173,6 +201,7 @@ function startRound() {
 
     send({
         type: 'INIT_ROUND',
+        hostName: gameState.myName, // Send Host Name
         pDeck: cleanDeck(gameState.aiDeck), 
         aDeck: cleanDeck(gameState.playerDeck),
         pHand: cleanHand(gameState.aiHand), 
@@ -235,29 +264,44 @@ function dealSmartHand(cards, owner) {
     });
 }
 
-// --- PHYSICS (IMPROVED) ---
+// --- PHYSICS: CONSTRAINED DRAG & SYNC ---
 function makeDraggable(img, cardData) {
     img.onmousedown = (e) => {
         e.preventDefault();
-
-        // 1. Bring to Front
         gameState.globalZ = (gameState.globalZ || 200) + 1;
         img.style.zIndex = gameState.globalZ;
         img.style.transition = 'none';
 
-        // 2. Store Original (Pixels for local snap, but we mostly just leave it)
         cardData.originalLeft = img.style.left;
         cardData.originalTop = img.style.top;
 
-        // 3. Container Logic
-        const box = document.getElementById('player-foundation-area');
+        // Mouse Offset relative to card
         let shiftX = e.clientX - img.getBoundingClientRect().left;
         let shiftY = e.clientY - img.getBoundingClientRect().top;
 
+        const box = document.getElementById('player-foundation-area');
+
         function moveAt(pageX, pageY) {
             const boxRect = box.getBoundingClientRect();
+            // Calculate raw position
             let newLeft = pageX - shiftX - boxRect.left;
             let newTop = pageY - shiftY - boxRect.top;
+
+            // --- BOUNDARY CHECKS (Constrain to Box) ---
+            const cardW = img.offsetWidth;
+            const cardH = img.offsetHeight;
+
+            // 1. Horizontal: Must stay within box width
+            if (newLeft < 0) newLeft = 0;
+            if (newLeft > boxRect.width - cardW) newLeft = boxRect.width - cardW;
+
+            // 2. Vertical: 
+            // Bottom Limit: Must stay within box height
+            if (newTop > boxRect.height - cardH) newTop = boxRect.height - cardH;
+            
+            // Top Limit: We allow dragging UP (negative) to play cards.
+            // But we don't want it flying off screen forever. Maybe limit to -300px?
+            // For now, playing logic relies on 'top < -20', so we leave top unbounded.
 
             img.style.left = newLeft + 'px';
             img.style.top = newTop + 'px';
@@ -265,53 +309,53 @@ function makeDraggable(img, cardData) {
 
         moveAt(e.pageX, e.pageY);
 
-        function onMouseMove(event) {
-            moveAt(event.pageX, event.pageY);
-        }
+        function onMouseMove(event) { moveAt(event.pageX, event.pageY); }
 
         function onMouseUp(event) {
             document.removeEventListener('mousemove', onMouseMove);
             document.removeEventListener('mouseup', onMouseUp);
-
             img.style.transition = 'all 0.1s ease-out';
 
-            // 4. Play Detection
-            if (gameState.gameActive && parseInt(img.style.top) < -10) {
+            // Play Detection
+            if (gameState.gameActive && parseInt(img.style.top) < -20) {
                 let success = playCardToCenter(cardData, img);
                 if (!success) {
                     img.style.left = cardData.originalLeft;
                     img.style.top = cardData.originalTop;
                 }
             } else {
-                // 5. DROPPED IN FOUNDATION (Reorganization)
-                // We must sync this new position to the opponent.
-                // Convert PX to % so it works on their screen size.
-                
+                // FREE MOVE (Reorganization)
+                // Calculate % position to send to opponent
                 const boxRect = box.getBoundingClientRect();
-                
-                // Current Left/Top in Pixels
                 const currentLeftPx = parseFloat(img.style.left);
                 const currentTopPx = parseFloat(img.style.top);
                 
-                // Convert to Percentage
                 const leftPct = (currentLeftPx / boxRect.width) * 100;
                 const topPct = (currentTopPx / boxRect.height) * 100;
 
-                // Send Network Update
-                send({ 
-                    type: 'OPPONENT_DRAG', 
-                    cardId: cardData.id, 
-                    left: leftPct, 
-                    top: topPct 
-                });
+                // Sync the move
+                send({ type: 'OPPONENT_DRAG', cardId: cardData.id, left: leftPct, top: topPct });
             }
         }
-
         document.addEventListener('mousemove', onMouseMove);
         document.addEventListener('mouseup', onMouseUp);
     };
 }
-// --- CARD PLAYING & SYNC ---
+
+function executeOpponentDrag(cardId, leftPct, topPct) {
+    // Opponent moved a card in their hand.
+    // Update its visual position.
+    const card = gameState.aiHand.find(c => c.id === cardId);
+    if (!card || !card.element) return;
+
+    card.element.style.left = leftPct + '%';
+    card.element.style.top = topPct + '%';
+    
+    // Ensure Z-Index bump so it floats over others
+    card.element.style.zIndex = 200;
+}
+
+// --- CARD PLAYING ---
 function playCardToCenter(card, imgElement) {
     let target = null; let side = '';
     const cardRect = imgElement.getBoundingClientRect(); 
@@ -332,8 +376,6 @@ function playCardToCenter(card, imgElement) {
         gameState.playerHand = gameState.playerHand.filter(c => c.id !== card.id); 
         gameState.playerTotal--;
 
-        // Send 'left' or 'right' exactly as I see it. 
-        // Receiver will flip it.
         send({ type: 'OPPONENT_MOVE', cardId: card.id, targetSide: side });
 
         gameState.playerReady = false; gameState.aiReady = false;
@@ -344,7 +386,7 @@ function playCardToCenter(card, imgElement) {
         checkSlapCondition(); 
 
         if (gameState.playerTotal <= 0) {
-            sendGameOver("OPPONENT WINS MATCH!", false);
+            sendGameOver(gameState.opponentName + " WINS!", false);
             showEndGame("YOU WIN THE MATCH!", true);
         }
         return true; 
@@ -353,7 +395,6 @@ function playCardToCenter(card, imgElement) {
 }
 
 function executeOpponentMove(cardId, side) {
-    // Note: 'side' has already been mirrored by processNetworkData
     const card = gameState.aiHand.find(c => c.id === cardId);
     if (!card) return; 
 
@@ -373,66 +414,40 @@ function executeOpponentMove(cardId, side) {
     });
 }
 
-function executeOpponentDrag(cardId, leftPct, topPct) {
-    // Find the card in the Opponent's hand (aiHand)
-    const card = gameState.aiHand.find(c => c.id === cardId);
-    if (!card || !card.element) return;
-
-    // Apply the new position
-    // Note: We don't mirror Left/Right for reorganization. 
-    // If you move it to YOUR Left, I see it move to MY Left (Screen-wise).
-    // This keeps it simple and consistent with how the deal renders.
-    
-    card.element.style.left = leftPct + '%';
-    card.element.style.top = topPct + '%';
-}
-
 function animateOpponentMove(card, side, callback) {
     if(!card.element) return;
     const el = card.element;
-    
-    // VISUAL TARGET: Since we already swapped 'side' in processData,
-    // 'left' means "MY Left Pile" (which is correct).
     const visualSide = (side === 'left') ? 'center-pile-left' : 'center-pile-right';
     const targetEl = document.getElementById(visualSide);
-    
     el.style.zIndex = 2000;
     const targetRect = targetEl.getBoundingClientRect();
     const startRect = el.getBoundingClientRect();
     const destX = targetRect.left + (targetRect.width/2) - (startRect.width/2);
     const destY = targetRect.top + (targetRect.height/2) - (startRect.height/2);
-    
-    el.style.position = 'fixed';
-    el.style.left = destX + 'px';
-    el.style.top = destY + 'px';
-    
+    el.style.position = 'fixed'; el.style.left = destX + 'px'; el.style.top = destY + 'px';
     setTimeout(() => { el.remove(); callback(); }, 400);
 }
 
-// --- FLIPPING LOGIC (NEW SYNC) ---
+// --- FLIPPING & UTILITIES ---
 function tryFlipCard(img, card) {
     const live = gameState.playerHand.filter(c => c.isFaceUp).length;
     if (live < 4) {
         setCardFaceUp(img, card, 'player');
-        // NOTIFY OPPONENT
         send({ type: 'OPPONENT_FLIP', cardId: card.id });
     }
 }
-
 function executeOpponentFlip(cardId) {
     const card = gameState.aiHand.find(c => c.id === cardId);
     if (!card) return;
-    
-    // Visually flip it
     card.isFaceUp = true;
     if (card.element) {
         card.element.src = card.imgSrc;
         card.element.classList.remove('card-face-down');
-        card.element.classList.add('opponent-card'); // Ensure styling
+        card.element.classList.add('opponent-card');
     }
 }
 
-// --- UTILITIES ---
+// Standard Helpers
 function setCardFaceUp(img, card, owner) {
     img.src = card.imgSrc; img.classList.remove('card-face-down'); card.isFaceUp = true;
     if (owner === 'player') { img.classList.add('player-card'); img.onclick = null; makeDraggable(img, card); } 
@@ -508,7 +523,6 @@ function startCountdown(broadcast) {
 function performReveal() {
     document.getElementById('player-draw-deck').classList.remove('deck-ready');
     document.getElementById('ai-draw-deck').classList.remove('deck-ready');
-    
     if (gameState.playerDeck.length === 0 && gameState.aiDeck.length > 0) {
         const steal = Math.floor(gameState.aiDeck.length / 2);
         gameState.playerDeck = gameState.playerDeck.concat(gameState.aiDeck.splice(0, steal));
@@ -553,7 +567,7 @@ function applySlapResult(winner) {
     if (winner === 'player') {
         txt.innerText = "YOU WON THE SLAP!"; overlay.style.backgroundColor = "rgba(0, 200, 0, 0.9)"; gameState.aiTotal += pileCount; 
     } else {
-        txt.innerText = "OPPONENT WON THE SLAP!"; overlay.style.backgroundColor = "rgba(200, 0, 0, 0.9)"; gameState.playerTotal += pileCount; 
+        txt.innerText = gameState.opponentName + " WON THE SLAP!"; overlay.style.backgroundColor = "rgba(200, 0, 0, 0.9)"; gameState.playerTotal += pileCount; 
     }
     gameState.centerPileLeft = []; gameState.centerPileRight = [];
     document.getElementById('center-pile-left').innerHTML = ''; document.getElementById('center-pile-right').innerHTML = '';
@@ -567,7 +581,7 @@ function issuePenalty(target, reason) {
     if (target === 'player') { gameState.playerTotal += 3; gameState.aiTotal = Math.max(0, gameState.aiTotal - 3); }
     updateScoreboard();
 }
-function sendGameOver(msg, isWin) { send({ type: 'GAME_OVER', msg: isWin ? "OPPONENT WINS!" : "YOU WIN!", isWin: !isWin }); }
+function sendGameOver(msg, isWin) { send({ type: 'GAME_OVER', msg: msg, isWin: isWin }); }
 function showEndGame(title, isWin) {
     const modal = document.getElementById('game-message');
     modal.querySelector('h1').innerText = title; modal.querySelector('h1').style.color = isWin ? '#66ff66' : '#ff7575';
