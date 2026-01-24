@@ -82,10 +82,9 @@ function handleInput(e) {
             return; 
         }
 
-        // 4. VALID SLAP
-        console.log("Slap Valid! Claiming...");
-        send({ type: 'SLAP_CLAIM', timestamp: Date.now() });
-        if (gameState.isHost) resolveSlapClaim('host', Date.now());
+        // 4. VALID SLAP (Single Player)
+console.log("Slap Valid! Player Wins!");
+resolveSlap('player');
     }
 }
 function issuePenalty(target, reason) {
