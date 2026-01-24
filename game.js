@@ -228,25 +228,31 @@ function checkDeckVisibility() {
 function endRound(winner) {
     gameState.gameActive = false;
     
-    // WINNER logic: Keep Remaining Deck
-    // LOSER logic: Take Everything Else (52 - Winner's Keep)
+    // LOGIC FIX: "Borrowed" cards are temporary. 
+    // If I win, I keep ONLY the cards in my deck that are MINE.
+    // Borrowed cards return to the pool (which the loser takes).
     
-    if (winner === 'player') {
-        // Player wins: Keeps their draw deck count
-        // Note: We use ownership count of deck, in case they hold AI cards?
-        // Prompt says: "Winner takes their remaining draw deck".
-        // Let's assume physical deck size determines next round start.
-        gameState.playerTotal = gameState.playerDeck.length;
-        gameState.aiTotal = 52 - gameState.playerTotal;
-        showRoundMessage("ROUND WON!", `You kept ${gameState.playerTotal} cards.`);
-    } else {
-        gameState.aiTotal = gameState.aiDeck.length;
-        gameState.playerTotal = 52 - gameState.aiTotal;
-        showRoundMessage("ROUND LOST!", `AI kept ${gameState.aiTotal} cards.`);
-    }
-    // Note: Scores will update visually on next startRound
-}
+    let winnerCount = 0;
 
+    if (winner === 'player') {
+        // Count only cards physically in deck AND owned by player
+        winnerCount = gameState.playerDeck.filter(c => c.owner === 'player').length;
+        
+        gameState.playerTotal = winnerCount;
+        gameState.aiTotal = 52 - winnerCount; // AI takes the rest
+        
+        showRoundMessage("ROUND WON!", `You kept ${winnerCount} cards (Borrowed returned).`);
+    } else {
+        // Count only cards physically in deck AND owned by AI
+        winnerCount = gameState.aiDeck.filter(c => c.owner === 'ai').length;
+        
+        gameState.aiTotal = winnerCount;
+        gameState.playerTotal = 52 - winnerCount; // Player takes the rest
+        
+        showRoundMessage("ROUND LOST!", `AI kept ${winnerCount} cards.`);
+    }
+    // Scores will update visually when startRound() triggers
+}
 // --- CARD HELPERS ---
 function setCardFaceUp(img, card, owner) {
     img.src = card.imgSrc;
@@ -596,21 +602,26 @@ function playCardToCenter(card, imgElement) {
 
     if (target) {
         target.push(card);
+        
+        // REMOVE FROM HAND/DECK LOGIC
         if (card.owner === 'player') {
             gameState.playerHand = gameState.playerHand.filter(c => c !== card);
-            gameState.playerReady = false;
-            document.getElementById('player-draw-deck').classList.remove('deck-ready');
-            checkDeckVisibility();
             if (gameState.playerHand.length === 0) endRound('player');
         } else {
             gameState.aiHand = gameState.aiHand.filter(c => c !== card);
-            gameState.aiReady = false;
-            document.getElementById('ai-draw-deck').classList.remove('deck-ready');
-            checkDeckVisibility();
             if (gameState.aiHand.length === 0) endRound('ai');
         }
+
+        // --- THE FIX: RESET *BOTH* PLAYERS' READY STATUS ---
+        // This forces the AI (and you) to re-evaluate before drawing again.
+        gameState.playerReady = false;
+        gameState.aiReady = false;
+        document.getElementById('player-draw-deck').classList.remove('deck-ready');
+        document.getElementById('ai-draw-deck').classList.remove('deck-ready');
+
         imgElement.remove(); 
         renderCenterPile(side, card); 
+        checkDeckVisibility();
         updateScoreboard();
         return true; 
     }
