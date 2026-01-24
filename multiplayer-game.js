@@ -1,5 +1,5 @@
 /* =========================================
-   ISF MULTIPLAYER ENGINE v12.0 (Guest-Triggered Start)
+   ISF MULTIPLAYER ENGINE v13.0 (Master Fix: Logic, Cleanup & Names)
    ========================================= */
 
 const gameState = {
@@ -59,93 +59,47 @@ function initNetwork() {
     }
 
     gameState.isHost = (role === 'host');
-    const peer = new Peer(gameState.isHost ? code : undefined);
+    const peer = new Peer(gameState.isHost ? code : null);
 
     peer.on('open', (id) => {
         console.log("My Peer ID: " + id);
         if (!gameState.isHost) {
-            // GUEST LOGIC
-            const conn = peer.connect(code, {
-                reliable: true
-            });
-            setupGuestConnection(conn);
+            const conn = peer.connect(code);
+            handleConnection(conn);
         }
     });
 
     peer.on('connection', (conn) => {
-        // HOST LOGIC
-        if (gameState.isHost) {
-            setupHostConnection(conn);
-        }
-    });
-
-    peer.on('error', (err) => {
-        console.error("Peer Error:", err);
-        if(err.type === 'peer-unavailable') {
-             alert("Match not found! The Host may have disconnected.");
-             window.location.href = 'multiplayer-setup.html';
-        }
+        if (gameState.isHost) handleConnection(conn);
     });
 }
 
-// --- HOST CONNECTION SETUP ---
-function setupHostConnection(conn) {
-    gameState.conn = conn;
-    
-    conn.on('open', () => {
-        console.log("HOST: Connection Open. Waiting for Guest...");
-        // DO NOT START ROUND YET. Wait for 'GUEST_READY'.
-    });
-
-    conn.on('data', (data) => processNetworkData(data));
-    
-    conn.on('close', () => {
-        alert("Opponent Disconnected!");
-    });
-}
-
-// --- GUEST CONNECTION SETUP ---
-function setupGuestConnection(conn) {
-    gameState.conn = conn;
-
-    conn.on('open', () => {
-        console.log("GUEST: Connected. Stabilizing...");
+function handleConnection(connection) {
+    gameState.conn = connection;
+    connection.on('open', () => {
+        console.log("CONNECTED!");
         
-        // CRITICAL FIX: Wait 500ms to ensure Host is listening, then trigger start
-        setTimeout(() => {
-            console.log("GUEST: Sending Ready Signal...");
-            send({ type: 'GUEST_READY', name: gameState.myName });
-        }, 500);
+        // IMMEDIATE NAME EXCHANGE
+        send({ type: 'NAME_UPDATE', name: gameState.myName });
+        
+        if (gameState.isHost) startRound(); 
     });
-
-    conn.on('data', (data) => processNetworkData(data));
-    
-    conn.on('close', () => {
-        alert("Host Disconnected!");
-    });
+    connection.on('data', (data) => processNetworkData(data));
 }
 
 function processNetworkData(data) {
     switch(data.type) {
-        // --- HANDSHAKE SIGNALS ---
-        case 'GUEST_READY':
-            if (gameState.isHost) {
-                console.log("HOST: Guest is Ready. Starting Round.");
-                gameState.opponentName = data.name || "Opponent";
-                updateNamesUI();
-                // NOW we deal cards
-                startRound();
-            }
+        case 'NAME_UPDATE':
+            gameState.opponentName = data.name;
+            updateNamesUI();
             break;
 
         case 'INIT_ROUND':
-            // Guest receives this AFTER sending GUEST_READY
             if(data.hostName) gameState.opponentName = data.hostName;
             updateNamesUI();
             syncBoardState(data);
             break;
 
-        // --- GAMEPLAY SIGNALS ---
         case 'OPPONENT_MOVE':
             const mirroredSide = (data.targetSide === 'left') ? 'right' : 'left';
             executeOpponentMove(data.cardId, mirroredSide);
@@ -192,11 +146,7 @@ function processNetworkData(data) {
 }
 
 function send(data) {
-    if (gameState.conn && gameState.conn.open) {
-        gameState.conn.send(data);
-    } else {
-        console.warn("Attempted to send data but connection is closed.");
-    }
+    if (gameState.conn) gameState.conn.send(data);
 }
 
 function updateNamesUI() {
@@ -204,14 +154,14 @@ function updateNamesUI() {
     if(labels[0]) labels[0].innerText = gameState.opponentName;
 }
 
-// --- HOST LOGIC: DEALING ---
+// --- HOST LOGIC ---
 function startRound() {
     if (!gameState.isHost) return;
 
     let fullDeck = createDeck();
     shuffle(fullDeck);
     
-    // MATCH WIN CHECK
+    // MATCH WIN CHECK (FIXED: Send My Name)
     if (gameState.playerTotal <= 0) { 
         sendGameOver(gameState.myName + " WINS!", false); 
         showEndGame("YOU WIN!", true); 
@@ -257,7 +207,6 @@ function startRound() {
     const cleanDeck = (deck) => deck.map(c => ({suit:c.suit, rank:c.rank, value:c.value, id:c.id}));
     const cleanHand = (hand) => hand.map(c => ({suit:c.suit, rank:c.rank, value:c.value, id:c.id}));
 
-    // Send Everything to Guest
     send({
         type: 'INIT_ROUND',
         hostName: gameState.myName,
@@ -410,14 +359,14 @@ function playCardToCenter(card, imgElement) {
         imgElement.remove(); renderCenterPile(side, card); updateScoreboard();
         checkSlapCondition(); 
 
-        // 1. MATCH WIN (Score hits 0)
+        // 1. MATCH WIN (FIXED: Send My Name)
         if (gameState.playerTotal <= 0) {
             sendGameOver(gameState.myName + " WINS!", false);
             showEndGame("YOU WIN THE MATCH!", true);
             return true;
         }
 
-        // 2. ROUND WIN (Hand Empty)
+        // 2. ROUND WIN
         if (gameState.playerHand.length === 0) {
             const nextPTotal = gameState.playerTotal;
             const nextATotal = 52 - gameState.playerTotal;
@@ -453,15 +402,17 @@ function executeOpponentMove(cardId, side) {
 function handleRoundOver(winner, myNextTotal, oppNextTotal) {
     gameState.gameActive = false;
     
-    // Clear Center Pile
+    // 1. UPDATE SCORES
+    gameState.playerTotal = myNextTotal;
+    gameState.aiTotal = oppNextTotal;
+
+    // 2. CLEAR CENTER PILE (FIXED)
     gameState.centerPileLeft = [];
     gameState.centerPileRight = [];
     document.getElementById('center-pile-left').innerHTML = '';
     document.getElementById('center-pile-right').innerHTML = '';
 
-    gameState.playerTotal = myNextTotal;
-    gameState.aiTotal = oppNextTotal;
-
+    // 3. SHOW POPUP
     const modal = document.getElementById('game-message');
     const btn = document.getElementById('msg-btn');
     
@@ -482,11 +433,12 @@ function handleRoundOver(winner, myNextTotal, oppNextTotal) {
     modal.classList.remove('hidden');
 }
 
-// --- STANDARD LOGIC ---
+// --- STANDARD LOGIC (FIXED SCORING) ---
 function performReveal() {
     document.getElementById('player-draw-deck').classList.remove('deck-ready');
     document.getElementById('ai-draw-deck').classList.remove('deck-ready');
     
+    // PHYSICAL BORROW
     if (gameState.playerDeck.length === 0 && gameState.aiDeck.length > 0) {
         const steal = Math.floor(gameState.aiDeck.length / 2);
         gameState.playerDeck = gameState.playerDeck.concat(gameState.aiDeck.splice(0, steal));
@@ -498,6 +450,7 @@ function performReveal() {
         document.getElementById('borrowed-ai').classList.remove('hidden');
     }
 
+    // SCORING (FIXED)
     const pBorrow = !document.getElementById('borrowed-player').classList.contains('hidden') || gameState.playerTotal <= 10;
     const aBorrow = !document.getElementById('borrowed-ai').classList.contains('hidden') || gameState.aiTotal <= 10;
 
@@ -552,8 +505,16 @@ function executeRedCardConsequence(offender) {
     if (offender === 'player') { gameState.playerTotal = Math.max(0, gameState.playerTotal - 3); gameState.aiTotal += 3; } 
     else { gameState.aiTotal = Math.max(0, gameState.aiTotal - 3); gameState.playerTotal += 3; }
     updateScoreboard();
-    if (gameState.playerTotal <= 0) { sendGameOver(gameState.myName + " WINS!", false); showEndGame("YOU WIN!", true); }
-    if (gameState.aiTotal <= 0) { sendGameOver("YOU WIN THE MATCH!", true); showEndGame(gameState.opponentName + " WINS!", false); }
+    
+    // WIN CHECK (FIXED: Send My Name)
+    if (gameState.playerTotal <= 0) { 
+        sendGameOver(gameState.myName + " WINS!", false); 
+        showEndGame("YOU WIN!", true); 
+    }
+    if (gameState.aiTotal <= 0) { 
+        sendGameOver("YOU WIN THE MATCH!", true); 
+        showEndGame(gameState.opponentName + " WINS!", false); 
+    }
 }
 function updatePenaltyUI() {
     renderBadges('player', gameState.playerYellows, gameState.playerReds);
@@ -655,34 +616,9 @@ function resolveSlapClaim(who, timestamp) {
     applySlapResult(isHostWin ? 'player' : 'ai'); 
     send({ type: 'SLAP_RESULT', winner: isHostWin ? 'ai' : 'player' }); 
 }
-function applySlapResult(winner) {
-    gameState.slapActive = false;
-    const overlay = document.getElementById('slap-overlay');
-    const txt = document.getElementById('slap-text');
-    overlay.classList.remove('hidden');
-    const pileCount = gameState.centerPileLeft.length + gameState.centerPileRight.length;
-    if (winner === 'player') {
-        txt.innerText = "YOU WON THE SLAP!"; overlay.style.backgroundColor = "rgba(0, 200, 0, 0.9)"; gameState.aiTotal += pileCount; 
-    } else {
-        txt.innerText = gameState.opponentName + " WON THE SLAP!"; overlay.style.backgroundColor = "rgba(200, 0, 0, 0.9)"; gameState.playerTotal += pileCount; 
-    }
-    gameState.centerPileLeft = []; gameState.centerPileRight = [];
-    document.getElementById('center-pile-left').innerHTML = ''; document.getElementById('center-pile-right').innerHTML = '';
-    updateScoreboard();
-    setTimeout(() => {
-        overlay.classList.add('hidden'); gameState.playerReady = false; gameState.aiReady = false;
-        document.getElementById('player-draw-deck').classList.remove('deck-ready'); document.getElementById('ai-draw-deck').classList.remove('deck-ready');
-    }, 2000);
-}
 function sendGameOver(msg, isWin) { send({ type: 'GAME_OVER', msg: msg, isWin: isWin }); }
 function showEndGame(title, isWin) {
     const modal = document.getElementById('game-message');
     modal.querySelector('h1').innerText = title; modal.querySelector('h1').style.color = isWin ? '#66ff66' : '#ff7575';
     modal.querySelector('p').innerText = "Refresh to play again."; document.getElementById('msg-btn').classList.add('hidden'); modal.classList.remove('hidden');
-    // POST-MESSAGE FOR TOURNAMENT
-    setTimeout(() => {
-        const myRole = localStorage.getItem('isf_role');
-        const winnerRole = isWin ? myRole : (myRole === 'host' ? 'join' : 'host');
-        window.parent.postMessage({ type: 'GAME_COMPLETE', winnerRole: winnerRole }, '*');
-    }, 3000);
 }
