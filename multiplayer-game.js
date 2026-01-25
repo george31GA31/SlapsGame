@@ -7,7 +7,7 @@ const gameState = {
     playerDeck: [], aiDeck: [],
     playerHand: [], aiHand: [],
     centerPileLeft: [], centerPileRight: [],
-    
+    globalZ: 1000,
     playerTotal: 26, aiTotal: 26,
 
     gameActive: false,
@@ -351,8 +351,31 @@ function dealSmartHand(cards, owner) {
         left += 24;
     });
 }
+function getDropSide(mouseEvent) {
+    const leftPileEl = document.getElementById('center-pile-left');
+    const rightPileEl = document.getElementById('center-pile-right');
+    if (!leftPileEl || !rightPileEl) return null;
 
-// --- PHYSICS: CONSTRAINED DRAG & SYNC ---
+    const x = mouseEvent.clientX;
+    const y = mouseEvent.clientY;
+
+    const pad = 25;
+
+    const l = leftPileEl.getBoundingClientRect();
+    const r = rightPileEl.getBoundingClientRect();
+
+    const inLeft =
+        x >= (l.left - pad) && x <= (l.right + pad) &&
+        y >= (l.top - pad) && y <= (l.bottom + pad);
+
+    const inRight =
+        x >= (r.left - pad) && x <= (r.right + pad) &&
+        y >= (r.top - pad) && y <= (r.bottom + pad);
+
+    if (inLeft) return 'left';
+    if (inRight) return 'right';
+    return null;
+}
 function makeDraggable(img, cardData) {
     img.onmousedown = (e) => {
         e.preventDefault();
@@ -403,7 +426,8 @@ function makeDraggable(img, cardData) {
             img.style.transition = 'all 0.1s ease-out';
 
             if (gameState.gameActive && parseInt(img.style.top) < -20) {
-                let success = playCardToCenter(cardData, img);
+                const dropSide = getDropSide(event); // 'left' | 'right' | null
+               let success = playCardToCenter(cardData, img, dropSide);
                 if (!success) {
                     img.style.left = cardData.originalLeft;
                     img.style.top = cardData.originalTop;
@@ -431,7 +455,7 @@ function executeOpponentDrag(cardId, leftPct, topPct) {
 }
 
 // --- CARD PLAYING ---
-function playCardToCenter(card, imgElement) {
+function playCardToCenter(card, imgElement, dropSide) {
     let target = null; let side = '';
     const cardRect = imgElement.getBoundingClientRect(); 
     const cardCenterX = cardRect.left + (cardRect.width / 2); 
@@ -441,11 +465,20 @@ function playCardToCenter(card, imgElement) {
     const isLeftLegal = checkPileLogic(card, gameState.centerPileLeft);
     const isRightLegal = checkPileLogic(card, gameState.centerPileRight);
 
-    if (intendedSide === 'left' && isLeftLegal) { target = gameState.centerPileLeft; side = 'left'; }
-    else if (intendedSide === 'right' && isRightLegal) { target = gameState.centerPileRight; side = 'right'; }
-    else if (isLeftLegal) { target = gameState.centerPileLeft; side = 'left'; }
-    else if (isRightLegal) { target = gameState.centerPileRight; side = 'right'; }
+   if (dropSide !== 'left' && dropSide !== 'right') return false;
 
+  
+   if (dropSide === 'left' && isLeftLegal) { 
+    target = gameState.centerPileLeft; 
+    side = 'left'; 
+} 
+   else if (dropSide === 'right' && isRightLegal) { 
+    target = gameState.centerPileRight; 
+    side = 'right'; 
+} 
+   else {
+    return false;
+}
     if (target) {
         target.push(card);
         gameState.playerHand = gameState.playerHand.filter(c => c.id !== card.id); 
