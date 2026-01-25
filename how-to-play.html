@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How to Play - SLAPS</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&family=Cinzel:wght@700&display=swap" rel="stylesheet">
+</head>
+<body class="scrollable-page">
+
+    <div class="top-bar">
+        <div class="logo-area">
+            <img src="assets/ISF_pink.png" alt="ISF" class="isf-logo">
+            <span class="logo-text">INSTRUCTIONS</span>
+        </div>
+        <button class="btn-join" onclick="window.location.href='index.html'">
+            <i class="fa-solid fa-arrow-left"></i> Main Menu
+        </button>
+    </div>
+
+    <div class="rules-container">
+        
+        <header class="rules-header">
+            <h1>Master the Art of Slaps</h1>
+            <p>Speed, reflexes, and strategy. Here is everything you need to know to become a champion.</p>
+        </header>
+
+        <div class="rules-grid">
+
+            <div class="rule-card">
+                <div class="rule-icon gold"><i class="fa-solid fa-trophy"></i></div>
+                <h3>The Objective</h3>
+                <p>The goal is simple: <strong>Bankrupt your opponent.</strong></p>
+                <p>You win the match when your opponent runs out of cards completely.</p>
+            </div>
+
+            <div class="rule-card green">
+                <div class="rule-icon"><i class="fa-solid fa-arrow-up-right-dots"></i></div>
+                <h3>Higher or Lower</h3>
+                <p>Play cards from your hand to the <strong>Center Piles</strong>.</p>
+                <p>You can only play a card if it is <strong>1 Rank Higher</strong> or <strong>1 Rank Lower</strong> than the top card.</p>
+                <ul class="example-list">
+                    <li>If Center is <strong class="highlight">9</strong>: Play <strong>8</strong> or <strong>10</strong>.</li>
+                    <li>If Center is <strong class="highlight">King</strong>: Play <strong>Queen</strong> or <strong>Ace</strong>.</li>
+                    <li><strong>Ace wraps to 2!</strong></li>
+                </ul>
+            </div>
+
+            <div class="rule-card blue">
+                <div class="rule-icon"><i class="fa-solid fa-gamepad"></i></div>
+                <h3>Controls</h3>
+                <p><strong>Drag & Drop:</strong> Click and drag cards from your hand to the center piles.</p>
+                <p><strong>Spacebar:</strong> Press <span class="key-box">SPACE</span> to SLAP the pile when a match occurs.</p>
+            </div>
+
+            <div class="rule-card red">
+                <div class="rule-icon"><i class="fa-solid fa-hand-back-fist"></i></div>
+                <h3>The Slap</h3>
+                <p>Keep an eye on the <strong>Top Cards</strong> of both center piles.</p>
+                <p>If they show the <strong>Same Rank</strong> (e.g., two Jacks, two 7s), press <span class="key-box">SPACE</span> immediately!</p>
+                <p><strong>Winner:</strong> The winner forces the LOSER to pick up all the cards in the pile (adding to their total).</p>
+            </div>
+
+            <div class="rule-card">
+                <div class="rule-icon yellow"><i class="fa-solid fa-triangle-exclamation"></i></div>
+                <h3>Referees & Penalties</h3>
+                <p>Don't spam the spacebar! If you slap incorrectly:</p>
+                <ul class="penalty-list">
+                    <li><i class="fa-solid fa-square text-yellow"></i> <strong>Yellow Card:</strong> Warning for spamming or bad slaps.</li>
+                    <li><i class="fa-solid fa-square text-red"></i> <strong>Red Card:</strong> After 2 Yellows. You receive a <strong>+3 Card Penalty</strong> (You take 3 cards from your opponent).</li>
+                </ul>
+            </div>
+
+            <div class="rule-card purple">
+                <div class="rule-icon"><i class="fa-solid fa-rotate"></i></div>
+                <h3>Rounds vs. Match</h3>
+                <p><strong>Round Over:</strong> Happens when one player's hand is empty. Scores update based on total cards remaining.</p>
+                <p><strong>Match Win:</strong> The game continues until one player reaches <strong>0 Cards</strong>.</p>
+            </div>
+
+        </div>
+
+        <div class="footer-note">
+            <p>Ready to play?</p>
+            <button class="btn-start-large" onclick="window.location.href='index.html'">PLAY NOW</button>
+        </div>
+
+    </div>
+
+</body>
+</html>
