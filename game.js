@@ -57,7 +57,7 @@ window.onload = function() {
     // INITIALIZE SCOREBOARD
     updateScoreboardWidget();
 
-    startRound(); // <--- THIS WAS MISSING
+    ; // <--- THIS WAS MISSING
 };
 
 function handleInput(e) {
@@ -252,18 +252,17 @@ function startRound() {
     if (gameState.playerDeck.length === 0 && gameState.aiDeck.length > 1) {
         const steal = Math.floor(gameState.aiDeck.length / 2);
         gameState.playerDeck = gameState.aiDeck.splice(0, steal);
-        // UPDATE SCORES
-        gameState.playerTotal += steal;
-        gameState.aiTotal -= steal;
         document.getElementById('borrowed-player').classList.remove('hidden');
+    } else {
+        document.getElementById('borrowed-player').classList.add('hidden');
     }
+
     if (gameState.aiDeck.length === 0 && gameState.playerDeck.length > 1) {
         const steal = Math.floor(gameState.playerDeck.length / 2);
         gameState.aiDeck = gameState.playerDeck.splice(0, steal);
-        // UPDATE SCORES
-        gameState.aiTotal += steal;
-        gameState.playerTotal -= steal;
         document.getElementById('borrowed-ai').classList.remove('hidden');
+    } else {
+        document.getElementById('borrowed-ai').classList.add('hidden');
     }
 
     dealSmartHand(pHandCards, 'player');
@@ -398,17 +397,45 @@ function performReveal() {
     document.getElementById('player-draw-deck').classList.remove('deck-ready');
     document.getElementById('ai-draw-deck').classList.remove('deck-ready');
     
-    // 1. Check for Shortage & Borrow (AND UPDATE SCORES)
+    // 1. Reset Borrowed Tags (Fixes "Staying Forever")
+    document.getElementById('borrowed-player').classList.add('hidden');
+    document.getElementById('borrowed-ai').classList.add('hidden');
+
+    // 2. Check for Shortage & Borrow (NO SCORE CHANGE)
     if (gameState.playerDeck.length === 0 && gameState.aiDeck.length > 0) {
         const stealAmount = Math.floor(gameState.aiDeck.length / 2);
         if (stealAmount > 0) {
             const stolen = gameState.aiDeck.splice(0, stealAmount);
             gameState.playerDeck = gameState.playerDeck.concat(stolen);
-            gameState.playerTotal += stealAmount;
-            gameState.aiTotal -= stealAmount;
             document.getElementById('borrowed-player').classList.remove('hidden');
         }
     }
+    if (gameState.aiDeck.length === 0 && gameState.playerDeck.length > 0) {
+        const stealAmount = Math.floor(gameState.playerDeck.length / 2);
+        if (stealAmount > 0) {
+            const stolen = gameState.playerDeck.splice(0, stealAmount);
+            gameState.aiDeck = gameState.aiDeck.concat(stolen);
+            document.getElementById('borrowed-ai').classList.remove('hidden');
+        }
+    }
+    
+    // 3. Play Cards (Score Decreases here only)
+    gameState.playerTotal--; 
+    gameState.aiTotal--;
+
+    if (gameState.playerDeck.length > 0) { let pCard = gameState.playerDeck.pop(); gameState.centerPileRight.push(pCard); renderCenterPile('right', pCard); }
+    if (gameState.aiDeck.length > 0) { let aCard = gameState.aiDeck.pop(); gameState.centerPileLeft.push(aCard); renderCenterPile('left', aCard); }
+    
+    checkDeckVisibility(); 
+    updateScoreboard();
+    
+    gameState.gameActive = true; 
+    gameState.playerReady = false; 
+    gameState.aiReady = false;
+    
+    checkSlapCondition();
+    if (!gameState.aiLoopRunning) startAILoop();
+}
     if (gameState.aiDeck.length === 0 && gameState.playerDeck.length > 0) {
         const stealAmount = Math.floor(gameState.playerDeck.length / 2);
         if (stealAmount > 0) {
