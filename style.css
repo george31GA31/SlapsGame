@@ -664,14 +664,14 @@ body {
    ========================================= */
 .scoreboard-widget {
     position: absolute;
-    top: 90px; /* Positioned below the top bar */
+    top: 20px; 
     right: 20px;
-    background: rgba(20, 20, 20, 0.95); /* Matches top bar */
+    background: rgba(20, 20, 20, 0.95); 
     border: 2px solid var(--accent-gold);
     border-radius: 8px;
     padding: 10px;
     box-shadow: 0 4px 10px rgba(0,0,0,0.5);
-    z-index: 900; /* Below modals but above cards */
+    z-index: 900;
     font-family: var(--font-main);
     font-size: 0.85rem;
     color: var(--text-white);
@@ -681,7 +681,7 @@ body {
 
 .sb-header, .sb-row {
     display: grid;
-    grid-template-columns: 2fr 1fr 1fr; /* Player column is wider */
+    grid-template-columns: 2fr 1fr 1fr;
     gap: 5px;
     text-align: center;
     padding: 6px 0;
@@ -710,4 +710,47 @@ body {
 .sb-row:nth-child(2) {
     background: rgba(241, 196, 15, 0.05);
     border-radius: 4px;
+}
+/* =========================================
+   BOTTOM LEFT ACTIONS (Quit & Restart)
+   ========================================= */
+.bottom-left-actions {
+    position: fixed;
+    bottom: 20px;
+    left: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    z-index: 1000;
+}
+
+.btn-action-small {
+    background: rgba(0, 0, 0, 0.6);
+    color: #fff;
+    border: 1px solid #555;
+    padding: 10px 20px;
+    font-size: 0.9rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: center;
+    backdrop-filter: blur(4px);
+    width: 160px; /* Fixed width so they align nicely */
+}
+
+.btn-action-small:hover {
+    background: #fff;
+    color: #000;
+    border-color: #fff;
+}
+
+.btn-quit {
+    border-color: #ff4444;
+    color: #ffaaaa;
+}
+.btn-quit:hover {
+    background: #ff4444;
+    color: white;
 }
