@@ -330,3 +330,142 @@ body {
     .mode-card { width: 45%; }
     .hero-area { display: none; }
 }
+/* =========================================
+   8. HOW TO PLAY PAGE STYLES
+   ========================================= */
+
+.scrollable-page {
+    overflow-y: auto; /* Allows scrolling for long content */
+    height: 100vh;
+}
+
+.rules-container {
+    max-width: 1000px;
+    margin: 40px auto;
+    padding: 20px;
+    animation: fadeIn 0.8s ease;
+}
+
+.rules-header {
+    text-align: center;
+    margin-bottom: 50px;
+}
+
+.rules-header h1 {
+    font-family: var(--font-header);
+    font-size: 3rem;
+    color: var(--accent-gold);
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    margin-bottom: 10px;
+    text-shadow: 0 4px 10px rgba(0,0,0,0.5);
+}
+
+.rules-header p {
+    color: var(--text-gray);
+    font-size: 1.2rem;
+}
+
+.rules-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 30px;
+}
+
+.rule-card {
+    background: rgba(30, 30, 30, 0.6);
+    backdrop-filter: blur(10px);
+    border: 1px solid #333;
+    border-radius: 12px;
+    padding: 30px;
+    position: relative;
+    transition: transform 0.3s;
+}
+
+.rule-card:hover {
+    transform: translateY(-5px);
+    border-color: #555;
+    background: rgba(40, 40, 40, 0.8);
+}
+
+.rule-icon {
+    font-size: 2rem;
+    margin-bottom: 15px;
+    color: var(--text-white);
+    background: rgba(255,255,255,0.1);
+    width: 60px; height: 60px;
+    display: flex; justify-content: center; align-items: center;
+    border-radius: 50%;
+}
+
+.rule-icon.gold { color: var(--accent-gold); border: 1px solid var(--accent-gold); }
+.rule-card.green .rule-icon { color: var(--accent-green); border: 1px solid var(--accent-green); }
+.rule-card.blue .rule-icon { color: var(--accent-blue); border: 1px solid var(--accent-blue); }
+.rule-card.red .rule-icon { color: #e74c3c; border: 1px solid #e74c3c; }
+.rule-icon.yellow { color: #f1c40f; border: 1px solid #f1c40f; }
+.rule-card.purple .rule-icon { color: #9b59b6; border: 1px solid #9b59b6; }
+
+.rule-card h3 {
+    font-size: 1.5rem;
+    color: white;
+    margin-bottom: 15px;
+    font-family: var(--font-header);
+}
+
+.rule-card p {
+    font-size: 0.95rem;
+    color: #ccc;
+    line-height: 1.6;
+    margin-bottom: 10px;
+}
+
+.key-box {
+    background: #333;
+    border-bottom: 3px solid #111;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-weight: bold;
+    color: white;
+    font-family: monospace;
+}
+
+.example-list, .penalty-list {
+    margin-top: 15px;
+    padding-left: 20px;
+    color: #ccc;
+}
+.example-list li, .penalty-list li { margin-bottom: 8px; }
+
+.highlight { color: var(--accent-gold); font-weight: bold; }
+.text-yellow { color: #f1c40f; }
+.text-red { color: #e74c3c; }
+
+.footer-note {
+    text-align: center;
+    margin-top: 60px;
+    margin-bottom: 40px;
+}
+
+.btn-start-large {
+    background: var(--accent-gold);
+    color: #000;
+    border: none;
+    padding: 15px 40px;
+    font-size: 1.2rem;
+    font-weight: 900;
+    border-radius: 50px;
+    cursor: pointer;
+    margin-top: 15px;
+    box-shadow: 0 4px 20px rgba(241, 196, 15, 0.4);
+    transition: all 0.3s;
+}
+
+.btn-start-large:hover {
+    transform: scale(1.05);
+    box-shadow: 0 6px 30px rgba(241, 196, 15, 0.6);
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
