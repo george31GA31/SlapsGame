@@ -463,6 +463,12 @@ function executeOpponentMove(cardId, side) {
     gameState.aiTotal--;
 
     animateOpponentMove(card, side, () => {
+        // SAFETY CHECK: If a slap happened while this card was flying (piles are empty), 
+        // DO NOT add this card to the board. Discard it visually.
+        if (gameState.centerPileLeft.length === 0 && gameState.centerPileRight.length === 0) {
+            return; 
+        }
+
         const target = (side === 'left') ? gameState.centerPileLeft : gameState.centerPileRight;
         target.push(card);
         renderCenterPile(side, card);
@@ -545,10 +551,28 @@ function checkSlapCondition() {
 function renderCenterPile(side, card) {
     const id = side === 'left' ? 'center-pile-left' : 'center-pile-right';
     const container = document.getElementById(id);
-    const img = document.createElement('img'); img.src = card.imgSrc; img.className = 'game-card'; 
-    img.style.left = '50%'; img.style.top = '50%';
-    const rot = Math.random() * 20 - 10; img.style.transform = `translate(-50%, -50%) rotate(${rot}deg)`;
+    const img = document.createElement('img'); 
+    
+    // 1. Set source but keep hidden initially
+    img.src = card.imgSrc; 
+    img.className = 'game-card'; 
+    img.style.opacity = '0'; // Start invisible
+    img.style.transition = 'opacity 0.1s ease-out'; // Fast fade-in
+
+    img.style.left = '50%'; 
+    img.style.top = '50%';
+    const rot = Math.random() * 20 - 10; 
+    img.style.transform = `translate(-50%, -50%) rotate(${rot}deg)`;
+    
     container.appendChild(img);
+
+    // 2. Trigger visible render after a micro-delay
+    // This ensures the image data is ready before the user sees it
+    requestAnimationFrame(() => {
+        setTimeout(() => {
+            img.style.opacity = '1';
+        }, 50);
+    });
 }
 function handlePlayerDeckClick() {
     if (!gameState.gameActive) {
@@ -629,26 +653,40 @@ function applySlapResult(winner) {
     const overlay = document.getElementById('slap-overlay');
     const txt = document.getElementById('slap-text');
     overlay.classList.remove('hidden');
+    
     const pileCount = gameState.centerPileLeft.length + gameState.centerPileRight.length;
     
     if (winner === 'player') {
-        txt.innerText = "YOU WON THE SLAP!"; overlay.style.backgroundColor = "rgba(0, 200, 0, 0.9)"; 
+        txt.innerText = "YOU WON THE SLAP!"; 
+        overlay.style.backgroundColor = "rgba(0, 200, 0, 0.9)"; 
         gameState.aiTotal += pileCount; 
-        gameState.p1Slaps++; // SCOREBOARD UPDATE
+        gameState.p1Slaps++; 
     } else {
-        txt.innerText = gameState.opponentName + " WON THE SLAP!"; overlay.style.backgroundColor = "rgba(200, 0, 0, 0.9)"; 
+        txt.innerText = gameState.opponentName + " WON THE SLAP!"; 
+        overlay.style.backgroundColor = "rgba(200, 0, 0, 0.9)"; 
         gameState.playerTotal += pileCount; 
-        gameState.aiSlaps++; // SCOREBOARD UPDATE
+        gameState.aiSlaps++; 
     }
     
-    gameState.centerPileLeft = []; gameState.centerPileRight = [];
-    document.getElementById('center-pile-left').innerHTML = ''; document.getElementById('center-pile-right').innerHTML = '';
+    // RESET ARRAYS
+    gameState.centerPileLeft = []; 
+    gameState.centerPileRight = [];
+    
+    // FORCE DOM CLEAR (More robust than just innerHTML)
+    const leftPile = document.getElementById('center-pile-left');
+    const rightPile = document.getElementById('center-pile-right');
+    while (leftPile.firstChild) leftPile.removeChild(leftPile.firstChild);
+    while (rightPile.firstChild) rightPile.removeChild(rightPile.firstChild);
+
     updateScoreboard();
-    updateScoreboardWidget(); // REFRESH WIDGET
+    updateScoreboardWidget(); 
 
     setTimeout(() => {
-        overlay.classList.add('hidden'); gameState.playerReady = false; gameState.aiReady = false;
-        document.getElementById('player-draw-deck').classList.remove('deck-ready'); document.getElementById('ai-draw-deck').classList.remove('deck-ready');
+        overlay.classList.add('hidden'); 
+        gameState.playerReady = false; 
+        gameState.aiReady = false;
+        document.getElementById('player-draw-deck').classList.remove('deck-ready'); 
+        document.getElementById('ai-draw-deck').classList.remove('deck-ready');
     }, 2000);
 }
 function issuePenalty(target, reason) {
