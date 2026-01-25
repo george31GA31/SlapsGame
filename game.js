@@ -544,7 +544,6 @@ function animateAIMoveToLane(card, laneIdx, callback) {
     const el = card.element; const leftPercent = AI_LANES[laneIdx];
     el.style.transition = 'all 0.5s ease'; el.style.left = `${leftPercent}%`; el.style.top = '10px'; el.style.zIndex = 10; setTimeout(() => { callback(); }, 500);
 }
-// --- HELPER: STRICT OVERLAP CHECK ---
 function isOverlapping(element1, element2) {
     if (!element1 || !element2) return false;
     const rect1 = element1.getBoundingClientRect();
@@ -557,7 +556,19 @@ function isOverlapping(element1, element2) {
     );
 }
 
-// --- UPDATED DRAG LOGIC ---
+function isOverlapping(element1, element2) {
+    if (!element1 || !element2) return false;
+    const rect1 = element1.getBoundingClientRect();
+    const rect2 = element2.getBoundingClientRect();
+    return !(
+        rect1.right < rect2.left || 
+        rect1.left > rect2.right || 
+        rect1.bottom < rect2.top || 
+        rect1.top > rect2.bottom
+    );
+}
+
+// --- UPDATED DRAG LOGIC (MULTIPLAYER) ---
 function makeDraggable(img, cardData) {
     img.onmousedown = (e) => {
         e.preventDefault();
@@ -576,8 +587,7 @@ function makeDraggable(img, cardData) {
             const boxRect = box.getBoundingClientRect();
             let newLeft = pageX - shiftX - boxRect.left;
             let newTop = pageY - shiftY - boxRect.top;
-            
-            // Constrain width but allow dragging up
+
             const cardW = img.offsetWidth;
             if (newLeft < 0) newLeft = 0;
             if (newLeft > boxRect.width - cardW) newLeft = boxRect.width - cardW;
@@ -611,6 +621,16 @@ function makeDraggable(img, cardData) {
             if (!success) {
                 img.style.left = cardData.originalLeft;
                 img.style.top = cardData.originalTop;
+                
+                // Sync "Drop/Snap Back" to opponent
+                if (gameState.conn && gameState.conn.open) {
+                    const boxRect = box.getBoundingClientRect();
+                    const currentLeftPx = parseFloat(img.style.left);
+                    const currentTopPx = parseFloat(img.style.top);
+                    const leftPct = (currentLeftPx / boxRect.width) * 100;
+                    const topPct = (currentTopPx / boxRect.height) * 100;
+                    send({ type: 'OPPONENT_DRAG', cardId: cardData.id, left: leftPct, top: topPct });
+                }
             }
         }
         document.addEventListener('mousemove', onMouseMove);
@@ -618,7 +638,7 @@ function makeDraggable(img, cardData) {
     };
 }
 
-// --- UPDATED PLAY LOGIC ---
+// --- UPDATED PLAY LOGIC (MULTIPLAYER) ---
 function playCardToCenter(card, imgElement, forcedSide) {
     if (!gameState.gameActive) return false;
 
@@ -631,13 +651,16 @@ function playCardToCenter(card, imgElement, forcedSide) {
 
     // RACE CONDITION CHECK
     if (!checkPileLogic(card, targetPile)) {
-        return false; // Snap back if move is no longer valid
+        console.log("Move rejected: Pile changed state.");
+        return false;
     }
 
     if (targetPile) {
         targetPile.push(card);
-        gameState.playerHand = gameState.playerHand.filter(c => c !== card);
-        gameState.playerTotal--;
+        gameState.playerHand = gameState.playerHand.filter(c => c.id !== card.id);
+        gameState.playerTotal--; // Always -1 for manual play
+
+        send({ type: 'OPPONENT_MOVE', cardId: card.id, targetSide: side });
 
         gameState.playerReady = false; 
         gameState.aiReady = false;
@@ -653,10 +676,17 @@ function playCardToCenter(card, imgElement, forcedSide) {
         checkSlapCondition(); 
 
         if (gameState.playerTotal <= 0) {
+            sendGameOver(gameState.myName + " WINS!", false);
             showEndGame("YOU WIN THE MATCH!", true);
             return true;
         }
-        if (gameState.playerHand.length === 0) endRound('player');
+
+        if (gameState.playerHand.length === 0) {
+            const nextPTotal = gameState.playerTotal;
+            const nextATotal = 52 - gameState.playerTotal;
+            send({ type: 'ROUND_OVER', winner: 'opponent', nextPTotal: nextATotal, nextATotal: nextPTotal });
+            handleRoundOver('player', nextPTotal, nextATotal);
+        }
 
         return true; 
     }
