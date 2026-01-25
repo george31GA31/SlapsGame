@@ -17,7 +17,7 @@
             <div class="logo-area"><img src="assets/ISF_pink.png" alt="ISF" class="isf-logo"></div>
             <ul class="nav-links">
                <li><a href="index.html"><i class="fa-solid fa-arrow-left"></i> Back to Home</a></li>
-           </ul>
+            </ul>
         </nav>
 
         <main class="game-board-area" style="flex-direction: column;">
@@ -35,15 +35,10 @@
                 </div>
 
                 <div class="lobby-actions">
-                    <div class="lobby-col">
+                    <div class="lobby-col" id="host-col-content">
                         <button class="btn-lobby" id="btn-host" onclick="hostGame()">
                             <i class="fa-solid fa-server"></i> HOST MATCH
                         </button>
-                        <div id="host-area" class="hidden">
-                            <p>SHARE THIS CODE:</p>
-                            <div class="code-display" id="my-code">Generating...</div>
-                            <div id="status-host" class="status-text">Waiting for friend...</div>
-                        </div>
                     </div>
 
                     <div class="divider">OR</div>
@@ -77,13 +72,21 @@
             const randomCode = Math.floor(1000 + Math.random() * 9000);
             myId = `ISF-${randomCode}`;
 
-            // --- THE FIX: SAVE CONNECTION INFO ---
             localStorage.setItem('isf_role', 'host');
             localStorage.setItem('isf_code', myId);
 
-            document.getElementById('btn-host').classList.add('disabled');
-            document.getElementById('host-area').classList.remove('hidden');
-            document.getElementById('my-code').innerText = myId;
+            // --- INJECT THE NEW "BIG BOX" UI ---
+            const hostContainer = document.getElementById('host-col-content');
+            hostContainer.innerHTML = `
+                <div class="host-code-display">
+                    <span class="code-label">Share This Code</span>
+                    <span class="the-code">${myId}</span>
+                    <div class="waiting-text" id="status-host">
+                        <i class="fa-solid fa-spinner fa-spin"></i> Waiting for friend...
+                    </div>
+                </div>
+                <button class="btn-cancel" onclick="location.reload()" style="background:transparent; border:none; color:#666; cursor:pointer; font-size:0.8rem; text-decoration:underline;">CANCEL</button>
+            `;
 
             peer = new Peer(myId);
 
@@ -94,8 +97,15 @@
             peer.on('connection', (c) => {
                 conn = c;
                 setupConnection();
-                document.getElementById('status-host').innerText = "FRIEND CONNECTED!";
-                document.getElementById('status-host').style.color = "#66ff66";
+                
+                // Update Status Text in the box
+                const statusEl = document.getElementById('status-host');
+                if(statusEl) {
+                    statusEl.innerHTML = '<i class="fa-solid fa-check"></i> FRIEND CONNECTED!';
+                    statusEl.style.color = "#66ff66";
+                    statusEl.style.animation = "none";
+                }
+                
                 document.getElementById('lobby-card').classList.add('glow-green');
                 document.getElementById('btn-start-multi').classList.remove('hidden');
             });
@@ -109,21 +119,28 @@
             const targetId = document.getElementById('join-code').value.toUpperCase();
             if(!targetId) return alert("Please enter a code!");
 
-            // --- THE FIX: SAVE CONNECTION INFO ---
             localStorage.setItem('isf_role', 'join');
             localStorage.setItem('isf_code', targetId);
 
-            document.getElementById('status-join').classList.remove('hidden');
+            const statusJoin = document.getElementById('status-join');
+            statusJoin.classList.remove('hidden');
+            statusJoin.innerText = "Connecting...";
             
             peer = new Peer(); 
 
             peer.on('open', (id) => {
                 conn = peer.connect(targetId);
                 conn.on('open', () => {
-                    document.getElementById('status-join').innerText = "CONNECTED!";
-                    document.getElementById('status-join').style.color = "#66ff66";
+                    statusJoin.innerText = "CONNECTED!";
+                    statusJoin.style.color = "#66ff66";
                     document.getElementById('lobby-card').classList.add('glow-green');
                     setupConnection();
+                });
+                
+                // Handle errors
+                peer.on('error', (err) => {
+                    statusJoin.innerText = "Error: Code not found.";
+                    statusJoin.style.color = "#ff4444";
                 });
             });
         }
@@ -143,5 +160,5 @@
             }
         }
     </script>
-<body class="setup-page">
+</body>
 </html>
