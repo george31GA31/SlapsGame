@@ -57,7 +57,7 @@ window.onload = function() {
     // INITIALIZE SCOREBOARD
     updateScoreboardWidget();
 
-    ;
+    startRound(); // <--- THIS WAS MISSING
 };
 
 function handleInput(e) {
