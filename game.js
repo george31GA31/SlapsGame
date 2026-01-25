@@ -6,7 +6,7 @@ const gameState = {
     playerDeck: [], aiDeck: [],
     playerHand: [], aiHand: [],
     centerPileLeft: [], centerPileRight: [],
-    
+    globalZ: 1000,
     playerTotal: 26, aiTotal: 26,
 
     gameActive: false,
@@ -451,7 +451,7 @@ function attemptAIMove() {
             
             animateAIMove(bestMove.c, bestMove.t, () => {
                 const laneIdx = bestMove.c.laneIndex; 
-                let success = playCardToCenter(bestMove.c, bestMove.c.element);
+                let success = playCardToCenter(bestMove.c, bestMove.c.element, bestMove.t);
                 if (success) {
                     gameState.aiInChain = true; 
                     const laneCards = gameState.aiHand.filter(c => c.laneIndex === laneIdx);
@@ -544,6 +544,32 @@ function animateAIMoveToLane(card, laneIdx, callback) {
     const el = card.element; const leftPercent = AI_LANES[laneIdx];
     el.style.transition = 'all 0.5s ease'; el.style.left = `${leftPercent}%`; el.style.top = '10px'; el.style.zIndex = 10; setTimeout(() => { callback(); }, 500);
 }
+function getDropSide(imgElement, mouseEvent) {
+    const leftPileEl = document.getElementById('center-pile-left');
+    const rightPileEl = document.getElementById('center-pile-right');
+    if (!leftPileEl || !rightPileEl) return null;
+
+    // Use mouse position (more intuitive than card rect)
+    const x = mouseEvent.clientX;
+    const y = mouseEvent.clientY;
+
+    const pad = 25; // tolerance so it is not pixel-perfect
+
+    const l = leftPileEl.getBoundingClientRect();
+    const r = rightPileEl.getBoundingClientRect();
+
+    const inLeft =
+        x >= (l.left - pad) && x <= (l.right + pad) &&
+        y >= (l.top - pad) && y <= (l.bottom + pad);
+
+    const inRight =
+        x >= (r.left - pad) && x <= (r.right + pad) &&
+        y >= (r.top - pad) && y <= (r.bottom + pad);
+
+    if (inLeft) return 'left';
+    if (inRight) return 'right';
+    return null;
+}
 function makeDraggable(img, cardData) {
     img.onmousedown = (e) => {
         e.preventDefault(); gameState.globalZ++; img.style.zIndex = gameState.globalZ; img.style.transition = 'none'; 
@@ -561,8 +587,13 @@ function makeDraggable(img, cardData) {
             document.removeEventListener('mousemove', onMouseMove); document.removeEventListener('mouseup', onMouseUp);
             img.style.transition = 'all 0.1s ease-out'; 
             if (gameState.gameActive && parseInt(img.style.top) < -10) {
-                let success = playCardToCenter(cardData, img); if (!success) { img.style.left = cardData.originalLeft; img.style.top = cardData.originalTop; }
-            }
+    const dropSide = getDropSide(img, event); // 'left' | 'right' | null
+    let success = playCardToCenter(cardData, img, dropSide);
+    if (!success) { 
+        img.style.left = cardData.originalLeft; 
+        img.style.top = cardData.originalTop; 
+    }
+}
         }
         document.addEventListener('mousemove', onMouseMove); document.addEventListener('mouseup', onMouseUp);
     };
@@ -571,44 +602,49 @@ function checkLegalPlay(card) { if (!gameState.gameActive) return false; return 
 function checkPileLogic(card, targetPile) {
     if (targetPile.length === 0) return false; const targetCard = targetPile[targetPile.length - 1]; const diff = Math.abs(card.value - targetCard.value); return (diff === 1 || diff === 12);
 }
-function playCardToCenter(card, imgElement) {
+function playCardToCenter(card, imgElement, dropSide) {
     if (!gameState.gameActive) return false;
 
-    let target = null; let side = '';
-    const cardRect = imgElement.getBoundingClientRect(); 
-    const cardCenterX = cardRect.left + (cardRect.width / 2); 
-    const screenCenterX = window.innerWidth / 2;
-    const intendedSide = (cardCenterX < screenCenterX) ? 'left' : 'right';
-    
-    const isLeftLegal = checkPileLogic(card, gameState.centerPileLeft); 
+    // Must be dropped on a pile
+    if (dropSide !== 'left' && dropSide !== 'right') return false;
+
+    const isLeftLegal = checkPileLogic(card, gameState.centerPileLeft);
     const isRightLegal = checkPileLogic(card, gameState.centerPileRight);
-    
-    if (intendedSide === 'left' && isLeftLegal) { target = gameState.centerPileLeft; side = 'left'; }
-    else if (intendedSide === 'right' && isRightLegal) { target = gameState.centerPileRight; side = 'right'; }
-    else { if (isLeftLegal) { target = gameState.centerPileLeft; side = 'left'; } else if (isRightLegal) { target = gameState.centerPileRight; side = 'right'; } }
-    
-    if (target) {
-        gameState.playerReady = false; 
-        gameState.aiReady = false;
-        document.getElementById('player-draw-deck').classList.remove('deck-ready');
-        document.getElementById('ai-draw-deck').classList.remove('deck-ready');
-       
-        target.push(card);
-        if (card.owner === 'player') {
-            gameState.playerHand = gameState.playerHand.filter(c => c !== card); gameState.playerTotal--; 
-            if (gameState.playerTotal <= 0) { showEndGame("YOU WIN THE MATCH!", true); return true; }
-            if (gameState.playerHand.length === 0) endRound('player');
-        } else {
-            gameState.aiHand = gameState.aiHand.filter(c => c !== card); gameState.aiTotal--; 
-            if (gameState.aiTotal <= 0) { showEndGame("AI WINS THE MATCH!", false); return true; }
-            if (gameState.aiHand.length === 0) endRound('ai');
-        }
-        
-        checkDeckVisibility(); imgElement.remove(); renderCenterPile(side, card); updateScoreboard();
-        checkSlapCondition(); 
-        return true; 
+
+    let target = null;
+    let side = '';
+
+    if (dropSide === 'left' && isLeftLegal) { target = gameState.centerPileLeft; side = 'left'; }
+    if (dropSide === 'right' && isRightLegal) { target = gameState.centerPileRight; side = 'right'; }
+
+    // No fallback to the other pile. If you dropped on the wrong one, it fails.
+    if (!target) return false;
+
+    // --- everything below here stays exactly as you already have it ---
+    gameState.playerReady = false; 
+    gameState.aiReady = false;
+    document.getElementById('player-draw-deck').classList.remove('deck-ready');
+    document.getElementById('ai-draw-deck').classList.remove('deck-ready');
+
+    target.push(card);
+    if (card.owner === 'player') {
+        gameState.playerHand = gameState.playerHand.filter(c => c !== card); 
+        gameState.playerTotal--; 
+        if (gameState.playerTotal <= 0) { showEndGame("YOU WIN THE MATCH!", true); return true; }
+        if (gameState.playerHand.length === 0) endRound('player');
+    } else {
+        gameState.aiHand = gameState.aiHand.filter(c => c !== card); 
+        gameState.aiTotal--; 
+        if (gameState.aiTotal <= 0) { showEndGame("AI WINS THE MATCH!", false); return true; }
+        if (gameState.aiHand.length === 0) endRound('ai');
     }
-    return false; 
+
+    checkDeckVisibility(); 
+    imgElement.remove(); 
+    renderCenterPile(side, card); 
+    updateScoreboard();
+    checkSlapCondition(); 
+    return true;
 }
 function showRoundMessage(title, sub) {
     const modal = document.getElementById('game-message'); modal.querySelector('h1').innerText = title; modal.querySelector('p').innerText = sub;
