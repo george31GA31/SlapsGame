@@ -546,25 +546,86 @@ function animateAIMoveToLane(card, laneIdx, callback) {
 }
 function makeDraggable(img, cardData) {
     img.onmousedown = (e) => {
-        e.preventDefault(); gameState.globalZ++; img.style.zIndex = gameState.globalZ; img.style.transition = 'none'; 
-        cardData.originalLeft = img.style.left; cardData.originalTop = img.style.top;
-        let shiftX = e.clientX - img.getBoundingClientRect().left; let shiftY = e.clientY - img.getBoundingClientRect().top;
+        e.preventDefault();
+        // Bring to front
+        gameState.globalZ = (gameState.globalZ || 200) + 1;
+        img.style.zIndex = gameState.globalZ;
+        img.style.transition = 'none';
+
+        cardData.originalLeft = img.style.left;
+        cardData.originalTop = img.style.top;
+
+        // Calculate offset from mouse to top-left of card
+        let shiftX = e.clientX - img.getBoundingClientRect().left;
+        let shiftY = e.clientY - img.getBoundingClientRect().top;
+
         const box = document.getElementById('player-foundation-area');
+
         function moveAt(pageX, pageY) {
-            const boxRect = box.getBoundingClientRect(); let newLeft = pageX - shiftX - boxRect.left; let newTop = pageY - shiftY - boxRect.top;
-            if (newTop < 0) { if (!gameState.gameActive || !checkLegalPlay(cardData)) newTop = 0; }
-            img.style.left = newLeft + 'px'; img.style.top = newTop + 'px';
+            const boxRect = box.getBoundingClientRect();
+            let newLeft = pageX - shiftX - boxRect.left;
+            let newTop = pageY - shiftY - boxRect.top;
+
+            // Constrain inside the box (mostly)
+            const cardW = img.offsetWidth;
+            const cardH = img.offsetHeight;
+
+            if (newLeft < 0) newLeft = 0;
+            if (newLeft > boxRect.width - cardW) newLeft = boxRect.width - cardW;
+            if (newTop > boxRect.height - cardH) newTop = boxRect.height - cardH;
+
+            // Allow dragging UP out of the box (for playing)
+            // But prevent dragging DOWN too far
+            
+            img.style.left = newLeft + 'px';
+            img.style.top = newTop + 'px';
         }
+
         moveAt(e.pageX, e.pageY);
+
         function onMouseMove(event) { moveAt(event.pageX, event.pageY); }
+
         function onMouseUp(event) {
-            document.removeEventListener('mousemove', onMouseMove); document.removeEventListener('mouseup', onMouseUp);
-            img.style.transition = 'all 0.1s ease-out'; 
-            if (gameState.gameActive && parseInt(img.style.top) < -10) {
-                let success = playCardToCenter(cardData, img); if (!success) { img.style.left = cardData.originalLeft; img.style.top = cardData.originalTop; }
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+            img.style.transition = 'all 0.1s ease-out';
+
+            // --- STRICT OVERLAP CHECK ---
+            // Instead of just checking height, we check if it touches a pile
+            const leftPileEl = document.getElementById('center-pile-left');
+            const rightPileEl = document.getElementById('center-pile-right');
+            
+            // Check overlap
+            const hitsLeft = isOverlapping(img, leftPileEl);
+            const hitsRight = isOverlapping(img, rightPileEl);
+
+            let success = false;
+
+            if (gameState.gameActive && (hitsLeft || hitsRight)) {
+                // Pass the specific target pile to playCardToCenter
+                const targetSide = hitsLeft ? 'left' : 'right';
+                success = playCardToCenter(cardData, img, targetSide);
+            }
+
+            // If move failed (illegal or race condition), snap back
+            if (!success) {
+                img.style.left = cardData.originalLeft;
+                img.style.top = cardData.originalTop;
+                
+                // In Multiplayer, tell opponent I stopped dragging
+                if (typeof send === 'function') {
+                    const boxRect = box.getBoundingClientRect();
+                    const currentLeftPx = parseFloat(img.style.left);
+                    const currentTopPx = parseFloat(img.style.top);
+                    const leftPct = (currentLeftPx / boxRect.width) * 100;
+                    const topPct = (currentTopPx / boxRect.height) * 100;
+                    send({ type: 'OPPONENT_DRAG', cardId: cardData.id, left: leftPct, top: topPct });
+                }
             }
         }
-        document.addEventListener('mousemove', onMouseMove); document.addEventListener('mouseup', onMouseUp);
+
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
     };
 }
 function checkLegalPlay(card) { if (!gameState.gameActive) return false; return checkPileLogic(card, gameState.centerPileLeft) || checkPileLogic(card, gameState.centerPileRight); }
