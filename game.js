@@ -11,6 +11,8 @@ const gameState = {
 
     gameActive: false,
     playerReady: false, aiReady: false,
+    drawLock: false,
+    countdownRunning: false,
     aiLoopRunning: false, aiProcessing: false, aiInChain: false,
     
     slapActive: false,
@@ -332,38 +334,55 @@ function handlePlayerDeckClick() {
     if (!gameState.gameActive) {
         if (gameState.playerReady) return;
         gameState.playerReady = true; document.getElementById('player-draw-deck').classList.add('deck-ready');
-        setTimeout(() => { gameState.aiReady = true; document.getElementById('ai-draw-deck').classList.add('deck-ready'); startCountdown(); }, 800);
+        setTimeout(() => { gameState.aiReady = true; document.getElementById('ai-draw-deck').classList.add('deck-ready'); checkDrawCondition(); }, 800);
         return;
     }
     if (gameState.gameActive && !gameState.playerReady) {
         gameState.playerReady = true; document.getElementById('player-draw-deck').classList.add('deck-ready'); checkDrawCondition();
     }
 }
-function checkDrawCondition() { if (gameState.playerReady && gameState.aiReady) setTimeout(() => startCountdown(), 500); }
+function checkDrawCondition() {
+    if (gameState.drawLock || gameState.countdownRunning) return;
+
+    if (gameState.playerReady && gameState.aiReady) {
+        gameState.drawLock = true;
+        setTimeout(() => startCountdown(), 50);
+    }
+}
 function startCountdown() {
-    gameState.gameActive = false; 
-    const overlay = document.getElementById('countdown-overlay'); 
+    if (gameState.countdownRunning) return;
+
+    gameState.countdownRunning = true;
+    gameState.gameActive = false;
+
+    const overlay = document.getElementById('countdown-overlay');
     overlay.classList.remove('hidden');
-    let count = 3; overlay.innerText = count;
-    
+
+    let count = 3;
+    overlay.innerText = count;
+
     const timer = setInterval(() => {
         count--;
-        if (count > 0) { 
-            overlay.innerText = count; 
-            overlay.style.animation = 'none'; 
-            overlay.offsetHeight; 
-            overlay.style.animation = 'popIn 0.5s ease'; 
-        } 
-        else { 
-            clearInterval(timer); 
-            overlay.classList.add('hidden'); 
-            performReveal(); 
+
+        if (count > 0) {
+            overlay.innerText = count;
+            overlay.style.animation = 'none';
+            overlay.offsetHeight;
+            overlay.style.animation = 'popIn 0.5s ease';
+        } else {
+            clearInterval(timer);
+            overlay.classList.add('hidden');
+
+            gameState.countdownRunning = false;
+            performReveal();
         }
     }, 800);
 }
 
 // --- FIXED REVEAL & SCORING LOGIC ---
 function performReveal() {
+    if (!gameState.drawLock) return;
+
     document.getElementById('player-draw-deck').classList.remove('deck-ready');
     document.getElementById('ai-draw-deck').classList.remove('deck-ready');
     
@@ -413,8 +432,10 @@ function performReveal() {
     gameState.playerReady = false; 
     gameState.aiReady = false;
     
-    checkSlapCondition();
+        checkSlapCondition();
     if (!gameState.aiLoopRunning) startAILoop();
+
+    gameState.drawLock = false;
 }
 
 function renderCenterPile(side, card) {
