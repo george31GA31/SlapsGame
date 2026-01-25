@@ -638,9 +638,7 @@ function playCardToCenter(card, imgElement, strictSide) {
     let target = null;
     let side = '';
 
-    // --- CHANGE STARTS HERE ---
-    
-    // 1. HUMAN LOGIC (Strict Contact Required)
+    // --- HUMAN LOGIC (Strict Contact Required) ---
     if (card.owner === 'player') {
         if (strictSide === 'left' && checkPileLogic(card, gameState.centerPileLeft)) {
             target = gameState.centerPileLeft;
@@ -651,9 +649,8 @@ function playCardToCenter(card, imgElement, strictSide) {
             side = 'right';
         }
     } 
-    // 2. AI LOGIC (Old Behavior Preserved Completely)
+    // --- AI LOGIC (Old Behavior Preserved Completely) ---
     else {
-        // This is your original logic, kept strictly for the AI
         const cardRect = imgElement.getBoundingClientRect(); 
         const cardCenterX = cardRect.left + (cardRect.width / 2); 
         const screenCenterX = window.innerWidth / 2;
