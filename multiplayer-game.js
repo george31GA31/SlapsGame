@@ -434,11 +434,15 @@ function makeDraggable(img, cardData) {
     img.onmousedown = (e) => {
         e.preventDefault();
 
+        // 1. SNAPSHOT: Is the card legal RIGHT NOW?
+        // We check this once on click. If true, you can drag it out freely.
+        // This prevents the card from snapping back if the board changes mid-drag.
+        const isInitiallyLegal = checkLegalPlay(cardData);
+
         gameState.globalZ = (gameState.globalZ || 200) + 1;
         img.style.zIndex = gameState.globalZ;
         img.style.transition = 'none';
 
-        // Store snap-back
         cardData.originalLeft = img.style.left;
         cardData.originalTop = img.style.top;
 
@@ -457,14 +461,13 @@ function makeDraggable(img, cardData) {
 
             if (newLeft < 0) newLeft = 0;
             if (newLeft > boxRect.width - cardW) newLeft = boxRect.width - cardW;
-
             if (newTop > boxRect.height - cardH) newTop = boxRect.height - cardH;
 
-            // THE PHYSICAL WALL
-            // If pulling up, check if legal
+            // THE PHYSICAL WALL (Improved)
+            // If dragging UP (negative top), only allow if it was legal WHEN CLICKED.
             if (newTop < 0) {
-                if (!gameState.gameActive || !checkLegalPlay(cardData)) {
-                    newTop = 0;
+                if (!gameState.gameActive || !isInitiallyLegal) {
+                    newTop = 0; 
                 }
             }
 
@@ -481,15 +484,32 @@ function makeDraggable(img, cardData) {
             document.removeEventListener('mouseup', onMouseUp);
             img.style.transition = 'all 0.1s ease-out';
 
+            // Only attempt play if dragged out of the box
             if (gameState.gameActive && parseInt(img.style.top, 10) < -20) {
-                const dropSide = getDropSide(event);
-                const success = playCardToCenter(cardData, img, dropSide);
+                
+                // USE OVERLAP CHECK INSTEAD OF CURSOR POSITION
+                const leftPileEl = document.getElementById('center-pile-left');
+                const rightPileEl = document.getElementById('center-pile-right');
+                
+                const hitsLeft = isOverlapping(img, leftPileEl);
+                const hitsRight = isOverlapping(img, rightPileEl);
+
+                let success = false;
+
+                // Priority: If touching Left, try Left. Else if touching Right, try Right.
+                if (hitsLeft) {
+                    success = playCardToCenter(cardData, img, 'left');
+                } else if (hitsRight) {
+                    success = playCardToCenter(cardData, img, 'right');
+                }
+
+                // If failed to play, snap back
                 if (!success) {
                     img.style.left = cardData.originalLeft;
                     img.style.top = cardData.originalTop;
                 }
             } else {
-                // Send drag position (percent of my box)
+                // If inside the box (Free Drag), sync position to opponent
                 const boxRect = box.getBoundingClientRect();
                 const currentLeftPx = parseFloat(img.style.left);
                 const currentTopPx = parseFloat(img.style.top);
@@ -1208,4 +1228,16 @@ function updatePenaltyUI() {
     const aBox = document.getElementById('ai-penalties');
     if (pBox) pBox.innerHTML = '';
     if (aBox) aBox.innerHTML = '';
+}
+// --- NEW HELPER: STRICT OVERLAP CHECK ---
+function isOverlapping(element1, element2) {
+    if (!element1 || !element2) return false;
+    const rect1 = element1.getBoundingClientRect();
+    const rect2 = element2.getBoundingClientRect();
+    return !(
+        rect1.right < rect2.left || 
+        rect1.left > rect2.right || 
+        rect1.bottom < rect2.top || 
+        rect1.top > rect2.bottom
+    );
 }
