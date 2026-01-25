@@ -426,9 +426,10 @@ function dealSmartHand(cards, owner) {
         if (pile.length === 0) { left += 24; return; }
 
         pile.forEach((card, i) => {
-            const img = document.createElement('img');
-            img.className = 'game-card';
-            img.src = card.imgSrc;
+         const img = document.createElement('img');
+      img.className = 'game-card';
+img.src = card.imgSrc;
+img.dataset.cardId = card.id;
 
             card.owner = owner;
             card.laneIndex = laneIdx;
@@ -754,14 +755,41 @@ function handleMoveRejected(data) {
 }
 
 function executeOpponentMove(cardId, side) {
-    const card = gameState.aiHand.find(c => c.id === cardId);
-    if (!card) return;
+    // Find card object
+    let card = gameState.aiHand.find(c => c.id === cardId);
 
+    // Fallback: if card object missing, still remove DOM + render centre
+    // (This keeps clients visually consistent even if state drifted)
+    const domEl = document.querySelector(`img[data-card-id="${cardId}"]`);
+
+    if (!card) {
+        if (domEl) domEl.remove();
+        // Cannot render correct face without card data, so just bail after cleanup
+        return;
+    }
+
+    // Ensure card.element exists (fallback to DOM lookup)
+    if (!card.element && domEl) card.element = domEl;
+
+    // Remove from opponent hand totals immediately
     gameState.aiHand = gameState.aiHand.filter(c => c.id !== cardId);
     gameState.aiTotal--;
 
+    // If element still missing, just remove any DOM instance and render centre instantly
+    if (!card.element) {
+        if (domEl) domEl.remove();
+
+        const target = (side === 'left') ? gameState.centerPileLeft : gameState.centerPileRight;
+        target.push(card);
+        renderCenterPile(side, card);
+        updateScoreboard();
+        checkSlapCondition();
+        return;
+    }
+
+    // Normal animation path
     animateOpponentMove(card, side, () => {
-        // Safety check: if a slap happened while flying (piles cleared), discard
+        // If a slap cleared piles while this was "flying", discard it visually
         if (gameState.centerPileLeft.length === 0 && gameState.centerPileRight.length === 0) {
             return;
         }
@@ -787,6 +815,12 @@ function animateOpponentMove(card, side, callback) {
     const el = card.element;
     const visualSide = (side === 'left') ? 'center-pile-left' : 'center-pile-right';
     const targetEl = document.getElementById(visualSide);
+    if (!targetEl) { 
+    el.remove(); 
+    callback(); 
+    return; 
+}
+
 
     el.style.zIndex = 2000;
 
