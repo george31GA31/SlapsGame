@@ -1,5 +1,5 @@
 /* =========================================
-   ISF SINGLE PLAYER ENGINE v20.0 (With Scoreboard)
+   ISF SINGLE PLAYER ENGINE v23.0 (Fixed & Cleaned)
    ========================================= */
 
 const gameState = {
@@ -57,7 +57,7 @@ window.onload = function() {
     // INITIALIZE SCOREBOARD
     updateScoreboardWidget();
 
-    ; // <--- THIS WAS MISSING
+    startRound(); 
 };
 
 function handleInput(e) {
@@ -433,6 +433,9 @@ function performReveal() {
     gameState.playerReady = false; 
     gameState.aiReady = false;
     
+    checkSlapCondition();
+    if (!gameState.aiLoopRunning) startAILoop();
+}
 function renderCenterPile(side, card) {
     const id = side === 'left' ? 'center-pile-left' : 'center-pile-right';
     const container = document.getElementById(id);
@@ -458,10 +461,13 @@ function attemptAIMove() {
     if (bestMove) {
         gameState.aiProcessing = true; 
         setTimeout(() => {
-            if (!gameState.gameActive) {
-                gameState.aiProcessing = false;
-                return;
+            // NEW: Abort if game paused during wait
+            if (!gameState.gameActive) { 
+                gameState.aiProcessing = false; 
+                return; 
             }
+
+            // Re-check validity in case board changed
             let targetPile = (bestMove.t === 'left') ? gameState.centerPileLeft : gameState.centerPileRight;
             if (!checkPileLogic(bestMove.c, targetPile)) { gameState.aiProcessing = false; return; }
             
