@@ -754,3 +754,40 @@ body {
     background: #ff4444;
     color: white;
 }
+/* =========================================
+   UI FIXES (Transparent Header & Centering)
+   ========================================= */
+
+/* 1. Remove the "Black Block" and float the header */
+.top-bar {
+    position: absolute; /* Floats on top of the background */
+    top: 0;
+    left: 0;
+    width: 100%;
+    background: transparent !important; /* Removes the black color */
+    border-bottom: none !important;     /* Removes the line */
+    box-shadow: none !important;        /* Removes the shadow */
+    pointer-events: none; /* Lets clicks pass through if needed, but allows buttons to work */
+}
+
+/* Re-enable clicking on buttons inside the top bar */
+.top-bar button, .top-bar a, .top-bar .logo-area {
+    pointer-events: auto;
+}
+
+/* 2. Fix Centering for Setup Boxes */
+/* This ensures the setup cards are dead-center on the screen */
+.main-container, .game-body {
+    display: flex;
+    justify-content: center; /* Horizontal Center */
+    align-items: center;     /* Vertical Center */
+    height: 100vh;           /* Full Screen Height */
+    padding-top: 0 !important; /* Remove any padding pushing it down */
+}
+
+/* Ensure the Setup Card doesn't get pushed by the invisible top bar */
+.setup-card {
+    margin: 0 !important; /* Remove auto margins to let flexbox center it */
+    position: relative;
+    top: 0;
+}
