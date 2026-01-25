@@ -546,47 +546,133 @@ function animateAIMoveToLane(card, laneIdx, callback) {
 }
 function makeDraggable(img, cardData) {
     img.onmousedown = (e) => {
-        e.preventDefault(); gameState.globalZ++; img.style.zIndex = gameState.globalZ; img.style.transition = 'none'; 
-        cardData.originalLeft = img.style.left; cardData.originalTop = img.style.top;
-        let shiftX = e.clientX - img.getBoundingClientRect().left; let shiftY = e.clientY - img.getBoundingClientRect().top;
+        e.preventDefault();
+        gameState.globalZ = (gameState.globalZ || 200) + 1;
+        img.style.zIndex = gameState.globalZ;
+        img.style.transition = 'none';
+
+        cardData.originalLeft = img.style.left;
+        cardData.originalTop = img.style.top;
+
+        let shiftX = e.clientX - img.getBoundingClientRect().left;
+        let shiftY = e.clientY - img.getBoundingClientRect().top;
         const box = document.getElementById('player-foundation-area');
+
         function moveAt(pageX, pageY) {
-            const boxRect = box.getBoundingClientRect(); let newLeft = pageX - shiftX - boxRect.left; let newTop = pageY - shiftY - boxRect.top;
-            if (newTop < 0) { if (!gameState.gameActive || !checkLegalPlay(cardData)) newTop = 0; }
-            img.style.left = newLeft + 'px'; img.style.top = newTop + 'px';
+            const boxRect = box.getBoundingClientRect();
+            let newLeft = pageX - shiftX - boxRect.left;
+            let newTop = pageY - shiftY - boxRect.top;
+
+            const cardW = img.offsetWidth;
+            const cardH = img.offsetHeight;
+
+            // Constrain inside box width
+            if (newLeft < 0) newLeft = 0;
+            if (newLeft > boxRect.width - cardW) newLeft = boxRect.width - cardW;
+            if (newTop > boxRect.height - cardH) newTop = boxRect.height - cardH;
+
+            // --- PHYSICAL BORDER LOGIC (UNCHANGED) ---
+            // You can only drag UP if the card is legally playable on AT LEAST one pile.
+            if (newTop < 0) {
+                if (!gameState.gameActive || !checkLegalPlay(cardData)) {
+                    newTop = 0; 
+                }
+            }
+
+            img.style.left = newLeft + 'px';
+            img.style.top = newTop + 'px';
         }
+
         moveAt(e.pageX, e.pageY);
+
         function onMouseMove(event) { moveAt(event.pageX, event.pageY); }
+
         function onMouseUp(event) {
-            document.removeEventListener('mousemove', onMouseMove); document.removeEventListener('mouseup', onMouseUp);
-            img.style.transition = 'all 0.1s ease-out'; 
-            if (gameState.gameActive && parseInt(img.style.top) < -10) {
-                let success = playCardToCenter(cardData, img); if (!success) { img.style.left = cardData.originalLeft; img.style.top = cardData.originalTop; }
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+            img.style.transition = 'all 0.1s ease-out';
+
+            // --- STRICT CONTACT CHECK ---
+            const leftPileEl = document.getElementById('center-pile-left');
+            const rightPileEl = document.getElementById('center-pile-right');
+            
+            const hitsLeft = isOverlapping(img, leftPileEl);
+            const hitsRight = isOverlapping(img, rightPileEl);
+
+            let success = false;
+
+            if (gameState.gameActive) {
+                // If touching Left, ONLY try Left.
+                if (hitsLeft) {
+                    success = playCardToCenter(cardData, img, 'left');
+                } 
+                // If touching Right, ONLY try Right.
+                else if (hitsRight) {
+                    success = playCardToCenter(cardData, img, 'right');
+                }
+                // If touching neither, do nothing (success remains false)
+            }
+
+            // Snap back if not played
+            if (!success) {
+                img.style.left = cardData.originalLeft;
+                img.style.top = cardData.originalTop;
+                
+                // (Multiplayer Sync Code - Only needed in multiplayer-game.js)
+                if (typeof send === 'function' && gameState.conn && gameState.conn.open) {
+                    const boxRect = box.getBoundingClientRect();
+                    const currentLeftPx = parseFloat(img.style.left);
+                    const currentTopPx = parseFloat(img.style.top);
+                    const leftPct = (currentLeftPx / boxRect.width) * 100;
+                    const topPct = (currentTopPx / boxRect.height) * 100;
+                    send({ type: 'OPPONENT_DRAG', cardId: cardData.id, left: leftPct, top: topPct });
+                }
             }
         }
-        document.addEventListener('mousemove', onMouseMove); document.addEventListener('mouseup', onMouseUp);
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
     };
-}
-function checkLegalPlay(card) { if (!gameState.gameActive) return false; return checkPileLogic(card, gameState.centerPileLeft) || checkPileLogic(card, gameState.centerPileRight); }
+}function checkLegalPlay(card) { if (!gameState.gameActive) return false; return checkPileLogic(card, gameState.centerPileLeft) || checkPileLogic(card, gameState.centerPileRight); }
 function checkPileLogic(card, targetPile) {
     if (targetPile.length === 0) return false; const targetCard = targetPile[targetPile.length - 1]; const diff = Math.abs(card.value - targetCard.value); return (diff === 1 || diff === 12);
 }
-function playCardToCenter(card, imgElement) {
+function playCardToCenter(card, imgElement, strictSide) {
     if (!gameState.gameActive) return false;
 
-    let target = null; let side = '';
-    const cardRect = imgElement.getBoundingClientRect(); 
-    const cardCenterX = cardRect.left + (cardRect.width / 2); 
-    const screenCenterX = window.innerWidth / 2;
-    const intendedSide = (cardCenterX < screenCenterX) ? 'left' : 'right';
+    let target = null; 
+    let side = '';
+
+    // --- CHANGE STARTS HERE ---
     
-    const isLeftLegal = checkPileLogic(card, gameState.centerPileLeft); 
-    const isRightLegal = checkPileLogic(card, gameState.centerPileRight);
-    
-    if (intendedSide === 'left' && isLeftLegal) { target = gameState.centerPileLeft; side = 'left'; }
-    else if (intendedSide === 'right' && isRightLegal) { target = gameState.centerPileRight; side = 'right'; }
-    else { if (isLeftLegal) { target = gameState.centerPileLeft; side = 'left'; } else if (isRightLegal) { target = gameState.centerPileRight; side = 'right'; } }
-    
+    // 1. HUMAN LOGIC (Strict Contact Required)
+    if (card.owner === 'player') {
+        if (strictSide === 'left' && checkPileLogic(card, gameState.centerPileLeft)) {
+            target = gameState.centerPileLeft; 
+            side = 'left';
+        } 
+        else if (strictSide === 'right' && checkPileLogic(card, gameState.centerPileRight)) {
+            target = gameState.centerPileRight; 
+            side = 'right';
+        }
+    } 
+    // 2. AI LOGIC (Old Behavior Preserved Completely)
+    else {
+        // This is your original logic, kept strictly for the AI
+        const cardRect = imgElement.getBoundingClientRect(); 
+        const cardCenterX = cardRect.left + (cardRect.width / 2); 
+        const screenCenterX = window.innerWidth / 2;
+        const intendedSide = (cardCenterX < screenCenterX) ? 'left' : 'right';
+        
+        const isLeftLegal = checkPileLogic(card, gameState.centerPileLeft); 
+        const isRightLegal = checkPileLogic(card, gameState.centerPileRight);
+        
+        if (intendedSide === 'left' && isLeftLegal) { target = gameState.centerPileLeft; side = 'left'; }
+        else if (intendedSide === 'right' && isRightLegal) { target = gameState.centerPileRight; side = 'right'; }
+        else { 
+            if (isLeftLegal) { target = gameState.centerPileLeft; side = 'left'; } 
+            else if (isRightLegal) { target = gameState.centerPileRight; side = 'right'; } 
+        }
+    }
     if (target) {
         gameState.playerReady = false; 
         gameState.aiReady = false;
@@ -652,4 +738,15 @@ function updateScoreboardWidget() {
     if(p2R) p2R.innerText = gameState.aiRounds;
     if(p1S) p1S.innerText = gameState.p1Slaps;
     if(p2S) p2S.innerText = gameState.aiSlaps;
+}
+function isOverlapping(element1, element2) {
+    if (!element1 || !element2) return false;
+    const rect1 = element1.getBoundingClientRect();
+    const rect2 = element2.getBoundingClientRect();
+    return !(
+        rect1.right < rect2.left || 
+        rect1.left > rect2.right || 
+        rect1.bottom < rect2.top || 
+        rect1.top > rect2.bottom
+    );
 }
