@@ -11,6 +11,7 @@ const gameState = {
     playerTotal: 26, aiTotal: 26,
 
     gameActive: false,
+    matchEnded: false,
     playerReady: false, aiReady: false,
     
     isHost: false,
@@ -112,19 +113,31 @@ function handleConnection(connection) {
 function processNetworkData(data) {
     switch(data.type) {
           case 'CONCEDED':
-            showEndGame("YOU WIN!", true, `${gameState.opponentName} conceded the match.`);
+            // Only count concession if match isn't already over
+            if (!gameState.matchEnded) {
+                showEndGame("YOU WIN!", true, `${gameState.opponentName} conceded.`);
+            }
             break;
+
+        case 'OPPONENT_LEFT':
+            // Opponent quit AFTER the match ended
+            handleOpponentLeft();
+            break;
+
         case 'REMATCH_REQUEST':
             document.getElementById('rematch-modal').classList.remove('hidden');
             break;
+
         case 'REMATCH_ACCEPTED':
-            // Opponent said yes, reset the board and start
             performSoftReset();
             break;
+
         case 'REMATCH_DECLINED':
             const statusText = document.getElementById('rematch-status-text');
-            if(statusText) statusText.innerText = "Opponent declined.";
-            setTimeout(() => window.location.href = 'index.html', 2000);
+            if(statusText) {
+                statusText.innerText = "Opponent is busy.";
+                statusText.style.color = "#ff4444";
+            }
             break;
         case 'REQUEST_DEAL':
             // Host received the "I'm Listening" signal from Guest.
@@ -775,21 +788,68 @@ function handleRoundOver(winner, myNextTotal, oppNextTotal) {
     };
     modal.classList.remove('hidden');
 }
-function sendGameOver(msg, isWin) { send({ type: 'GAME_OVER', msg: msg, isWin: isWin }); }
-function showEndGame(title, isWin) {
-    const modal = document.getElementById('game-message');
-    modal.querySelector('h1').innerText = title; modal.querySelector('h1').style.color = isWin ? '#66ff66' : '#ff7575';
-    modal.querySelector('p').innerText = "Refresh to play again."; document.getElementById('msg-btn').classList.add('hidden'); modal.classList.remove('hidden');
+function sendGameOver(msg, isWin) { 
+    gameState.matchEnded = true; // Lock the result
+    send({ type: 'GAME_OVER', msg: msg, isWin: isWin }); 
 }
-// --- QUIT & CONCEDE LOGIC ---
+
+function showEndGame(title, isWin, subMsg) {
+    gameState.matchEnded = true; // Lock the result locally
+
+    const modal = document.getElementById('game-message');
+    modal.querySelector('h1').innerText = title;
+    modal.querySelector('h1').style.color = isWin ? '#66ff66' : '#ff7575';
+    modal.querySelector('p').innerText = subMsg || "Game Over";
+    
+    const roundBtn = document.getElementById('msg-btn');
+    if(roundBtn) roundBtn.classList.add('hidden');
+
+    let actionContainer = document.getElementById('end-game-buttons');
+    if (!actionContainer) {
+        actionContainer = document.createElement('div');
+        actionContainer.id = 'end-game-buttons';
+        actionContainer.style.cssText = "display:flex; gap:10px; justify-content:center; margin-top:20px;";
+        modal.appendChild(actionContainer);
+    }
+
+    // Two Buttons: Rematch & Quit
+    actionContainer.innerHTML = `
+        <button class="btn-action-small" onclick="sendRematchRequest()" style="background:#444; width:auto;">
+            <i class="fa-solid fa-rotate-right"></i> REMATCH
+        </button>
+        <button class="btn-action-small" onclick="quitMatch()" style="background:#ff4444; width:auto;">
+            Quit to Home Page
+        </button>
+    `;
+    modal.classList.remove('hidden');
+}
+// --- NEW LOGIC: QUIT, REMATCH, & RESET ---
+
 function quitMatch() {
-    // Tell opponent I gave up
-    send({ type: 'CONCEDED' });
-    // Go home immediately
+    if (gameState.matchEnded) {
+        // Game is already over -> Just notify opponent I left (Does not change score)
+        send({ type: 'OPPONENT_LEFT' });
+    } else {
+        // Game is active -> I forfeit
+        send({ type: 'CONCEDED' });
+    }
     window.location.href = 'index.html';
 }
 
-// --- REMATCH LOGIC ---
+function handleOpponentLeft() {
+    // Called when the other player leaves AFTER the match ends
+    const btnContainer = document.getElementById('end-game-buttons');
+    if (btnContainer) {
+        // Remove Rematch option
+        btnContainer.innerHTML = `
+            <p style="color:#ffcc00; font-weight:bold; margin-bottom:10px;">Opponent has left.</p>
+            <button class="btn-action-small" onclick="window.location.href='index.html'" style="background:#ff4444; width:auto;">
+                Quit to Home Page
+            </button>
+        `;
+    }
+}
+
 function sendRematchRequest() {
     const btnContainer = document.getElementById('end-game-buttons');
     if(btnContainer) {
@@ -807,11 +867,12 @@ function acceptRematch() {
 function declineRematch() {
     document.getElementById('rematch-modal').classList.add('hidden');
     send({ type: 'REMATCH_DECLINED' });
-    window.location.href = 'index.html';
+    // Keep them on the screen, opponent sees "Opponent is busy"
 }
 
 function performSoftReset() {
-    // Reset Game State without reloading page (keeping connection alive)
+    // Reset state for new match
+    gameState.matchEnded = false;
     gameState.playerTotal = 26; 
     gameState.aiTotal = 26;
     gameState.playerHand = [];
@@ -828,27 +889,20 @@ function performSoftReset() {
     document.getElementById('center-pile-right').innerHTML = '';
     document.getElementById('player-foundation-area').innerHTML = '';
     document.getElementById('ai-foundation-area').innerHTML = '';
-    
-    // Reset Borrowed Tags
     document.getElementById('borrowed-player').classList.add('hidden');
     document.getElementById('borrowed-ai').classList.add('hidden');
     
-    // Update Scoreboard
     updateScoreboardWidget();
-    
-    // Reset badges
     updatePenaltyUI();
 
-    // Start again
     if (gameState.isHost) {
         startRound();
     } else {
-        // Guest waits for INIT_ROUND from Host
         console.log("Waiting for Host to deal new round...");
     }
 }
+
 function updatePenaltyUI() {
-    // Clear penalty boxes
     const pBox = document.getElementById('player-penalties');
     const aBox = document.getElementById('ai-penalties');
     if(pBox) pBox.innerHTML = '';
