@@ -422,20 +422,7 @@ function playCardToCenter(card, imgElement) {
         target.push(card);
         gameState.playerHand = gameState.playerHand.filter(c => c.id !== card.id); 
         
-        // SCORING LOGIC UPDATE: Decrease the score of the deck OWNER
-        // In multiplayer, 'card.owner' isn't explicitly set for deck cards, 
-        // so we use the borrowing flag logic if needed, but primarily 
-        // playing from your hand means decreasing your total.
-        // However, if we borrowed, we are playing opponent's cards.
-        
-        // Check if I am borrowing cards from opponent
-        // In this game model, if I borrowed, my deck is technically opponent's cards.
-        // But for simplicity, the total score tracks whose cards are remaining.
-        
-        // If I am 'borrowing', it means I took cards from opponent's deck to my deck.
-        // So they are now in my deck. When I play them, they leave my control.
-        // The previous logic was: "If I borrow, opponent loses score".
-        
+        // SCORING LOGIC UPDATE: Owner pays
         const pBorrowing = !document.getElementById('borrowed-player').classList.contains('hidden');
         if (pBorrowing) {
              gameState.aiTotal--; // Opponent loses a point (it was their card)
@@ -485,9 +472,7 @@ function executeOpponentMove(cardId, side) {
 
     gameState.aiHand = gameState.aiHand.filter(c => c.id !== cardId);
     
-    // OPPONENT SCORING LOGIC
-    // Check if opponent is borrowing
-    // We can check the UI flag for opponent's borrow state
+    // OPPONENT SCORING LOGIC: Owner pays
     const aBorrowing = !document.getElementById('borrowed-ai').classList.contains('hidden');
     
     if (aBorrowing) {
@@ -601,7 +586,6 @@ function renderCenterPile(side, card) {
     container.appendChild(img);
 
     // 2. Trigger visible render after a micro-delay
-    // This ensures the image data is ready before the user sees it
     requestAnimationFrame(() => {
         setTimeout(() => {
             img.style.opacity = '1';
@@ -724,7 +708,7 @@ function applySlapResult(winner) {
     gameState.centerPileLeft = []; 
     gameState.centerPileRight = [];
     
-    // FORCE DOM CLEAR (More robust than just innerHTML)
+    // FORCE DOM CLEAR
     const leftPile = document.getElementById('center-pile-left');
     const rightPile = document.getElementById('center-pile-right');
     while (leftPile.firstChild) leftPile.removeChild(leftPile.firstChild);
