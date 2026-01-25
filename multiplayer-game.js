@@ -365,6 +365,7 @@ function makeDraggable(img, cardData) {
 
         let shiftX = e.clientX - img.getBoundingClientRect().left;
         let shiftY = e.clientY - img.getBoundingClientRect().top;
+
         const box = document.getElementById('player-foundation-area');
 
         function moveAt(pageX, pageY) {
@@ -377,26 +378,19 @@ function makeDraggable(img, cardData) {
 
             if (newLeft < 0) newLeft = 0;
             if (newLeft > boxRect.width - cardW) newLeft = boxRect.width - cardW;
+
             if (newTop > boxRect.height - cardH) newTop = boxRect.height - cardH;
 
-            // THE PHYSICAL WALL (Multiplayer Version)
+            // --- THE PHYSICAL WALL ---
+            // If pulling UP, check if legal
             if (newTop < 0) {
-                const leftPileEl = document.getElementById('center-pile-left');
-                const rightPileEl = document.getElementById('center-pile-right');
-                
-                const hitsLeft = isOverlapping(img, leftPileEl);
-                const hitsRight = isOverlapping(img, rightPileEl);
-                
-                const validLeft = hitsLeft && checkPileLogic(cardData, gameState.centerPileLeft);
-                const validRight = hitsRight && checkPileLogic(cardData, gameState.centerPileRight);
-
-                if (!gameState.gameActive || (!validLeft && !validRight)) {
-                    newTop = 0; 
+                if (!gameState.gameActive || !checkLegalPlay(cardData)) {
+                    newTop = 0; // The Wall
                 }
             }
 
             img.style.left = newLeft + 'px';
-            img.style.top = newTop + 'px';
+            img.style.top = newTop + 'px'; // FIXED: VERTICAL MOVEMENT APPLIED
         }
 
         moveAt(e.pageX, e.pageY);
@@ -408,34 +402,19 @@ function makeDraggable(img, cardData) {
             document.removeEventListener('mouseup', onMouseUp);
             img.style.transition = 'all 0.1s ease-out';
 
-            const leftPileEl = document.getElementById('center-pile-left');
-            const rightPileEl = document.getElementById('center-pile-right');
-            const hitsLeft = isOverlapping(img, leftPileEl);
-            const hitsRight = isOverlapping(img, rightPileEl);
-
-            let success = false;
-            if (gameState.gameActive && (hitsLeft || hitsRight)) {
-                let targetSide = '';
-                if (hitsLeft && checkPileLogic(cardData, gameState.centerPileLeft)) targetSide = 'left';
-                else if (hitsRight && checkPileLogic(cardData, gameState.centerPileRight)) targetSide = 'right';
-                
-                if (targetSide) {
-                    success = playCardToCenter(cardData, img, targetSide);
+            if (gameState.gameActive && parseInt(img.style.top) < -20) {
+                let success = playCardToCenter(cardData, img);
+                if (!success) {
+                    img.style.left = cardData.originalLeft;
+                    img.style.top = cardData.originalTop;
                 }
-            }
-
-            if (!success) {
-                img.style.left = cardData.originalLeft;
-                img.style.top = cardData.originalTop;
-                
-                if (gameState.conn && gameState.conn.open) {
-                    const boxRect = box.getBoundingClientRect();
-                    const currentLeftPx = parseFloat(img.style.left);
-                    const currentTopPx = parseFloat(img.style.top);
-                    const leftPct = (currentLeftPx / boxRect.width) * 100;
-                    const topPct = (currentTopPx / boxRect.height) * 100;
-                    send({ type: 'OPPONENT_DRAG', cardId: cardData.id, left: leftPct, top: topPct });
-                }
+            } else {
+                const boxRect = box.getBoundingClientRect();
+                const currentLeftPx = parseFloat(img.style.left);
+                const currentTopPx = parseFloat(img.style.top);
+                const leftPct = (currentLeftPx / boxRect.width) * 100;
+                const topPct = (currentTopPx / boxRect.height) * 100;
+                send({ type: 'OPPONENT_DRAG', cardId: cardData.id, left: leftPct, top: topPct });
             }
         }
         document.addEventListener('mousemove', onMouseMove);
@@ -452,26 +431,28 @@ function executeOpponentDrag(cardId, leftPct, topPct) {
 }
 
 // --- CARD PLAYING ---
-function playCardToCenter(card, imgElement, forcedSide) {
-    if (!gameState.gameActive) return false;
+function playCardToCenter(card, imgElement) {
+    let target = null; let side = '';
+    const cardRect = imgElement.getBoundingClientRect(); 
+    const cardCenterX = cardRect.left + (cardRect.width / 2); 
+    const screenCenterX = window.innerWidth / 2;
+    const intendedSide = (cardCenterX < screenCenterX) ? 'left' : 'right';
+    
+    const isLeftLegal = checkPileLogic(card, gameState.centerPileLeft);
+    const isRightLegal = checkPileLogic(card, gameState.centerPileRight);
 
-    let targetPile = null;
-    let side = '';
+    if (intendedSide === 'left' && isLeftLegal) { target = gameState.centerPileLeft; side = 'left'; }
+    else if (intendedSide === 'right' && isRightLegal) { target = gameState.centerPileRight; side = 'right'; }
+    else if (isLeftLegal) { target = gameState.centerPileLeft; side = 'left'; }
+    else if (isRightLegal) { target = gameState.centerPileRight; side = 'right'; }
 
-    if (forcedSide === 'left') { targetPile = gameState.centerPileLeft; side = 'left'; }
-    else if (forcedSide === 'right') { targetPile = gameState.centerPileRight; side = 'right'; }
-    else { return false; }
-
-    // RACE CONDITION CHECK
-    if (!checkPileLogic(card, targetPile)) {
-        console.log("Move rejected: Pile changed state.");
-        return false;
-    }
-
-    if (targetPile) {
-        targetPile.push(card);
+    if (target) {
+        target.push(card);
         gameState.playerHand = gameState.playerHand.filter(c => c.id !== card.id); 
+        
+        // --- REPLACE SCORING LOGIC WITH THIS ONE LINE ---
         gameState.playerTotal--; 
+        // -----------------------------------------------
 
         send({ type: 'OPPONENT_MOVE', cardId: card.id, targetSide: side });
 
@@ -479,21 +460,28 @@ function playCardToCenter(card, imgElement, forcedSide) {
         document.getElementById('player-draw-deck').classList.remove('deck-ready');
         document.getElementById('ai-draw-deck').classList.remove('deck-ready');
 
-        if(imgElement) imgElement.remove(); 
-        renderCenterPile(side, card); 
-        updateScoreboard();
+        imgElement.remove(); renderCenterPile(side, card); updateScoreboard();
         checkSlapCondition(); 
 
+        // 1. MATCH WIN CHECK
         if (gameState.playerTotal <= 0) {
             sendGameOver(gameState.myName + " WINS!", false);
             showEndGame("YOU WIN THE MATCH!", true);
             return true;
         }
 
+        // 2. ROUND WIN CHECK
         if (gameState.playerHand.length === 0) {
             const nextPTotal = gameState.playerTotal;
             const nextATotal = 52 - gameState.playerTotal;
-            send({ type: 'ROUND_OVER', winner: 'opponent', nextPTotal: nextATotal, nextATotal: nextPTotal });
+            
+            send({ 
+                type: 'ROUND_OVER', 
+                winner: 'opponent', 
+                nextPTotal: nextATotal, 
+                nextATotal: nextPTotal 
+            });
+
             handleRoundOver('player', nextPTotal, nextATotal);
         }
 
@@ -501,6 +489,7 @@ function playCardToCenter(card, imgElement, forcedSide) {
     }
     return false; 
 }
+
 function executeOpponentMove(cardId, side) {
     const card = gameState.aiHand.find(c => c.id === cardId);
     if (!card) return; 
@@ -918,10 +907,4 @@ function updatePenaltyUI() {
     const aBox = document.getElementById('ai-penalties');
     if(pBox) pBox.innerHTML = '';
     if(aBox) aBox.innerHTML = '';
-}
-function isOverlapping(element1, element2) {
-    if (!element1 || !element2) return false;
-    const rect1 = element1.getBoundingClientRect();
-    const rect2 = element2.getBoundingClientRect();
-    return !(rect1.right < rect2.left || rect1.left > rect2.right || rect1.bottom < rect2.top || rect1.top > rect2.bottom);
 }
