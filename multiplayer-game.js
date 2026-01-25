@@ -309,6 +309,7 @@ function makeDraggable(img, cardData) {
             }
 
             img.style.left = newLeft + 'px';
+            img.style.top = newTop + 'px';
         }
 
         moveAt(e.pageX, e.pageY);
