@@ -587,10 +587,32 @@ function makeDraggable(img, cardData) {
             const boxRect = box.getBoundingClientRect();
             let newLeft = pageX - shiftX - boxRect.left;
             let newTop = pageY - shiftY - boxRect.top;
-
+            
             const cardW = img.offsetWidth;
+            const cardH = img.offsetHeight;
+
+            // 1. Constrain Left/Right/Bottom strictly
             if (newLeft < 0) newLeft = 0;
             if (newLeft > boxRect.width - cardW) newLeft = boxRect.width - cardW;
+            if (newTop > boxRect.height - cardH) newTop = boxRect.height - cardH;
+
+            // 2. THE PHYSICAL WALL (Top Edge)
+            if (newTop < 0) {
+                // Only allow dragging OUT if touching a VALID pile
+                const leftPileEl = document.getElementById('center-pile-left');
+                const rightPileEl = document.getElementById('center-pile-right');
+                
+                const hitsLeft = isOverlapping(img, leftPileEl);
+                const hitsRight = isOverlapping(img, rightPileEl);
+                
+                const validLeft = hitsLeft && checkPileLogic(cardData, gameState.centerPileLeft);
+                const validRight = hitsRight && checkPileLogic(cardData, gameState.centerPileRight);
+
+                // If NOT touching a valid pile, hit the wall
+                if (!gameState.gameActive || (!validLeft && !validRight)) {
+                    newTop = 0; 
+                }
+            }
 
             img.style.left = newLeft + 'px';
             img.style.top = newTop + 'px';
@@ -605,7 +627,7 @@ function makeDraggable(img, cardData) {
             document.removeEventListener('mouseup', onMouseUp);
             img.style.transition = 'all 0.1s ease-out';
 
-            // STRICT OVERLAP CHECK
+            // STRICT OVERLAP CHECK ON DROP
             const leftPileEl = document.getElementById('center-pile-left');
             const rightPileEl = document.getElementById('center-pile-right');
             
@@ -613,31 +635,27 @@ function makeDraggable(img, cardData) {
             const hitsRight = isOverlapping(img, rightPileEl);
 
             let success = false;
+            // Only attempt play if touching a pile
             if (gameState.gameActive && (hitsLeft || hitsRight)) {
-                const targetSide = hitsLeft ? 'left' : 'right';
-                success = playCardToCenter(cardData, img, targetSide);
+                // Prefer the side we are valid on
+                let targetSide = '';
+                if (hitsLeft && checkPileLogic(cardData, gameState.centerPileLeft)) targetSide = 'left';
+                else if (hitsRight && checkPileLogic(cardData, gameState.centerPileRight)) targetSide = 'right';
+                
+                if (targetSide) {
+                    success = playCardToCenter(cardData, img, targetSide);
+                }
             }
 
             if (!success) {
                 img.style.left = cardData.originalLeft;
                 img.style.top = cardData.originalTop;
-                
-                // Sync "Drop/Snap Back" to opponent
-                if (gameState.conn && gameState.conn.open) {
-                    const boxRect = box.getBoundingClientRect();
-                    const currentLeftPx = parseFloat(img.style.left);
-                    const currentTopPx = parseFloat(img.style.top);
-                    const leftPct = (currentLeftPx / boxRect.width) * 100;
-                    const topPct = (currentTopPx / boxRect.height) * 100;
-                    send({ type: 'OPPONENT_DRAG', cardId: cardData.id, left: leftPct, top: topPct });
-                }
             }
         }
         document.addEventListener('mousemove', onMouseMove);
         document.addEventListener('mouseup', onMouseUp);
     };
 }
-
 // --- UPDATED PLAY LOGIC (MULTIPLAYER) ---
 function playCardToCenter(card, imgElement, forcedSide) {
     if (!gameState.gameActive) return false;
