@@ -11,11 +11,8 @@
 </head>
 <body class="game-body" ondragstart="return false;" ondrop="return false;">
     <div class="bottom-left-actions">
-    <button class="btn-action-small btn-quit" onclick="window.location.href='index.html'">
+    <button class="btn-action-small btn-quit" onclick="quitMatch()">
         <i class="fa-solid fa-door-open"></i> Quit Match
-    </button>
-    <button class="btn-action-small" onclick="window.location.reload()">
-        <i class="fa-solid fa-rotate-right"></i> Restart
     </button>
 </div>
     <div id="scoreboard-widget" class="scoreboard-widget">
@@ -81,7 +78,14 @@
         </div>
         <div class="foundation-box player-box" id="player-foundation-area"></div>
     </div>
-
+<div id="rematch-modal" class="message-modal hidden" style="z-index: 3000;">
+    <h1>REMATCH?</h1>
+    <p>Your opponent wants to play again.</p>
+    <div style="display:flex; gap:15px; justify-content:center; margin-top:20px;">
+        <button class="btn-action-small" onclick="acceptRematch()" style="background:#66ff66; color:#000;">YES</button>
+        <button class="btn-action-small" onclick="declineRematch()" style="background:#ff4444;">NO</button>
+    </div>
+</div>
     <script src="multiplayer-game.js"></script>
 </body>
 </html>
