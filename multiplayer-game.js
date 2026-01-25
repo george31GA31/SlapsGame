@@ -163,8 +163,11 @@ function processNetworkData(data) {
         case 'SLAP_RESULT':
             applySlapResult(data.winner);
             break;
-            
-        case 'GAME_OVER':
+         case 'ROUND_OVER':
+            // Opponent finished their hand first
+            handleRoundOver(data.winner, data.nextPTotal, data.nextATotal);
+            break;   
+         case 'GAME_OVER':
             showEndGame(data.msg, data.isWin);
             break;
     }
@@ -404,7 +407,7 @@ function playCardToCenter(card, imgElement) {
     else if (isLeftLegal) { target = gameState.centerPileLeft; side = 'left'; }
     else if (isRightLegal) { target = gameState.centerPileRight; side = 'right'; }
 
-    if (target) {
+if (target) {
         target.push(card);
         gameState.playerHand = gameState.playerHand.filter(c => c.id !== card.id); 
         gameState.playerTotal--;
@@ -418,14 +421,33 @@ function playCardToCenter(card, imgElement) {
         imgElement.remove(); renderCenterPile(side, card); updateScoreboard();
         checkSlapCondition(); 
 
+        // 1. MATCH WIN CHECK (0 Cards Total)
         if (gameState.playerTotal <= 0) {
-            sendGameOver(gameState.opponentName + " WINS!", false);
+            sendGameOver(gameState.myName + " WINS!", false);
             showEndGame("YOU WIN THE MATCH!", true);
+            return true;
         }
+
+        // 2. ROUND WIN CHECK (0 Cards in Hand)
+        if (gameState.playerHand.length === 0) {
+            // Logic: Winner keeps their current total. Loser takes the rest (52 - Winner).
+            const nextPTotal = gameState.playerTotal;       // My new total
+            const nextATotal = 52 - gameState.playerTotal;  // Opponent's new total
+            
+            // Tell opponent they lost the round
+            send({ 
+                type: 'ROUND_OVER', 
+                winner: 'opponent', // From their perspective, 'opponent' won (which is me)
+                nextPTotal: nextATotal, // Their new total
+                nextATotal: nextPTotal  // Their opponent's new total (mine)
+            });
+
+            // Handle it locally
+            handleRoundOver('player', nextPTotal, nextATotal);
+        }
+
         return true; 
     }
-    return false; 
-}
 
 function executeOpponentMove(cardId, side) {
     const card = gameState.aiHand.find(c => c.id === cardId);
@@ -621,6 +643,44 @@ function applySlapResult(winner) {
 function issuePenalty(target, reason) {
     if (target === 'player') { gameState.playerTotal += 3; gameState.aiTotal = Math.max(0, gameState.aiTotal - 3); }
     updateScoreboard();
+}
+   function handleRoundOver(winner, myNextTotal, oppNextTotal) {
+    gameState.gameActive = false;
+    
+    // 1. UPDATE SCORES FOR NEXT ROUND
+    gameState.playerTotal = myNextTotal;
+    gameState.aiTotal = oppNextTotal;
+
+    // 2. CLEAR CENTER PILE
+    // Reset the internal arrays so the game knows they are empty
+    gameState.centerPileLeft = [];
+    gameState.centerPileRight = [];
+    
+    // Wipe the visual cards from the screen
+    document.getElementById('center-pile-left').innerHTML = '';
+    document.getElementById('center-pile-right').innerHTML = '';
+
+    // 3. SHOW ROUND OVER POPUP
+    const modal = document.getElementById('game-message');
+    const btn = document.getElementById('msg-btn');
+    
+    if (winner === 'player') {
+        modal.querySelector('h1').innerText = "ROUND WON!";
+        modal.querySelector('p').innerText = `You start next round with ${myNextTotal} cards.`;
+    } else {
+        modal.querySelector('h1').innerText = "ROUND LOST!";
+        modal.querySelector('p').innerText = `${gameState.opponentName} starts next round with ${oppNextTotal} cards.`;
+    }
+
+    btn.innerText = "CONTINUE";
+    btn.classList.remove('hidden');
+    btn.onclick = function() {
+        modal.classList.add('hidden');
+        // Both players click continue, but only Host triggers the deal for the new round
+        if (gameState.isHost) startRound(); 
+    };
+    
+    modal.classList.remove('hidden');
 }
 function sendGameOver(msg, isWin) { send({ type: 'GAME_OVER', msg: msg, isWin: isWin }); }
 function showEndGame(title, isWin) {
