@@ -616,12 +616,27 @@ function showRoundMessage(title, sub) {
     modal.classList.remove('hidden');
 }
 function showEndGame(title, isWin) {
-    const modal = document.getElementById('game-message'); modal.querySelector('h1').innerText = title; modal.querySelector('h1').style.color = isWin ? '#66ff66' : '#ff7575';
-    modal.querySelector('p').innerText = "Return to Menu to play again.";
-    const btn = document.getElementById('msg-btn'); btn.innerText = "MAIN MENU"; btn.onclick = () => window.location.href = 'index.html';
+    const modal = document.getElementById('game-message');
+    modal.querySelector('h1').innerText = title;
+    modal.querySelector('h1').style.color = isWin ? '#66ff66' : '#ff7575';
+    
+    const contentArea = modal.querySelector('p');
+    contentArea.innerHTML = `
+        <div style="display:flex; gap:10px; justify-content:center; margin-top:20px;">
+            <button class="btn-action-small" onclick="location.reload()" style="background:#444; width:auto;">
+                <i class="fa-solid fa-rotate-right"></i> REMATCH
+            </button>
+            <button class="btn-action-small" onclick="window.location.href='index.html'" style="background:#ff4444; width:auto;">
+                MAIN MENU
+            </button>
+        </div>
+    `;
+    
+    const oldBtn = document.getElementById('msg-btn');
+    if(oldBtn) oldBtn.classList.add('hidden');
+    
     modal.classList.remove('hidden');
 }
-
 function updateScoreboardWidget() {
     const p1Name = document.getElementById('sb-p1-name');
     const p2Name = document.getElementById('sb-p2-name');
