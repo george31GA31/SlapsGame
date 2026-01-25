@@ -566,13 +566,15 @@ function makeDraggable(img, cardData) {
             const cardW = img.offsetWidth;
             const cardH = img.offsetHeight;
 
-            // Constrain inside box width
+            // Constrain Width
             if (newLeft < 0) newLeft = 0;
             if (newLeft > boxRect.width - cardW) newLeft = boxRect.width - cardW;
+            
+            // Constrain Bottom
             if (newTop > boxRect.height - cardH) newTop = boxRect.height - cardH;
 
-            // --- PHYSICAL BORDER LOGIC (UNCHANGED) ---
-            // You can only drag UP if the card is legally playable on AT LEAST one pile.
+            // --- THE PHYSICAL WALL ---
+            // If trying to drag UP (negative top), only allow if legally playable
             if (newTop < 0) {
                 if (!gameState.gameActive || !checkLegalPlay(cardData)) {
                     newTop = 0; 
@@ -592,46 +594,38 @@ function makeDraggable(img, cardData) {
             document.removeEventListener('mouseup', onMouseUp);
             img.style.transition = 'all 0.1s ease-out';
 
-            // --- STRICT CONTACT CHECK ---
-            const leftPileEl = document.getElementById('center-pile-left');
-            const rightPileEl = document.getElementById('center-pile-right');
-            
-            const hitsLeft = isOverlapping(img, leftPileEl);
-            const hitsRight = isOverlapping(img, rightPileEl);
-
-            let success = false;
-
-            if (gameState.gameActive) {
-                // If touching Left, ONLY try Left.
-                if (hitsLeft) {
-                    success = playCardToCenter(cardData, img, 'left');
-                } 
-                // If touching Right, ONLY try Right.
-                else if (hitsRight) {
-                    success = playCardToCenter(cardData, img, 'right');
-                }
-                // If touching neither, do nothing (success remains false)
-            }
-
-            // Snap back if not played
-            if (!success) {
-                img.style.left = cardData.originalLeft;
-                img.style.top = cardData.originalTop;
+            // --- CRITICAL FIX ---
+            // Only attempt to "Play" (or Snap Back) if we are outside the foundation boundary.
+            if (parseInt(img.style.top) < -10) {
                 
-                // (Multiplayer Sync Code - Only needed in multiplayer-game.js)
-                if (typeof send === 'function' && gameState.conn && gameState.conn.open) {
-                    const boxRect = box.getBoundingClientRect();
-                    const currentLeftPx = parseFloat(img.style.left);
-                    const currentTopPx = parseFloat(img.style.top);
-                    const leftPct = (currentLeftPx / boxRect.width) * 100;
-                    const topPct = (currentTopPx / boxRect.height) * 100;
-                    send({ type: 'OPPONENT_DRAG', cardId: cardData.id, left: leftPct, top: topPct });
+                const leftPileEl = document.getElementById('center-pile-left');
+                const rightPileEl = document.getElementById('center-pile-right');
+                const hitsLeft = isOverlapping(img, leftPileEl);
+                const hitsRight = isOverlapping(img, rightPileEl);
+
+                let success = false;
+
+                if (gameState.gameActive) {
+                    if (hitsLeft) {
+                        success = playCardToCenter(cardData, img, 'left');
+                    } else if (hitsRight) {
+                        success = playCardToCenter(cardData, img, 'right');
+                    }
+                }
+
+                // If we dragged OUT but failed to play (didn't touch, or illegal move), SNAP BACK.
+                if (!success) {
+                    img.style.left = cardData.originalLeft;
+                    img.style.top = cardData.originalTop;
                 }
             }
+            // If top >= -10, do NOTHING. The card stays where you dragged it (Free Drag).
         }
+        
         document.addEventListener('mousemove', onMouseMove);
         document.addEventListener('mouseup', onMouseUp);
     };
+}
 }function checkLegalPlay(card) { if (!gameState.gameActive) return false; return checkPileLogic(card, gameState.centerPileLeft) || checkPileLogic(card, gameState.centerPileRight); }
 function checkPileLogic(card, targetPile) {
     if (targetPile.length === 0) return false; const targetCard = targetPile[targetPile.length - 1]; const diff = Math.abs(card.value - targetCard.value); return (diff === 1 || diff === 12);
