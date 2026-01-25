@@ -234,20 +234,14 @@ function startRound() {
     gameState.aiDeck = aAllCards;
 
     let pBorrow = false, aBorrow = false;
-    
-    // --- FIX: Update Totals when Borrowing ---
     if (gameState.playerDeck.length === 0 && gameState.aiDeck.length > 1) {
         const steal = Math.floor(gameState.aiDeck.length / 2);
         gameState.playerDeck = gameState.aiDeck.splice(0, steal);
-        gameState.playerTotal += steal; // Update Host Score
-        gameState.aiTotal -= steal;     // Update Host Score
         pBorrow = true;
     }
     if (gameState.aiDeck.length === 0 && gameState.playerDeck.length > 1) {
         const steal = Math.floor(gameState.playerDeck.length / 2);
         gameState.aiDeck = gameState.playerDeck.splice(0, steal);
-        gameState.aiTotal += steal;     // Update Host Score
-        gameState.playerTotal -= steal; // Update Host Score
         aBorrow = true;
     }
 
@@ -620,16 +614,39 @@ function performReveal() {
     document.getElementById('player-draw-deck').classList.remove('deck-ready');
     document.getElementById('ai-draw-deck').classList.remove('deck-ready');
 
-    // 1. Check for Shortage & Borrow (AND UPDATE SCORES)
+    // 1. Reset Borrowed Tags
+    document.getElementById('borrowed-player').classList.add('hidden');
+    document.getElementById('borrowed-ai').classList.add('hidden');
+
+    // 2. Check for Shortage & Borrow (NO SCORE CHANGE)
     if (gameState.playerDeck.length === 0 && gameState.aiDeck.length > 0) {
         const steal = Math.floor(gameState.aiDeck.length / 2);
         if (steal > 0) {
             gameState.playerDeck = gameState.playerDeck.concat(gameState.aiDeck.splice(0, steal));
-            gameState.playerTotal += steal;
-            gameState.aiTotal -= steal;
             document.getElementById('borrowed-player').classList.remove('hidden');
         }
     }
+    if (gameState.aiDeck.length === 0 && gameState.playerDeck.length > 0) {
+        const steal = Math.floor(gameState.playerDeck.length / 2);
+        if (steal > 0) {
+            gameState.aiDeck = gameState.aiDeck.concat(gameState.playerDeck.splice(0, steal));
+            document.getElementById('borrowed-ai').classList.remove('hidden');
+        }
+    }
+
+    // 3. Play Cards
+    gameState.playerTotal--; 
+    gameState.aiTotal--;
+
+    if (gameState.playerDeck.length > 0) { let c = gameState.playerDeck.pop(); gameState.centerPileRight.push(c); renderCenterPile('right', c); }
+    if (gameState.aiDeck.length > 0) { let c = gameState.aiDeck.pop(); gameState.centerPileLeft.push(c); renderCenterPile('left', c); }
+    
+    updateScoreboard();
+    gameState.gameActive = true; 
+    gameState.playerReady = false; 
+    gameState.aiReady = false;
+    checkSlapCondition();
+}
     if (gameState.aiDeck.length === 0 && gameState.playerDeck.length > 0) {
         const steal = Math.floor(gameState.playerDeck.length / 2);
         if (steal > 0) {
