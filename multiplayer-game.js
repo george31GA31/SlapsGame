@@ -1,5 +1,5 @@
 /* =========================================
-   ISF MULTIPLAYER ENGINE v5.0 (Nicknames, Boundaries & Sync)
+   ISF MULTIPLAYER ENGINE v6.0 (Complete Fix)
    ========================================= */
 
 const gameState = {
@@ -16,7 +16,7 @@ const gameState = {
     isHost: false,
     conn: null,
     
-    opponentName: "OPPONENT", // New: Stores the other player's name
+    opponentName: "OPPONENT",
     myName: "ME",
     
     slapActive: false,
@@ -25,7 +25,11 @@ const gameState = {
     
     playerYellows: 0, playerReds: 0,
     aiYellows: 0, aiReds: 0,
-    difficulty: 1
+    difficulty: 1,
+
+    // SCOREBOARD STATE
+    p1Rounds: 0, aiRounds: 0,
+    p1Slaps: 0, aiSlaps: 0
 };
 
 const SUITS = ['hearts', 'diamonds', 'clubs', 'spades'];
@@ -45,8 +49,12 @@ class Card {
 window.onload = function() {
     gameState.playerTotal = 26; gameState.aiTotal = 26;
     gameState.myName = localStorage.getItem('isf_my_name') || "Player";
+    
     document.addEventListener('keydown', handleInput);
     initNetwork();
+
+    // Initialize Scoreboard UI
+    updateScoreboardWidget();
 
     // --- PANIC LOOP ---
     // If I am a Guest, connected, but have NO cards... keep asking!
@@ -55,7 +63,7 @@ window.onload = function() {
             console.warn("PANIC: Hand is empty! Asking again...");
             send({ type: 'REQUEST_DEAL', name: gameState.myName });
         }
-    }, 2000); // Check every 2 seconds
+    }, 2000); 
 };
 
 function initNetwork() {
@@ -90,10 +98,9 @@ function handleConnection(connection) {
         console.log("CONNECTED!");
         
         // 1. Send Name immediately
-        send({ type: 'NAME_REPLY', name: gameState.myName }); // Changed to match your existing logic
+        send({ type: 'NAME_REPLY', name: gameState.myName });
         
         // 2. THE FIX: If I am the Guest, I MUST ask for the deck now.
-        // The Host will NOT send it until I ask.
         if (!gameState.isHost) {
             console.log("GUEST: Asking for deck...");
             send({ type: 'REQUEST_DEAL', name: gameState.myName });
@@ -104,33 +111,34 @@ function handleConnection(connection) {
 
 function processNetworkData(data) {
     switch(data.type) {
-          case 'REQUEST_DEAL':
+        case 'REQUEST_DEAL':
             // Host received the "I'm Listening" signal from Guest.
             if (gameState.isHost) {
                 console.log("HOST: Guest is ready. Dealing now...");
                 gameState.opponentName = data.name || "Opponent";
                 updateNamesUI();
+                updateScoreboardWidget(); // Update names on scoreboard
                 
                 // Start the round (Shuffle & Deal)
                 startRound(); 
             }
             break;
+
         case 'INIT_ROUND':
-            // SAVE NICKNAME
-            gameState.opponentName = data.hostName; // If I am Joiner, I get Host Name
+            gameState.opponentName = data.hostName; 
             updateNamesUI();
+            updateScoreboardWidget(); // Update names on scoreboard
             syncBoardState(data);
             
-            // If I am Joiner, I must reply with MY name
             if(!gameState.isHost) {
                 send({ type: 'NAME_REPLY', name: gameState.myName });
             }
             break;
             
         case 'NAME_REPLY':
-            // Host receives Joiner's name
             gameState.opponentName = data.name;
             updateNamesUI();
+            updateScoreboardWidget(); // Update names on scoreboard
             break;
 
         case 'OPPONENT_MOVE':
@@ -163,11 +171,12 @@ function processNetworkData(data) {
         case 'SLAP_RESULT':
             applySlapResult(data.winner);
             break;
-         case 'ROUND_OVER':
-            // Opponent finished their hand first
+
+        case 'ROUND_OVER':
             handleRoundOver(data.winner, data.nextPTotal, data.nextATotal);
-            break;   
-         case 'GAME_OVER':
+            break;
+            
+        case 'GAME_OVER':
             showEndGame(data.msg, data.isWin);
             break;
     }
@@ -179,10 +188,27 @@ function send(data) {
 
 // --- UI UPDATES ---
 function updateNamesUI() {
-    // Update the label on the left
-    // HTML: <span class="stat-label">OPPONENT</span> -> change to Name
     const labels = document.querySelectorAll('.stat-label');
-    if(labels[0]) labels[0].innerText = gameState.opponentName; // Left Widget (Opponent)
+    if(labels[0]) labels[0].innerText = gameState.opponentName; 
+}
+
+function updateScoreboardWidget() {
+    // Update Names
+    const p1Name = document.getElementById('sb-p1-name');
+    const p2Name = document.getElementById('sb-p2-name');
+    if(p1Name) p1Name.innerText = gameState.myName || "You";
+    if(p2Name) p2Name.innerText = gameState.opponentName || "AI";
+
+    // Update Scores
+    const p1R = document.getElementById('sb-p1-rounds');
+    const p2R = document.getElementById('sb-p2-rounds');
+    const p1S = document.getElementById('sb-p1-slaps');
+    const p2S = document.getElementById('sb-p2-slaps');
+
+    if(p1R) p1R.innerText = gameState.p1Rounds;
+    if(p2R) p2R.innerText = gameState.aiRounds;
+    if(p1S) p1S.innerText = gameState.p1Slaps;
+    if(p2S) p2S.innerText = gameState.aiSlaps;
 }
 
 // --- HOST LOGIC ---
@@ -192,7 +218,6 @@ function startRound() {
     let fullDeck = createDeck();
     shuffle(fullDeck);
     
-    // Win Check logic
     if (gameState.playerTotal <= 0) { sendGameOver("YOU WIN!", true); showEndGame("YOU WIN!", true); return; }
     if (gameState.aiTotal <= 0) { sendGameOver(gameState.opponentName + " WINS!", false); showEndGame(gameState.opponentName + " WINS!", false); return; }
 
@@ -232,7 +257,7 @@ function startRound() {
 
     send({
         type: 'INIT_ROUND',
-        hostName: gameState.myName, // Send Host Name
+        hostName: gameState.myName, 
         pDeck: cleanDeck(gameState.aiDeck), 
         aDeck: cleanDeck(gameState.playerDeck),
         pHand: cleanHand(gameState.aiHand), 
@@ -306,7 +331,6 @@ function makeDraggable(img, cardData) {
         cardData.originalLeft = img.style.left;
         cardData.originalTop = img.style.top;
 
-        // Mouse Offset relative to card
         let shiftX = e.clientX - img.getBoundingClientRect().left;
         let shiftY = e.clientY - img.getBoundingClientRect().top;
 
@@ -314,33 +338,27 @@ function makeDraggable(img, cardData) {
 
         function moveAt(pageX, pageY) {
             const boxRect = box.getBoundingClientRect();
-            // Calculate raw position
             let newLeft = pageX - shiftX - boxRect.left;
             let newTop = pageY - shiftY - boxRect.top;
 
-            // --- BOUNDARY CHECKS (Constrain to Box) ---
             const cardW = img.offsetWidth;
             const cardH = img.offsetHeight;
 
-            // 1. Horizontal: Must stay within box width
             if (newLeft < 0) newLeft = 0;
             if (newLeft > boxRect.width - cardW) newLeft = boxRect.width - cardW;
 
-            // 2. Vertical: 
-            // Bottom Limit: Must stay within box height
             if (newTop > boxRect.height - cardH) newTop = boxRect.height - cardH;
 
-            // --- NEW TOP LIMIT (The Physical Wall) ---
-            // If dragging up (negative top), check if it's allowed
+            // --- THE PHYSICAL WALL ---
+            // If pulling UP, check if legal
             if (newTop < 0) {
-                // If game isn't active OR the move is illegal, force top to 0 (the wall)
                 if (!gameState.gameActive || !checkLegalPlay(cardData)) {
-                    newTop = 0;
+                    newTop = 0; // The Wall
                 }
             }
 
             img.style.left = newLeft + 'px';
-            img.style.top = newTop + 'px';
+            img.style.top = newTop + 'px'; // FIXED: VERTICAL MOVEMENT APPLIED
         }
 
         moveAt(e.pageX, e.pageY);
@@ -352,7 +370,6 @@ function makeDraggable(img, cardData) {
             document.removeEventListener('mouseup', onMouseUp);
             img.style.transition = 'all 0.1s ease-out';
 
-            // Play Detection
             if (gameState.gameActive && parseInt(img.style.top) < -20) {
                 let success = playCardToCenter(cardData, img);
                 if (!success) {
@@ -360,16 +377,11 @@ function makeDraggable(img, cardData) {
                     img.style.top = cardData.originalTop;
                 }
             } else {
-                // FREE MOVE (Reorganization)
-                // Calculate % position to send to opponent
                 const boxRect = box.getBoundingClientRect();
                 const currentLeftPx = parseFloat(img.style.left);
                 const currentTopPx = parseFloat(img.style.top);
-                
                 const leftPct = (currentLeftPx / boxRect.width) * 100;
                 const topPct = (currentTopPx / boxRect.height) * 100;
-
-                // Sync the move
                 send({ type: 'OPPONENT_DRAG', cardId: cardData.id, left: leftPct, top: topPct });
             }
         }
@@ -379,15 +391,10 @@ function makeDraggable(img, cardData) {
 }
 
 function executeOpponentDrag(cardId, leftPct, topPct) {
-    // Opponent moved a card in their hand.
-    // Update its visual position.
     const card = gameState.aiHand.find(c => c.id === cardId);
     if (!card || !card.element) return;
-
     card.element.style.left = leftPct + '%';
     card.element.style.top = topPct + '%';
-    
-    // Ensure Z-Index bump so it floats over others
     card.element.style.zIndex = 200;
 }
 
@@ -407,7 +414,7 @@ function playCardToCenter(card, imgElement) {
     else if (isLeftLegal) { target = gameState.centerPileLeft; side = 'left'; }
     else if (isRightLegal) { target = gameState.centerPileRight; side = 'right'; }
 
-if (target) {
+    if (target) {
         target.push(card);
         gameState.playerHand = gameState.playerHand.filter(c => c.id !== card.id); 
         gameState.playerTotal--;
@@ -421,33 +428,32 @@ if (target) {
         imgElement.remove(); renderCenterPile(side, card); updateScoreboard();
         checkSlapCondition(); 
 
-        // 1. MATCH WIN CHECK (0 Cards Total)
+        // 1. MATCH WIN CHECK
         if (gameState.playerTotal <= 0) {
             sendGameOver(gameState.myName + " WINS!", false);
             showEndGame("YOU WIN THE MATCH!", true);
             return true;
         }
 
-        // 2. ROUND WIN CHECK (0 Cards in Hand)
+        // 2. ROUND WIN CHECK
         if (gameState.playerHand.length === 0) {
-            // Logic: Winner keeps their current total. Loser takes the rest (52 - Winner).
-            const nextPTotal = gameState.playerTotal;       // My new total
-            const nextATotal = 52 - gameState.playerTotal;  // Opponent's new total
+            const nextPTotal = gameState.playerTotal;
+            const nextATotal = 52 - gameState.playerTotal;
             
-            // Tell opponent they lost the round
             send({ 
                 type: 'ROUND_OVER', 
-                winner: 'opponent', // From their perspective, 'opponent' won (which is me)
-                nextPTotal: nextATotal, // Their new total
-                nextATotal: nextPTotal  // Their opponent's new total (mine)
+                winner: 'opponent', 
+                nextPTotal: nextATotal, 
+                nextATotal: nextPTotal 
             });
 
-            // Handle it locally
             handleRoundOver('player', nextPTotal, nextATotal);
         }
 
         return true; 
     }
+    return false; 
+}
 
 function executeOpponentMove(cardId, side) {
     const card = gameState.aiHand.find(c => c.id === cardId);
@@ -520,10 +526,7 @@ function createDeck() {
 function shuffle(array) { for (let i = array.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [array[i], array[j]] = [array[j], array[i]]; } }
 function updateScoreboard() { document.getElementById('score-player').innerText = gameState.playerTotal; document.getElementById('score-ai').innerText = gameState.aiTotal; }
 function checkLegalPlay(card) {
-    // If game is paused, nothing is legal
     if (!gameState.gameActive) return false;
-    
-    // Check if the card fits on Left OR Right pile
     return checkPileLogic(card, gameState.centerPileLeft) || 
            checkPileLogic(card, gameState.centerPileRight);
 }
@@ -608,7 +611,7 @@ function handleInput(e) {
     if (e.code === 'Space') {
         e.preventDefault();
         const now = Date.now();
-        if (now - gameState.lastSpacebarTime < 1000) { issuePenalty('player', 'SPAM'); return; }
+        if (now - gameState.lastSpacebarTime < 400) { return; }
         gameState.lastSpacebarTime = now;
         if (!gameState.slapActive) { issuePenalty('player', 'INVALID'); return; }
         send({ type: 'SLAP_CLAIM', timestamp: Date.now() });
@@ -627,14 +630,22 @@ function applySlapResult(winner) {
     const txt = document.getElementById('slap-text');
     overlay.classList.remove('hidden');
     const pileCount = gameState.centerPileLeft.length + gameState.centerPileRight.length;
+    
     if (winner === 'player') {
-        txt.innerText = "YOU WON THE SLAP!"; overlay.style.backgroundColor = "rgba(0, 200, 0, 0.9)"; gameState.aiTotal += pileCount; 
+        txt.innerText = "YOU WON THE SLAP!"; overlay.style.backgroundColor = "rgba(0, 200, 0, 0.9)"; 
+        gameState.aiTotal += pileCount; 
+        gameState.p1Slaps++; // SCOREBOARD UPDATE
     } else {
-        txt.innerText = gameState.opponentName + " WON THE SLAP!"; overlay.style.backgroundColor = "rgba(200, 0, 0, 0.9)"; gameState.playerTotal += pileCount; 
+        txt.innerText = gameState.opponentName + " WON THE SLAP!"; overlay.style.backgroundColor = "rgba(200, 0, 0, 0.9)"; 
+        gameState.playerTotal += pileCount; 
+        gameState.aiSlaps++; // SCOREBOARD UPDATE
     }
+    
     gameState.centerPileLeft = []; gameState.centerPileRight = [];
     document.getElementById('center-pile-left').innerHTML = ''; document.getElementById('center-pile-right').innerHTML = '';
     updateScoreboard();
+    updateScoreboardWidget(); // REFRESH WIDGET
+
     setTimeout(() => {
         overlay.classList.add('hidden'); gameState.playerReady = false; gameState.aiReady = false;
         document.getElementById('player-draw-deck').classList.remove('deck-ready'); document.getElementById('ai-draw-deck').classList.remove('deck-ready');
@@ -644,42 +655,36 @@ function issuePenalty(target, reason) {
     if (target === 'player') { gameState.playerTotal += 3; gameState.aiTotal = Math.max(0, gameState.aiTotal - 3); }
     updateScoreboard();
 }
-   function handleRoundOver(winner, myNextTotal, oppNextTotal) {
+function handleRoundOver(winner, myNextTotal, oppNextTotal) {
     gameState.gameActive = false;
-    
-    // 1. UPDATE SCORES FOR NEXT ROUND
     gameState.playerTotal = myNextTotal;
     gameState.aiTotal = oppNextTotal;
-
-    // 2. CLEAR CENTER PILE
-    // Reset the internal arrays so the game knows they are empty
     gameState.centerPileLeft = [];
     gameState.centerPileRight = [];
-    
-    // Wipe the visual cards from the screen
     document.getElementById('center-pile-left').innerHTML = '';
     document.getElementById('center-pile-right').innerHTML = '';
 
-    // 3. SHOW ROUND OVER POPUP
     const modal = document.getElementById('game-message');
     const btn = document.getElementById('msg-btn');
     
     if (winner === 'player') {
         modal.querySelector('h1').innerText = "ROUND WON!";
         modal.querySelector('p').innerText = `You start next round with ${myNextTotal} cards.`;
+        gameState.p1Rounds++; // SCOREBOARD UPDATE
     } else {
         modal.querySelector('h1').innerText = "ROUND LOST!";
         modal.querySelector('p').innerText = `${gameState.opponentName} starts next round with ${oppNextTotal} cards.`;
+        gameState.aiRounds++; // SCOREBOARD UPDATE
     }
+    
+    updateScoreboardWidget(); // REFRESH WIDGET
 
     btn.innerText = "CONTINUE";
     btn.classList.remove('hidden');
     btn.onclick = function() {
         modal.classList.add('hidden');
-        // Both players click continue, but only Host triggers the deal for the new round
         if (gameState.isHost) startRound(); 
     };
-    
     modal.classList.remove('hidden');
 }
 function sendGameOver(msg, isWin) { send({ type: 'GAME_OVER', msg: msg, isWin: isWin }); }
