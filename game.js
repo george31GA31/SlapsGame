@@ -365,15 +365,28 @@ function handlePlayerDeckClick() {
 }
 function checkDrawCondition() { if (gameState.playerReady && gameState.aiReady) setTimeout(() => startCountdown(), 500); }
 function startCountdown() {
-    const overlay = document.getElementById('countdown-overlay'); overlay.classList.remove('hidden');
+    // PAUSE GAME IMMEDIATELY (Fixes playing during countdown)
+    gameState.gameActive = false; 
+
+    const overlay = document.getElementById('countdown-overlay'); 
+    overlay.classList.remove('hidden');
     let count = 3; overlay.innerText = count;
+    
     const timer = setInterval(() => {
         count--;
-        if (count > 0) { overlay.innerText = count; overlay.style.animation = 'none'; overlay.offsetHeight; overlay.style.animation = 'popIn 0.5s ease'; } 
-        else { clearInterval(timer); overlay.classList.add('hidden'); performReveal(); }
+        if (count > 0) { 
+            overlay.innerText = count; 
+            overlay.style.animation = 'none'; 
+            overlay.offsetHeight; 
+            overlay.style.animation = 'popIn 0.5s ease'; 
+        } 
+        else { 
+            clearInterval(timer); 
+            overlay.classList.add('hidden'); 
+            performReveal(); // This function sets gameActive = true again
+        }
     }, 800);
 }
-
 function performReveal() {
     document.getElementById('player-draw-deck').classList.remove('deck-ready');
     document.getElementById('ai-draw-deck').classList.remove('deck-ready');
@@ -427,23 +440,42 @@ function attemptAIMove() {
         if (checkPileLogic(card, gameState.centerPileLeft)) { bestMove = { c: card, t: 'left' }; break; }
         if (checkPileLogic(card, gameState.centerPileRight)) { bestMove = { c: card, t: 'right' }; break; }
     }
-    if (bestMove) {
-        gameState.aiProcessing = true; 
-        setTimeout(() => {
-            let targetPile = (bestMove.t === 'left') ? gameState.centerPileLeft : gameState.centerPileRight;
-            if (!checkPileLogic(bestMove.c, targetPile)) { gameState.aiProcessing = false; return; }
-            animateAIMove(bestMove.c, bestMove.t, () => {
-                const laneIdx = bestMove.c.laneIndex; 
-                let success = playCardToCenter(bestMove.c, bestMove.c.element);
-                if (success) {
-                    gameState.aiInChain = true; 
-                    const laneCards = gameState.aiHand.filter(c => c.laneIndex === laneIdx);
-                    if (laneCards.length > 0) { const newTop = laneCards[laneCards.length - 1]; if (!newTop.isFaceUp) setCardFaceUp(newTop.element, newTop, 'ai'); }
-                } else { animateSnapBack(bestMove.c); gameState.aiInChain = false; }
-                gameState.aiProcessing = false; 
-            });
-        }, reactionDelay);
-        return; 
+    // ... (top half with bestMove logic stays the same) ...
+
+    // If no immediate move found:
+    if (!bestMove) {
+        // 1. Check if we need to play a hidden card first
+        const hiddenCardsLeft = gameState.aiHand.filter(c => !c.isFaceUp).length;
+        
+        // 2. ONLY Ready up if hand is empty OR all cards are revealed & stuck
+        if (activeCards.length === 4 || hiddenCardsLeft === 0) {
+            if (!gameState.aiReady) {
+                gameState.aiProcessing = true;
+                setTimeout(() => {
+                    // DOUBLE CHECK: Before clicking ready, did a move appear?
+                    const freshActive = gameState.aiHand.filter(c => c.isFaceUp);
+                    const canMoveNow = freshActive.some(c => checkPileLogic(c, gameState.centerPileLeft) || checkPileLogic(c, gameState.centerPileRight));
+                    
+                    if (!canMoveNow && !gameState.gameActive) {
+                        // Game paused (maybe round ended), do nothing
+                        gameState.aiProcessing = false;
+                        return;
+                    }
+
+                    if (canMoveNow) {
+                        // Abort Ready, we can play!
+                        gameState.aiProcessing = false;
+                        return;
+                    }
+
+                    // Safe to Ready Up
+                    gameState.aiReady = true; 
+                    document.getElementById('ai-draw-deck').classList.add('deck-ready');
+                    gameState.aiProcessing = false; 
+                    checkDrawCondition();
+                }, 1000 + reactionDelay);
+            }
+        }
     }
     gameState.aiInChain = false; 
     if (activeCards.length < 4) {
@@ -537,15 +569,29 @@ function checkPileLogic(card, targetPile) {
     if (targetPile.length === 0) return false; const targetCard = targetPile[targetPile.length - 1]; const diff = Math.abs(card.value - targetCard.value); return (diff === 1 || diff === 12);
 }
 function playCardToCenter(card, imgElement) {
+    // 1. STOP IF GAME OVER OR PAUSED (Fixes AI playing after round ends)
+    if (!gameState.gameActive) return false;
+
     let target = null; let side = '';
-    const cardRect = imgElement.getBoundingClientRect(); const cardCenterX = cardRect.left + (cardRect.width / 2); const screenCenterX = window.innerWidth / 2;
+    const cardRect = imgElement.getBoundingClientRect(); 
+    const cardCenterX = cardRect.left + (cardRect.width / 2); 
+    const screenCenterX = window.innerWidth / 2;
     const intendedSide = (cardCenterX < screenCenterX) ? 'left' : 'right';
-    const isLeftLegal = checkPileLogic(card, gameState.centerPileLeft); const isRightLegal = checkPileLogic(card, gameState.centerPileRight);
+    
+    const isLeftLegal = checkPileLogic(card, gameState.centerPileLeft); 
+    const isRightLegal = checkPileLogic(card, gameState.centerPileRight);
+    
     if (intendedSide === 'left' && isLeftLegal) { target = gameState.centerPileLeft; side = 'left'; }
     else if (intendedSide === 'right' && isRightLegal) { target = gameState.centerPileRight; side = 'right'; }
     else { if (isLeftLegal) { target = gameState.centerPileLeft; side = 'left'; } else if (isRightLegal) { target = gameState.centerPileRight; side = 'right'; } }
     
     if (target) {
+        // 2. UNREADY BOTH PLAYERS ON ANY MOVE (Fixes Ready Button Logic)
+        gameState.playerReady = false; 
+        gameState.aiReady = false;
+        document.getElementById('player-draw-deck').classList.remove('deck-ready');
+        document.getElementById('ai-draw-deck').classList.remove('deck-ready');
+       
         target.push(card);
         if (card.owner === 'player') {
             gameState.playerHand = gameState.playerHand.filter(c => c !== card); gameState.playerTotal--; 
