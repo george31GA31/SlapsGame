@@ -440,8 +440,26 @@ function attemptAIMove() {
         if (checkPileLogic(card, gameState.centerPileLeft)) { bestMove = { c: card, t: 'left' }; break; }
         if (checkPileLogic(card, gameState.centerPileRight)) { bestMove = { c: card, t: 'right' }; break; }
     }
-    // ... (top half with bestMove logic stays the same) ...
-
+    if (bestMove) {
+        gameState.aiProcessing = true; 
+        setTimeout(() => {
+            // Re-check validity in case board changed
+            let targetPile = (bestMove.t === 'left') ? gameState.centerPileLeft : gameState.centerPileRight;
+            if (!checkPileLogic(bestMove.c, targetPile)) { gameState.aiProcessing = false; return; }
+            
+            animateAIMove(bestMove.c, bestMove.t, () => {
+                const laneIdx = bestMove.c.laneIndex; 
+                let success = playCardToCenter(bestMove.c, bestMove.c.element);
+                if (success) {
+                    gameState.aiInChain = true; 
+                    const laneCards = gameState.aiHand.filter(c => c.laneIndex === laneIdx);
+                    if (laneCards.length > 0) { const newTop = laneCards[laneCards.length - 1]; if (!newTop.isFaceUp) setCardFaceUp(newTop.element, newTop, 'ai'); }
+                } else { animateSnapBack(bestMove.c); gameState.aiInChain = false; }
+                gameState.aiProcessing = false; 
+            });
+        }, reactionDelay);
+        return; 
+    }
     // If no immediate move found:
     if (!bestMove) {
         // 1. Check if we need to play a hidden card first
