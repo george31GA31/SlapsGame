@@ -11,7 +11,7 @@ let seconds = 0;
 // Bucket Logic: We use 5 "public lobbies". 
 // You try to join one. If it fails, you host it.
 const LOBBY_ID_BASE = "isf-public-match-v1-"; 
-const LOBBY_BUCKETS = 10; // 10 potential rooms to prevent collision
+const LOBBY_BUCKETS = 1; // 10 potential rooms to prevent collision
 let currentBucketIndex = Math.floor(Math.random() * LOBBY_BUCKETS); 
 
 window.onload = function() {
