@@ -111,6 +111,21 @@ function handleConnection(connection) {
 
 function processNetworkData(data) {
     switch(data.type) {
+          case 'CONCEDED':
+            showEndGame("YOU WIN!", true, `${gameState.opponentName} conceded the match.`);
+            break;
+        case 'REMATCH_REQUEST':
+            document.getElementById('rematch-modal').classList.remove('hidden');
+            break;
+        case 'REMATCH_ACCEPTED':
+            // Opponent said yes, reset the board and start
+            performSoftReset();
+            break;
+        case 'REMATCH_DECLINED':
+            const statusText = document.getElementById('rematch-status-text');
+            if(statusText) statusText.innerText = "Opponent declined.";
+            setTimeout(() => window.location.href = 'index.html', 2000);
+            break;
         case 'REQUEST_DEAL':
             // Host received the "I'm Listening" signal from Guest.
             if (gameState.isHost) {
@@ -766,4 +781,77 @@ function showEndGame(title, isWin) {
     const modal = document.getElementById('game-message');
     modal.querySelector('h1').innerText = title; modal.querySelector('h1').style.color = isWin ? '#66ff66' : '#ff7575';
     modal.querySelector('p').innerText = "Refresh to play again."; document.getElementById('msg-btn').classList.add('hidden'); modal.classList.remove('hidden');
+}
+// --- QUIT & CONCEDE LOGIC ---
+function quitMatch() {
+    // Tell opponent I gave up
+    send({ type: 'CONCEDED' });
+    // Go home immediately
+    window.location.href = 'index.html';
+}
+
+// --- REMATCH LOGIC ---
+function sendRematchRequest() {
+    const btnContainer = document.getElementById('end-game-buttons');
+    if(btnContainer) {
+        btnContainer.innerHTML = '<p id="rematch-status-text" style="color:#fff; font-style:italic;">Waiting for opponent...</p>';
+    }
+    send({ type: 'REMATCH_REQUEST' });
+}
+
+function acceptRematch() {
+    document.getElementById('rematch-modal').classList.add('hidden');
+    send({ type: 'REMATCH_ACCEPTED' });
+    performSoftReset();
+}
+
+function declineRematch() {
+    document.getElementById('rematch-modal').classList.add('hidden');
+    send({ type: 'REMATCH_DECLINED' });
+    window.location.href = 'index.html';
+}
+
+function performSoftReset() {
+    // Reset Game State without reloading page (keeping connection alive)
+    gameState.playerTotal = 26; 
+    gameState.aiTotal = 26;
+    gameState.playerHand = [];
+    gameState.aiHand = [];
+    gameState.centerPileLeft = [];
+    gameState.centerPileRight = [];
+    gameState.slapActive = false;
+    gameState.playerYellows = 0; gameState.playerReds = 0;
+    gameState.aiYellows = 0; gameState.aiReds = 0;
+    
+    // Clear UI
+    document.getElementById('game-message').classList.add('hidden');
+    document.getElementById('center-pile-left').innerHTML = '';
+    document.getElementById('center-pile-right').innerHTML = '';
+    document.getElementById('player-foundation-area').innerHTML = '';
+    document.getElementById('ai-foundation-area').innerHTML = '';
+    
+    // Reset Borrowed Tags
+    document.getElementById('borrowed-player').classList.add('hidden');
+    document.getElementById('borrowed-ai').classList.add('hidden');
+    
+    // Update Scoreboard
+    updateScoreboardWidget();
+    
+    // Reset badges
+    updatePenaltyUI();
+
+    // Start again
+    if (gameState.isHost) {
+        startRound();
+    } else {
+        // Guest waits for INIT_ROUND from Host
+        console.log("Waiting for Host to deal new round...");
+    }
+}
+function updatePenaltyUI() {
+    // Clear penalty boxes
+    const pBox = document.getElementById('player-penalties');
+    const aBox = document.getElementById('ai-penalties');
+    if(pBox) pBox.innerHTML = '';
+    if(aBox) aBox.innerHTML = '';
 }
