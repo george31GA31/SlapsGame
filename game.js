@@ -1,5 +1,5 @@
 /* =========================================
-   ISF SINGLE PLAYER ENGINE v19.0 (Simplified Slap Logic)
+   ISF SINGLE PLAYER ENGINE v20.0 (With Scoreboard)
    ========================================= */
 
 const gameState = {
@@ -21,7 +21,11 @@ const gameState = {
     playerYellows: 0, playerReds: 0,
     aiYellows: 0, aiReds: 0,
 
-    difficulty: 1
+    difficulty: 1,
+
+    // --- SCOREBOARD STATE ---
+    p1Rounds: 0, aiRounds: 0,
+    p1Slaps: 0, aiSlaps: 0
 };
 
 const SUITS = ['hearts', 'diamonds', 'clubs', 'spades'];
@@ -50,6 +54,9 @@ window.onload = function() {
     const pDeck = document.getElementById('player-draw-deck');
     if(pDeck) pDeck.onclick = handlePlayerDeckClick;
 
+    // INITIALIZE SCOREBOARD
+    updateScoreboardWidget();
+
     startRound();
 };
 
@@ -63,7 +70,6 @@ function handleInput(e) {
         const now = Date.now();
 
         // 1. SPAM CHECK (400ms lockout)
-        // Prevents accidental double-taps but allows fast follow-ups
         if (now - gameState.lastSpacebarTime < 400) { 
             console.log("Ignored: Spam Protection");
             return; 
@@ -172,15 +178,11 @@ function checkSlapCondition() {
 
 function triggerAISlap() {
     const diff = gameState.difficulty;
-    // Difficulty Scaling: Higher difficulty = Faster AI
-    // Level 1: 3000ms - 5000ms
-    // Level 10: 480ms - 950ms
     const minTime = 3000 - ((diff - 1) * 280); 
     const maxTime = 5000 - ((diff - 1) * 450);
     const reaction = Math.random() * (maxTime - minTime) + minTime;
     
     setTimeout(() => {
-        // If Slap is still active (player hasn't won yet), AI wins.
         if (gameState.slapActive && gameState.gameActive) resolveSlap('ai');
     }, reaction);
 }
@@ -199,10 +201,12 @@ function resolveSlap(winner) {
         txt.innerText = "PLAYER SLAPS WON!";
         overlay.style.backgroundColor = "rgba(0, 200, 0, 0.9)"; 
         gameState.aiTotal += pilesTotal;
+        gameState.p1Slaps++; // SCOREBOARD UPDATE
     } else {
         txt.innerText = "AI SLAPS WON!";
         overlay.style.backgroundColor = "rgba(200, 0, 0, 0.9)"; 
         gameState.playerTotal += pilesTotal;
+        gameState.aiSlaps++; // SCOREBOARD UPDATE
     }
 
     gameState.centerPileLeft = []; gameState.centerPileRight = [];
@@ -210,6 +214,7 @@ function resolveSlap(winner) {
     document.getElementById('center-pile-right').innerHTML = '';
     
     updateScoreboard();
+    updateScoreboardWidget(); // REFRESH WIDGET
 
     setTimeout(() => {
         overlay.classList.add('hidden');
@@ -320,13 +325,19 @@ function checkDeckVisibility() {
 }
 function endRound(winner) {
     gameState.gameActive = false;
+    
+    // SCOREBOARD UPDATE
     if (winner === 'player') {
         gameState.aiTotal = 52 - gameState.playerTotal;
+        gameState.p1Rounds++; 
         showRoundMessage("ROUND WON!", `You start next round with ${gameState.playerTotal} cards.`);
     } else {
         gameState.playerTotal = 52 - gameState.aiTotal;
+        gameState.aiRounds++; 
         showRoundMessage("ROUND LOST!", `AI starts next round with ${gameState.aiTotal} cards.`);
     }
+    
+    updateScoreboardWidget(); // REFRESH WIDGET
 }
 function setCardFaceUp(img, card, owner) {
     img.src = card.imgSrc; img.classList.remove('card-face-down'); card.isFaceUp = true;
@@ -562,4 +573,24 @@ function showEndGame(title, isWin) {
     modal.querySelector('p').innerText = "Return to Menu to play again.";
     const btn = document.getElementById('msg-btn'); btn.innerText = "MAIN MENU"; btn.onclick = () => window.location.href = 'index.html';
     modal.classList.remove('hidden');
+}
+
+// --- SCOREBOARD WIDGET UPDATE ---
+function updateScoreboardWidget() {
+    // Names (Static for Single Player)
+    const p1Name = document.getElementById('sb-p1-name');
+    const p2Name = document.getElementById('sb-p2-name');
+    if(p1Name) p1Name.innerText = "You";
+    if(p2Name) p2Name.innerText = "AI";
+
+    // Scores
+    const p1R = document.getElementById('sb-p1-rounds');
+    const p2R = document.getElementById('sb-p2-rounds');
+    const p1S = document.getElementById('sb-p1-slaps');
+    const p2S = document.getElementById('sb-p2-slaps');
+
+    if(p1R) p1R.innerText = gameState.p1Rounds;
+    if(p2R) p2R.innerText = gameState.aiRounds;
+    if(p1S) p1S.innerText = gameState.p1Slaps;
+    if(p2S) p2S.innerText = gameState.aiSlaps;
 }
