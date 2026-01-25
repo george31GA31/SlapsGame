@@ -802,3 +802,73 @@ body:has(.setup-card) .top-bar {
     padding: 0;
     overflow: hidden;
 }
+/* =========================================
+   SETUP PAGES (Layout Fixes)
+   ========================================= */
+
+/* 1. Transparent Header & Centering */
+.setup-page .top-bar {
+    position: absolute;
+    background: transparent !important;
+    border-bottom: none !important;
+    box-shadow: none !important;
+    pointer-events: none;
+}
+
+.setup-page .top-bar button, 
+.setup-page .top-bar a {
+    pointer-events: auto; /* Keep buttons clickable */
+}
+
+.setup-page .main-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    padding-top: 0 !important;
+}
+
+/* 2. New Prominent Host Code Box */
+.host-code-display {
+    background: #000;
+    border: 2px solid var(--accent-gold);
+    border-radius: 8px;
+    padding: 15px;
+    margin: 20px 0;
+    text-align: center;
+    box-shadow: 0 0 15px rgba(241, 196, 15, 0.2);
+    animation: popIn 0.3s ease;
+}
+
+.code-label {
+    display: block;
+    color: #888;
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 1px;
+    margin-bottom: 5px;
+    text-transform: uppercase;
+}
+
+.the-code {
+    display: block;
+    color: var(--accent-gold);
+    font-size: 2.2rem;
+    font-weight: 900;
+    letter-spacing: 4px;
+    font-family: var(--font-header); /* Or 'Cinzel' */
+}
+
+.waiting-text {
+    color: #ccc;
+    font-size: 0.9rem;
+    font-style: italic;
+    margin-top: 10px;
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0% { opacity: 0.6; }
+    50% { opacity: 1; }
+    100% { opacity: 0.6; }
+}
