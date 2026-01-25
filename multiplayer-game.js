@@ -298,13 +298,17 @@ function makeDraggable(img, cardData) {
             // 2. Vertical: 
             // Bottom Limit: Must stay within box height
             if (newTop > boxRect.height - cardH) newTop = boxRect.height - cardH;
-            
-            // Top Limit: We allow dragging UP (negative) to play cards.
-            // But we don't want it flying off screen forever. Maybe limit to -300px?
-            // For now, playing logic relies on 'top < -20', so we leave top unbounded.
+
+            // --- NEW TOP LIMIT (The Physical Wall) ---
+            // If dragging up (negative top), check if it's allowed
+            if (newTop < 0) {
+                // If game isn't active OR the move is illegal, force top to 0 (the wall)
+                if (!gameState.gameActive || !checkLegalPlay(cardData)) {
+                    newTop = 0;
+                }
+            }
 
             img.style.left = newLeft + 'px';
-            img.style.top = newTop + 'px';
         }
 
         moveAt(e.pageX, e.pageY);
@@ -464,6 +468,14 @@ function createDeck() {
 }
 function shuffle(array) { for (let i = array.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [array[i], array[j]] = [array[j], array[i]]; } }
 function updateScoreboard() { document.getElementById('score-player').innerText = gameState.playerTotal; document.getElementById('score-ai').innerText = gameState.aiTotal; }
+function checkLegalPlay(card) {
+    // If game is paused, nothing is legal
+    if (!gameState.gameActive) return false;
+    
+    // Check if the card fits on Left OR Right pile
+    return checkPileLogic(card, gameState.centerPileLeft) || 
+           checkPileLogic(card, gameState.centerPileRight);
+}
 function checkPileLogic(card, targetPile) {
     if (targetPile.length === 0) return false; 
     const targetCard = targetPile[targetPile.length - 1]; 
