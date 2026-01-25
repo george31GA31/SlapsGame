@@ -852,11 +852,13 @@ body:has(.setup-card) .top-bar {
 
 .the-code {
     display: block;
-    color: var(--accent-gold);
-    font-size: 2.2rem;
-    font-weight: 900;
-    letter-spacing: 4px;
-    font-family: var(--font-header); /* Or 'Cinzel' */
+    /* FIX 2: Bolder, Greener font */
+    color: #66ff66 !important; /* Bright Green */
+    font-family: 'Montserrat', sans-serif !important; /* Ensure heavy font family */
+    font-weight: 900 !important; /* Maximum bold */
+    font-size: 2.5rem; /* Slightly larger */
+    letter-spacing: 3px;
+    text-shadow: 0 0 10px rgba(102, 255, 102, 0.3); /* Subtle green glow */
 }
 
 .waiting-text {
