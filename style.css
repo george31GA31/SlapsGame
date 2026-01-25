@@ -755,39 +755,50 @@ body {
     color: white;
 }
 /* =========================================
-   UI FIXES (Transparent Header & Centering)
+   CORRECTED UI FIXES (Targeted Centering)
    ========================================= */
 
-/* 1. Remove the "Black Block" and float the header */
-.top-bar {
-    position: absolute; /* Floats on top of the background */
-    top: 0;
-    left: 0;
+/* 1. TOP BAR - Transparent ONLY on Game & Setup pages 
+   (Leaves the Home Page top bar normal) */
+.game-body .top-bar, 
+body:has(.setup-card) .top-bar { 
+    position: absolute;
     width: 100%;
-    background: transparent !important; /* Removes the black color */
-    border-bottom: none !important;     /* Removes the line */
-    box-shadow: none !important;        /* Removes the shadow */
-    pointer-events: none; /* Lets clicks pass through if needed, but allows buttons to work */
+    background: transparent !important;
+    border-bottom: none !important;
+    box-shadow: none !important;
+    pointer-events: none; /* Click-through */
+    z-index: 100;
 }
 
-/* Re-enable clicking on buttons inside the top bar */
+/* Re-enable buttons in the header */
 .top-bar button, .top-bar a, .top-bar .logo-area {
     pointer-events: auto;
 }
 
-/* 2. Fix Centering for Setup Boxes */
-/* This ensures the setup cards are dead-center on the screen */
-.main-container, .game-body {
+/* 2. CENTER THE SETUP PAGES */
+/* This detects if the page has a "setup-card" and ONLY then centers the layout */
+.main-container:has(.setup-card) {
     display: flex;
-    justify-content: center; /* Horizontal Center */
-    align-items: center;     /* Vertical Center */
-    height: 100vh;           /* Full Screen Height */
-    padding-top: 0 !important; /* Remove any padding pushing it down */
+    justify-content: center; /* Center Horizontally */
+    align-items: center;     /* Center Vertically */
+    height: 100vh;           /* Full Height */
+    padding-top: 0;
 }
 
-/* Ensure the Setup Card doesn't get pushed by the invisible top bar */
+/* Ensure the Setup Card floats nicely */
 .setup-card {
-    margin: 0 !important; /* Remove auto margins to let flexbox center it */
+    margin: 0; 
     position: relative;
-    top: 0;
+    z-index: 10;
+}
+
+/* 3. CENTER THE GAME BOARD (Green Felt) */
+.game-body {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    padding: 0;
+    overflow: hidden;
 }
