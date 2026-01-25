@@ -874,3 +874,104 @@ body:has(.setup-card) .top-bar {
     50% { opacity: 1; }
     100% { opacity: 0.6; }
 }
+/* --- MATCHMAKING SCREEN --- */
+.matchmaking-body {
+    background-color: #1a1a1a;
+    background-image: radial-gradient(circle at center, #2a2a2a 0%, #000000 100%);
+    color: white;
+    font-family: 'Roboto', sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    margin: 0;
+    overflow: hidden;
+}
+
+.search-container {
+    text-align: center;
+    position: relative;
+}
+
+.search-container h1 {
+    font-weight: 900;
+    font-size: 2.5rem;
+    letter-spacing: 2px;
+    margin-bottom: 40px;
+    text-transform: uppercase;
+    font-style: italic;
+    transition: color 0.3s ease;
+}
+
+/* The Container for Ring + Card */
+.animation-wrapper {
+    position: relative;
+    width: 250px;
+    height: 350px;
+    margin: 0 auto 30px auto;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* The Card Image */
+.search-card-img {
+    width: 160px;
+    height: auto;
+    border-radius: 10px;
+    box-shadow: 0 0 20px rgba(0,0,0,0.5);
+    z-index: 2;
+}
+
+/* The Spinning Ring */
+.spinner-ring {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 280px; /* Bigger than card */
+    height: 280px;
+    border: 8px solid rgba(255, 255, 255, 0.1);
+    border-top: 8px solid #ffffff; /* White Spinner */
+    border-radius: 50%;
+    animation: spin 1.5s linear infinite;
+    z-index: 1;
+}
+
+@keyframes spin {
+    0% { transform: translate(-50%, -50%) rotate(0deg); }
+    100% { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+/* SUCCESS STATE (Green) */
+.match-found .spinner-ring {
+    border-color: #00ff00; /* Solid Green */
+    animation: none; /* Stop spinning */
+    box-shadow: 0 0 30px #00ff00;
+}
+
+.match-found h1 {
+    color: #00ff00;
+    text-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+}
+
+.timer {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: 20px;
+    color: #888;
+}
+
+.btn-cancel {
+    background: transparent;
+    border: 2px solid #444;
+    color: #888;
+    padding: 10px 30px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.btn-cancel:hover {
+    border-color: #fff;
+    color: #fff;
+}
