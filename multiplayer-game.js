@@ -437,13 +437,9 @@ function playCardToCenter(card, imgElement) {
         target.push(card);
         gameState.playerHand = gameState.playerHand.filter(c => c.id !== card.id); 
         
-        // SCORING LOGIC UPDATE: Owner pays
-        const pBorrowing = !document.getElementById('borrowed-player').classList.contains('hidden');
-        if (pBorrowing) {
-             gameState.aiTotal--; // Opponent loses a point (it was their card)
-        } else {
-             gameState.playerTotal--; // I lose a point (it was my card)
-        }
+        // --- REPLACE SCORING LOGIC WITH THIS ONE LINE ---
+        gameState.playerTotal--; 
+        // -----------------------------------------------
 
         send({ type: 'OPPONENT_MOVE', cardId: card.id, targetSide: side });
 
@@ -487,14 +483,7 @@ function executeOpponentMove(cardId, side) {
 
     gameState.aiHand = gameState.aiHand.filter(c => c.id !== cardId);
     
-    // OPPONENT SCORING LOGIC: Owner pays
-    const aBorrowing = !document.getElementById('borrowed-ai').classList.contains('hidden');
-    
-    if (aBorrowing) {
-        gameState.playerTotal--; // I lose a point (opponent played my card)
-    } else {
-        gameState.aiTotal--; // Opponent loses a point
-    }
+    gameState.aiTotal--; 
 
     animateOpponentMove(card, side, () => {
         // SAFETY CHECK: If a slap happened while this card was flying (piles are empty), 
@@ -668,9 +657,19 @@ function performReveal() {
     const pBorrowing = !document.getElementById('borrowed-player').classList.contains('hidden');
     const aBorrowing = !document.getElementById('borrowed-ai').classList.contains('hidden');
 
-    if (pBorrowing) gameState.aiTotal--; else gameState.playerTotal--;
-    if (aBorrowing) gameState.playerTotal--; else gameState.aiTotal--;
-
+    // If Player is borrowing (AI deck split) -> AI loses 2, Player loses 0
+    if (pBorrowing) {
+        gameState.aiTotal -= 2; 
+    } 
+    // If AI is borrowing (Player deck split) -> Player loses 2, AI loses 0
+    else if (aBorrowing) {
+        gameState.playerTotal -= 2; 
+    } 
+    // Normal Case: Both lose 1
+    else {
+        gameState.playerTotal--;
+        gameState.aiTotal--;
+    }
     // 3. Play Cards & Render
     if (gameState.playerDeck.length > 0) { let c = gameState.playerDeck.pop(); gameState.centerPileRight.push(c); renderCenterPile('right', c); }
     if (gameState.aiDeck.length > 0) { let c = gameState.aiDeck.pop(); gameState.centerPileLeft.push(c); renderCenterPile('left', c); }
