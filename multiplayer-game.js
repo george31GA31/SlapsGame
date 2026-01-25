@@ -449,10 +449,18 @@ function makeDraggable(img, cardData) {
 function executeOpponentDrag(cardId, leftPct, topPct) {
     const card = gameState.aiHand.find(c => c.id === cardId);
     if (!card || !card.element) return;
+
+    const box = document.getElementById('ai-foundation-area');
+    if (!box) return;
+
+    const cardH = card.element.offsetHeight;
+    const mirroredTop = 100 - topPct - (cardH / box.getBoundingClientRect().height) * 100;
+
     card.element.style.left = leftPct + '%';
-    card.element.style.top = topPct + '%';
+    card.element.style.top = mirroredTop + '%';
     card.element.style.zIndex = 200;
 }
+
 
 // --- CARD PLAYING ---
 function playCardToCenter(card, imgElement, dropSide) {
