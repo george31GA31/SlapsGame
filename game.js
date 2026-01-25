@@ -246,16 +246,24 @@ function startRound() {
     const pHandCards = pAllCards.splice(0, pHandSize);
     gameState.playerDeck = pAllCards; 
     const aHandCards = aAllCards.splice(0, aHandSize);
+    gameState.playerDeck = pAllCards; 
+    const aHandCards = aAllCards.splice(0, aHandSize);
     gameState.aiDeck = aAllCards;
 
     if (gameState.playerDeck.length === 0 && gameState.aiDeck.length > 1) {
         const steal = Math.floor(gameState.aiDeck.length / 2);
         gameState.playerDeck = gameState.aiDeck.splice(0, steal);
+        // UPDATE SCORES
+        gameState.playerTotal += steal;
+        gameState.aiTotal -= steal;
         document.getElementById('borrowed-player').classList.remove('hidden');
     }
     if (gameState.aiDeck.length === 0 && gameState.playerDeck.length > 1) {
         const steal = Math.floor(gameState.playerDeck.length / 2);
         gameState.aiDeck = gameState.playerDeck.splice(0, steal);
+        // UPDATE SCORES
+        gameState.aiTotal += steal;
+        gameState.playerTotal -= steal;
         document.getElementById('borrowed-ai').classList.remove('hidden');
     }
 
@@ -391,33 +399,44 @@ function performReveal() {
     document.getElementById('player-draw-deck').classList.remove('deck-ready');
     document.getElementById('ai-draw-deck').classList.remove('deck-ready');
     
-    let playerBorrowed = false; let aiBorrowed = false;
+    // 1. Check for Shortage & Borrow (AND UPDATE SCORES)
     if (gameState.playerDeck.length === 0 && gameState.aiDeck.length > 0) {
-        const stealAmount = Math.floor(gameState.aiDeck.length / 2); const stolen = gameState.aiDeck.splice(0, stealAmount);
-        gameState.playerDeck = gameState.playerDeck.concat(stolen); document.getElementById('borrowed-player').classList.remove('hidden'); playerBorrowed = true;
+        const stealAmount = Math.floor(gameState.aiDeck.length / 2);
+        if (stealAmount > 0) {
+            const stolen = gameState.aiDeck.splice(0, stealAmount);
+            gameState.playerDeck = gameState.playerDeck.concat(stolen);
+            gameState.playerTotal += stealAmount;
+            gameState.aiTotal -= stealAmount;
+            document.getElementById('borrowed-player').classList.remove('hidden');
+        }
     }
     if (gameState.aiDeck.length === 0 && gameState.playerDeck.length > 0) {
-        const stealAmount = Math.floor(gameState.playerDeck.length / 2); const stolen = gameState.playerDeck.splice(0, stealAmount);
-        gameState.aiDeck = gameState.aiDeck.concat(stolen); document.getElementById('borrowed-ai').classList.remove('hidden'); aiBorrowed = true;
+        const stealAmount = Math.floor(gameState.playerDeck.length / 2);
+        if (stealAmount > 0) {
+            const stolen = gameState.playerDeck.splice(0, stealAmount);
+            gameState.aiDeck = gameState.aiDeck.concat(stolen);
+            gameState.aiTotal += stealAmount;
+            gameState.playerTotal -= stealAmount;
+            document.getElementById('borrowed-ai').classList.remove('hidden');
+        }
     }
     
-    const isPlayerBorrowing = !document.getElementById('borrowed-player').classList.contains('hidden');
-    const isAiBorrowing = !document.getElementById('borrowed-ai').classList.contains('hidden');
-
-    if (isPlayerBorrowing) gameState.aiTotal -= 2;
-    else if (isAiBorrowing) gameState.playerTotal -= 2;
-    else { gameState.playerTotal--; gameState.aiTotal--; }
+    gameState.playerTotal--; 
+    gameState.aiTotal--;
 
     if (gameState.playerDeck.length > 0) { let pCard = gameState.playerDeck.pop(); gameState.centerPileRight.push(pCard); renderCenterPile('right', pCard); }
     if (gameState.aiDeck.length > 0) { let aCard = gameState.aiDeck.pop(); gameState.centerPileLeft.push(aCard); renderCenterPile('left', aCard); }
     
-    checkDeckVisibility(); updateScoreboard();
-    gameState.gameActive = true; gameState.playerReady = false; gameState.aiReady = false;
+    checkDeckVisibility(); 
+    updateScoreboard();
+    
+    gameState.gameActive = true; 
+    gameState.playerReady = false; 
+    gameState.aiReady = false;
     
     checkSlapCondition();
     if (!gameState.aiLoopRunning) startAILoop();
 }
-
 function renderCenterPile(side, card) {
     const id = side === 'left' ? 'center-pile-left' : 'center-pile-right';
     const container = document.getElementById(id);
