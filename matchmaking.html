@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Searching for Opponent...</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700;900&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+</head>
+<body class="matchmaking-body">
+
+    <div class="search-container">
+        <h1 id="status-text">SEARCHING FOR OPPONENT</h1>
+        
+        <div class="animation-wrapper">
+            <div class="spinner-ring" id="spinner"></div>
+            
+            <div class="center-card-display">
+                <img src="assets/cards/ace_of_hearts.png" alt="Card" class="search-card-img">
+            </div>
+        </div>
+
+        <div class="timer" id="timer">00:00</div>
+        
+        <button class="btn-cancel" onclick="window.location.href='index.html'">Cancel</button>
+    </div>
+
+    <script src="matchmaking.js"></script>
+</body>
+</html>
