@@ -1,5 +1,5 @@
 /* =========================================
-   ISF MULTIPLAYER ENGINE v6.0 (Complete Fix)
+   ISF MULTIPLAYER ENGINE v7.0 (Fixed & Cleaned)
    ========================================= */
 
 const gameState = {
@@ -233,7 +233,11 @@ function startRound() {
     const aHandCards = aAllCards.splice(0, aHandSize);
     gameState.aiDeck = aAllCards;
 
+    // Reset Tags at Start of Round
     let pBorrow = false, aBorrow = false;
+    document.getElementById('borrowed-player').classList.add('hidden');
+    document.getElementById('borrowed-ai').classList.add('hidden');
+
     if (gameState.playerDeck.length === 0 && gameState.aiDeck.length > 1) {
         const steal = Math.floor(gameState.aiDeck.length / 2);
         gameState.playerDeck = gameState.aiDeck.splice(0, steal);
@@ -417,7 +421,27 @@ function playCardToCenter(card, imgElement) {
     if (target) {
         target.push(card);
         gameState.playerHand = gameState.playerHand.filter(c => c.id !== card.id); 
-        gameState.playerTotal--;
+        
+        // SCORING LOGIC UPDATE: Decrease the score of the deck OWNER
+        // In multiplayer, 'card.owner' isn't explicitly set for deck cards, 
+        // so we use the borrowing flag logic if needed, but primarily 
+        // playing from your hand means decreasing your total.
+        // However, if we borrowed, we are playing opponent's cards.
+        
+        // Check if I am borrowing cards from opponent
+        // In this game model, if I borrowed, my deck is technically opponent's cards.
+        // But for simplicity, the total score tracks whose cards are remaining.
+        
+        // If I am 'borrowing', it means I took cards from opponent's deck to my deck.
+        // So they are now in my deck. When I play them, they leave my control.
+        // The previous logic was: "If I borrow, opponent loses score".
+        
+        const pBorrowing = !document.getElementById('borrowed-player').classList.contains('hidden');
+        if (pBorrowing) {
+             gameState.aiTotal--; // Opponent loses a point (it was their card)
+        } else {
+             gameState.playerTotal--; // I lose a point (it was my card)
+        }
 
         send({ type: 'OPPONENT_MOVE', cardId: card.id, targetSide: side });
 
@@ -460,7 +484,17 @@ function executeOpponentMove(cardId, side) {
     if (!card) return; 
 
     gameState.aiHand = gameState.aiHand.filter(c => c.id !== cardId);
-    gameState.aiTotal--;
+    
+    // OPPONENT SCORING LOGIC
+    // Check if opponent is borrowing
+    // We can check the UI flag for opponent's borrow state
+    const aBorrowing = !document.getElementById('borrowed-ai').classList.contains('hidden');
+    
+    if (aBorrowing) {
+        gameState.playerTotal--; // I lose a point (opponent played my card)
+    } else {
+        gameState.aiTotal--; // Opponent loses a point
+    }
 
     animateOpponentMove(card, side, () => {
         // SAFETY CHECK: If a slap happened while this card was flying (piles are empty), 
@@ -597,6 +631,7 @@ function checkDrawCondition() {
 }
 function startCountdown(broadcast) {
     if (broadcast) send({ type: 'SYNC_REVEAL' });
+    gameState.gameActive = false; // Pause game during countdown
     const overlay = document.getElementById('countdown-overlay');
     overlay.classList.remove('hidden');
     let count = 3; overlay.innerText = count;
@@ -614,11 +649,7 @@ function performReveal() {
     document.getElementById('player-draw-deck').classList.remove('deck-ready');
     document.getElementById('ai-draw-deck').classList.remove('deck-ready');
 
-    // 1. Reset Borrowed Tags
-    document.getElementById('borrowed-player').classList.add('hidden');
-    document.getElementById('borrowed-ai').classList.add('hidden');
-
-    // 2. Check for Shortage & Borrow (NO SCORE CHANGE)
+    // 1. Borrow Logic (Do NOT clear tags here)
     if (gameState.playerDeck.length === 0 && gameState.aiDeck.length > 0) {
         const steal = Math.floor(gameState.aiDeck.length / 2);
         if (steal > 0) {
@@ -634,10 +665,14 @@ function performReveal() {
         }
     }
 
-    // 3. Play Cards
-    gameState.playerTotal--; 
-    gameState.aiTotal--;
+    // 2. Scoring Logic: Who pays?
+    const pBorrowing = !document.getElementById('borrowed-player').classList.contains('hidden');
+    const aBorrowing = !document.getElementById('borrowed-ai').classList.contains('hidden');
 
+    if (pBorrowing) gameState.aiTotal--; else gameState.playerTotal--;
+    if (aBorrowing) gameState.playerTotal--; else gameState.aiTotal--;
+
+    // 3. Play Cards & Render
     if (gameState.playerDeck.length > 0) { let c = gameState.playerDeck.pop(); gameState.centerPileRight.push(c); renderCenterPile('right', c); }
     if (gameState.aiDeck.length > 0) { let c = gameState.aiDeck.pop(); gameState.centerPileLeft.push(c); renderCenterPile('left', c); }
     
@@ -647,30 +682,7 @@ function performReveal() {
     gameState.aiReady = false;
     checkSlapCondition();
 }
-    if (gameState.aiDeck.length === 0 && gameState.playerDeck.length > 0) {
-        const steal = Math.floor(gameState.playerDeck.length / 2);
-        if (steal > 0) {
-            gameState.aiDeck = gameState.aiDeck.concat(gameState.playerDeck.splice(0, steal));
-            gameState.aiTotal += steal;
-            gameState.playerTotal -= steal;
-            document.getElementById('borrowed-ai').classList.remove('hidden');
-        }
-    }
 
-    // 2. Play the Cards (Standard Decrement)
-    gameState.playerTotal--; 
-    gameState.aiTotal--;
-
-    // 3. Render
-    if (gameState.playerDeck.length > 0) { let c = gameState.playerDeck.pop(); gameState.centerPileRight.push(c); renderCenterPile('right', c); }
-    if (gameState.aiDeck.length > 0) { let c = gameState.aiDeck.pop(); gameState.centerPileLeft.push(c); renderCenterPile('left', c); }
-    
-    updateScoreboard();
-    gameState.gameActive = true; 
-    gameState.playerReady = false; 
-    gameState.aiReady = false;
-    checkSlapCondition();
-}
 function handleInput(e) {
     if (e.code === 'Space') {
         e.preventDefault();
