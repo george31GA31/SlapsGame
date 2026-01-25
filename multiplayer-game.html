@@ -10,6 +10,14 @@
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
 </head>
 <body class="game-body" ondragstart="return false;" ondrop="return false;">
+    <div class="bottom-left-actions">
+    <button class="btn-action-small btn-quit" onclick="window.location.href='index.html'">
+        <i class="fa-solid fa-door-open"></i> Quit Match
+    </button>
+    <button class="btn-action-small" onclick="window.location.reload()">
+        <i class="fa-solid fa-rotate-right"></i> Restart
+    </button>
+</div>
     <div id="scoreboard-widget" class="scoreboard-widget">
     <div class="sb-header">
         <span>PLAYER</span>
@@ -40,7 +48,6 @@
     </div>
 
     <div class="ui-widget-left" style="bottom: 20px; top: auto;">
-        <button class="btn-quit" onclick="window.location.href='index.html'">QUIT MATCH</button>
     </div>
 
     <div id="countdown-overlay" class="hidden">3</div>
