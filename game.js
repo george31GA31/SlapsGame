@@ -433,36 +433,6 @@ function performReveal() {
     gameState.playerReady = false; 
     gameState.aiReady = false;
     
-    checkSlapCondition();
-    if (!gameState.aiLoopRunning) startAILoop();
-}
-    if (gameState.aiDeck.length === 0 && gameState.playerDeck.length > 0) {
-        const stealAmount = Math.floor(gameState.playerDeck.length / 2);
-        if (stealAmount > 0) {
-            const stolen = gameState.playerDeck.splice(0, stealAmount);
-            gameState.aiDeck = gameState.aiDeck.concat(stolen);
-            gameState.aiTotal += stealAmount;
-            gameState.playerTotal -= stealAmount;
-            document.getElementById('borrowed-ai').classList.remove('hidden');
-        }
-    }
-    
-    gameState.playerTotal--; 
-    gameState.aiTotal--;
-
-    if (gameState.playerDeck.length > 0) { let pCard = gameState.playerDeck.pop(); gameState.centerPileRight.push(pCard); renderCenterPile('right', pCard); }
-    if (gameState.aiDeck.length > 0) { let aCard = gameState.aiDeck.pop(); gameState.centerPileLeft.push(aCard); renderCenterPile('left', aCard); }
-    
-    checkDeckVisibility(); 
-    updateScoreboard();
-    
-    gameState.gameActive = true; 
-    gameState.playerReady = false; 
-    gameState.aiReady = false;
-    
-    checkSlapCondition();
-    if (!gameState.aiLoopRunning) startAILoop();
-}
 function renderCenterPile(side, card) {
     const id = side === 'left' ? 'center-pile-left' : 'center-pile-right';
     const container = document.getElementById(id);
@@ -488,7 +458,10 @@ function attemptAIMove() {
     if (bestMove) {
         gameState.aiProcessing = true; 
         setTimeout(() => {
-            // Re-check validity in case board changed
+            if (!gameState.gameActive) {
+                gameState.aiProcessing = false;
+                return;
+            }
             let targetPile = (bestMove.t === 'left') ? gameState.centerPileLeft : gameState.centerPileRight;
             if (!checkPileLogic(bestMove.c, targetPile)) { gameState.aiProcessing = false; return; }
             
