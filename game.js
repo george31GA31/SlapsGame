@@ -663,48 +663,52 @@ function playCardToCenter(card, imgElement, forcedSide) {
     let targetPile = null;
     let side = '';
 
-    if (forcedSide === 'left') { targetPile = gameState.centerPileLeft; side = 'left'; }
-    else if (forcedSide === 'right') { targetPile = gameState.centerPileRight; side = 'right'; }
-    else { return false; }
-
-    // RACE CONDITION CHECK
-    if (!checkPileLogic(card, targetPile)) {
-        console.log("Move rejected: Pile changed state.");
-        return false;
+    // 1. DETERMINE TARGET
+    if (forcedSide) {
+        // Human/Overlap Logic: Use the side we detected
+        if (forcedSide === 'left') { targetPile = gameState.centerPileLeft; side = 'left'; }
+        else { targetPile = gameState.centerPileRight; side = 'right'; }
+    } else {
+        // AI Fallback Logic: Auto-detect side (Restores AI Behavior)
+        const isLeftLegal = checkPileLogic(card, gameState.centerPileLeft);
+        const isRightLegal = checkPileLogic(card, gameState.centerPileRight);
+        
+        // Simple preference logic for AI
+        if (isLeftLegal) { targetPile = gameState.centerPileLeft; side = 'left'; }
+        else if (isRightLegal) { targetPile = gameState.centerPileRight; side = 'right'; }
+        else { return false; }
     }
 
+    // 2. RACE CONDITION CHECK
+    // If the move is no longer legal (opponent played), abort.
+    if (!checkPileLogic(card, targetPile)) {
+        return false; 
+    }
+
+    // 3. EXECUTE
     if (targetPile) {
         targetPile.push(card);
-        gameState.playerHand = gameState.playerHand.filter(c => c.id !== card.id);
-        gameState.playerTotal--; // Always -1 for manual play
+        gameState.playerHand = gameState.playerHand.filter(c => c !== card);
+        gameState.playerTotal--;
 
-        send({ type: 'OPPONENT_MOVE', cardId: card.id, targetSide: side });
+        // Only player resets ready state (AI manages its own)
+        if (card.owner === 'player') {
+            gameState.playerReady = false; 
+            gameState.aiReady = false;
+            document.getElementById('player-draw-deck').classList.remove('deck-ready');
+            document.getElementById('ai-draw-deck').classList.remove('deck-ready');
+        }
 
-        gameState.playerReady = false; 
-        gameState.aiReady = false;
-        
-        const pDeck = document.getElementById('player-draw-deck');
-        const aDeck = document.getElementById('ai-draw-deck');
-        if(pDeck) pDeck.classList.remove('deck-ready');
-        if(aDeck) aDeck.classList.remove('deck-ready');
-
-        imgElement.remove(); 
+        if(imgElement && imgElement.parentNode) imgElement.remove(); 
         renderCenterPile(side, card); 
         updateScoreboard();
         checkSlapCondition(); 
 
         if (gameState.playerTotal <= 0) {
-            sendGameOver(gameState.myName + " WINS!", false);
             showEndGame("YOU WIN THE MATCH!", true);
             return true;
         }
-
-        if (gameState.playerHand.length === 0) {
-            const nextPTotal = gameState.playerTotal;
-            const nextATotal = 52 - gameState.playerTotal;
-            send({ type: 'ROUND_OVER', winner: 'opponent', nextPTotal: nextATotal, nextATotal: nextPTotal });
-            handleRoundOver('player', nextPTotal, nextATotal);
-        }
+        if (gameState.playerHand.length === 0) endRound('player');
 
         return true; 
     }
@@ -816,16 +820,9 @@ function updateScoreboardWidget() {
     if(p1S) p1S.innerText = gameState.p1Slaps;
     if(p2S) p2S.innerText = gameState.aiSlaps;
 }
-// --- NEW HELPER: STRICT OVERLAP CHECK ---
 function isOverlapping(element1, element2) {
     if (!element1 || !element2) return false;
     const rect1 = element1.getBoundingClientRect();
     const rect2 = element2.getBoundingClientRect();
-
-    return !(
-        rect1.right < rect2.left || 
-        rect1.left > rect2.right || 
-        rect1.bottom < rect2.top || 
-        rect1.top > rect2.bottom
-    );
+    return !(rect1.right < rect2.left || rect1.left > rect2.right || rect1.bottom < rect2.top || rect1.top > rect2.bottom);
 }
