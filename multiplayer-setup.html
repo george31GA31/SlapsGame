@@ -34,8 +34,8 @@
                     <input type="text" id="nickname" class="lobby-input" placeholder="e.g. George" maxlength="10">
                 </div>
 
-                <div class="lobby-actions">
-                    <div class="lobby-col" id="host-col-content">
+                <div class="lobby-actions" id="lobby-actions-container">
+                    <div class="lobby-col">
                         <button class="btn-lobby" id="btn-host" onclick="hostGame()">
                             <i class="fa-solid fa-server"></i> HOST MATCH
                         </button>
@@ -75,9 +75,9 @@
             localStorage.setItem('isf_role', 'host');
             localStorage.setItem('isf_code', myId);
 
-            // --- INJECT THE NEW "BIG BOX" UI ---
-            const hostContainer = document.getElementById('host-col-content');
-            hostContainer.innerHTML = `
+            // --- FIX 1: Target the main container, not just the column ---
+            const mainContainer = document.getElementById('lobby-actions-container');
+            mainContainer.innerHTML = `
                 <div class="host-code-display">
                     <span class="code-label">Share This Code</span>
                     <span class="the-code">${myId}</span>
@@ -85,7 +85,7 @@
                         <i class="fa-solid fa-spinner fa-spin"></i> Waiting for friend...
                     </div>
                 </div>
-                <button class="btn-cancel" onclick="location.reload()" style="background:transparent; border:none; color:#666; cursor:pointer; font-size:0.8rem; text-decoration:underline;">CANCEL</button>
+                <button class="btn-cancel" onclick="location.reload()" style="background:transparent; border:none; color:#888; cursor:pointer; font-size:0.8rem; text-decoration:underline; margin-top: 15px;">CANCEL</button>
             `;
 
             peer = new Peer(myId);
@@ -98,7 +98,6 @@
                 conn = c;
                 setupConnection();
                 
-                // Update Status Text in the box
                 const statusEl = document.getElementById('status-host');
                 if(statusEl) {
                     statusEl.innerHTML = '<i class="fa-solid fa-check"></i> FRIEND CONNECTED!';
@@ -112,6 +111,7 @@
         }
 
         function joinGame() {
+            // ... (Rest of joinGame logic is fine) ...
             const name = document.getElementById('nickname').value || "Player 2";
             localStorage.setItem('isf_my_name', name);
             isHost = false;
@@ -137,7 +137,6 @@
                     setupConnection();
                 });
                 
-                // Handle errors
                 peer.on('error', (err) => {
                     statusJoin.innerText = "Error: Code not found.";
                     statusJoin.style.color = "#ff4444";
