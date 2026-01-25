@@ -82,27 +82,78 @@ window.onload = function () {
 function initNetwork() {
     const role = localStorage.getItem('isf_role');
     const code = localStorage.getItem('isf_code');
-
+    
     if (!role || !code) {
-        alert("Connection lost. Returning to lobby.");
-        window.location.href = 'multiplayer-setup.html';
+        window.location.href = 'index.html';
         return;
     }
 
     gameState.isHost = (role === 'host');
-    const peer = new Peer(gameState.isHost ? code : null);
-
-    peer.on('open', (id) => {
-        console.log("My Peer ID: " + id);
-        if (!gameState.isHost) {
-            const conn = peer.connect(code);
-            handleConnection(conn);
+    
+    // Standard Google STUN servers for fast traversal
+    const peerOptions = {
+        debug: 1, // Lower debug level for speed
+        config: {
+            'iceServers': [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' }
+            ]
         }
-    });
+    };
 
-    peer.on('connection', (conn) => {
-        if (gameState.isHost) handleConnection(conn);
+    let peerId = gameState.isHost ? code : null;
+    
+    function createPeer(retryCount = 0) {
+        // Create Peer
+        const peer = new Peer(peerId, peerOptions);
+        gameState.peerInstance = peer; // SAVE FOR KILL SWITCH
+
+        peer.on('open', (id) => {
+            console.log("Connected with ID: " + id);
+            
+            // Guest: Connect immediately
+            if (!gameState.isHost) {
+                connectToHost(peer, code);
+            }
+        });
+
+        peer.on('connection', (conn) => {
+            if (gameState.isHost) {
+                console.log("Host: Opponent connected!");
+                handleConnection(conn);
+            }
+        });
+
+        peer.on('error', (err) => {
+            // TURBO RETRY LOGIC
+            if (gameState.isHost && err.type === 'unavailable-id') {
+                if (retryCount < 20) {
+                    // Retry in 100ms (Very fast)
+                    console.log("ID busy, retrying...");
+                    peer.destroy(); // Clear old instance
+                    setTimeout(() => createPeer(retryCount + 1), 100);
+                } else {
+                    alert("ID " + code + " is stuck. Please wait 10 seconds.");
+                    window.location.href = 'index.html';
+                }
+            } 
+            else if (!gameState.isHost && err.type === 'peer-unavailable') {
+                // Guest retrying to find Host
+                console.log("Searching for Host...");
+                setTimeout(() => connectToHost(peer, code), 500);
+            }
+        });
+    }
+
+    createPeer();
+}
+
+function connectToHost(peer, hostId) {
+    const conn = peer.connect(hostId, {
+        reliable: true,
+        serialization: 'json'
     });
+    handleConnection(conn);
 }
 
 function handleConnection(connection) {
@@ -1209,3 +1260,14 @@ function updatePenaltyUI() {
     if (pBox) pBox.innerHTML = '';
     if (aBox) aBox.innerHTML = '';
 }
+// --- KILL SWITCH: Frees up the Code immediately on exit ---
+window.addEventListener('beforeunload', () => {
+    if (gameState.conn) {
+        gameState.conn.close();
+    }
+    // 'peer' is defined in initNetwork scope, so we might need to make it global 
+    // or attach it to gameState to destroy it properly.
+    if (gameState.peerInstance) {
+        gameState.peerInstance.destroy(); // This releases the ID instantly
+    }
+});
