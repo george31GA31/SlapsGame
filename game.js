@@ -57,7 +57,7 @@ window.onload = function() {
     // INITIALIZE SCOREBOARD
     updateScoreboardWidget();
 
-    startRound();
+    ;
 };
 
 function handleInput(e) {
@@ -245,8 +245,7 @@ function startRound() {
 
     const pHandCards = pAllCards.splice(0, pHandSize);
     gameState.playerDeck = pAllCards; 
-    const aHandCards = aAllCards.splice(0, aHandSize);
-    gameState.playerDeck = pAllCards; 
+    
     const aHandCards = aAllCards.splice(0, aHandSize);
     gameState.aiDeck = aAllCards;
 
