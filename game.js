@@ -625,15 +625,17 @@ function makeDraggable(img, cardData) {
         document.addEventListener('mousemove', onMouseMove);
         document.addEventListener('mouseup', onMouseUp);
     };
+} // This closes onmousedown
+
+function checkLegalPlay(card) { 
+    if (!gameState.gameActive) return false; 
+    return checkPileLogic(card, gameState.centerPileLeft) || checkPileLogic(card, gameState.centerPileRight); 
 }
-}function checkLegalPlay(card) { if (!gameState.gameActive) return false; return checkPileLogic(card, gameState.centerPileLeft) || checkPileLogic(card, gameState.centerPileRight); }
-function checkPileLogic(card, targetPile) {
-    if (targetPile.length === 0) return false; const targetCard = targetPile[targetPile.length - 1]; const diff = Math.abs(card.value - targetCard.value); return (diff === 1 || diff === 12);
-}
+
 function playCardToCenter(card, imgElement, strictSide) {
     if (!gameState.gameActive) return false;
 
-    let target = null; 
+    let target = null;
     let side = '';
 
     // --- CHANGE STARTS HERE ---
@@ -641,11 +643,11 @@ function playCardToCenter(card, imgElement, strictSide) {
     // 1. HUMAN LOGIC (Strict Contact Required)
     if (card.owner === 'player') {
         if (strictSide === 'left' && checkPileLogic(card, gameState.centerPileLeft)) {
-            target = gameState.centerPileLeft; 
+            target = gameState.centerPileLeft;
             side = 'left';
         } 
         else if (strictSide === 'right' && checkPileLogic(card, gameState.centerPileRight)) {
-            target = gameState.centerPileRight; 
+            target = gameState.centerPileRight;
             side = 'right';
         }
     } 
