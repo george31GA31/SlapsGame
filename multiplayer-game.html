@@ -10,7 +10,23 @@
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
 </head>
 <body class="game-body" ondragstart="return false;" ondrop="return false;">
-
+    <div id="scoreboard-widget" class="scoreboard-widget">
+    <div class="sb-header">
+        <span>PLAYER</span>
+        <span>ROUNDS</span>
+        <span>SLAPS</span>
+    </div>
+    <div class="sb-row">
+        <span id="sb-p1-name">You</span>
+        <span id="sb-p1-rounds">0</span>
+        <span id="sb-p1-slaps">0</span>
+    </div>
+    <div class="sb-row">
+        <span id="sb-p2-name">AI</span>
+        <span id="sb-p2-rounds">0</span>
+        <span id="sb-p2-slaps">0</span>
+    </div>
+</div>
     <div class="ui-widget-left" style="top: 20%; left: 20px;">
         <span class="stat-label">OPPONENT</span>
         <div class="stat-value text-red" id="score-ai">26</div>
