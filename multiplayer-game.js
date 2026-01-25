@@ -47,6 +47,15 @@ window.onload = function() {
     gameState.myName = localStorage.getItem('isf_my_name') || "Player";
     document.addEventListener('keydown', handleInput);
     initNetwork();
+
+    // --- PANIC LOOP ---
+    // If I am a Guest, connected, but have NO cards... keep asking!
+    setInterval(() => {
+        if (!gameState.isHost && gameState.playerHand.length === 0 && gameState.conn && gameState.conn.open) {
+            console.warn("PANIC: Hand is empty! Asking again...");
+            send({ type: 'REQUEST_DEAL', name: gameState.myName });
+        }
+    }, 2000); // Check every 2 seconds
 };
 
 function initNetwork() {
@@ -79,14 +88,33 @@ function handleConnection(connection) {
     gameState.conn = connection;
     connection.on('open', () => {
         console.log("CONNECTED!");
-        // Host starts round immediately
-        if (gameState.isHost) startRound(); 
+        
+        // 1. Send Name immediately
+        send({ type: 'NAME_REPLY', name: gameState.myName }); // Changed to match your existing logic
+        
+        // 2. THE FIX: If I am the Guest, I MUST ask for the deck now.
+        // The Host will NOT send it until I ask.
+        if (!gameState.isHost) {
+            console.log("GUEST: Asking for deck...");
+            send({ type: 'REQUEST_DEAL', name: gameState.myName });
+        }
     });
     connection.on('data', (data) => processNetworkData(data));
 }
 
 function processNetworkData(data) {
     switch(data.type) {
+          case 'REQUEST_DEAL':
+            // Host received the "I'm Listening" signal from Guest.
+            if (gameState.isHost) {
+                console.log("HOST: Guest is ready. Dealing now...");
+                gameState.opponentName = data.name || "Opponent";
+                updateNamesUI();
+                
+                // Start the round (Shuffle & Deal)
+                startRound(); 
+            }
+            break;
         case 'INIT_ROUND':
             // SAVE NICKNAME
             gameState.opponentName = data.hostName; // If I am Joiner, I get Host Name
