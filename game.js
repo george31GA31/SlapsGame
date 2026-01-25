@@ -1,5 +1,5 @@
 /* =========================================
-   ISF SINGLE PLAYER ENGINE v23.0 (Fixed & Cleaned)
+   ISF SINGLE PLAYER ENGINE v24.0 (Scoring Fixes)
    ========================================= */
 
 const gameState = {
@@ -14,8 +14,6 @@ const gameState = {
     aiLoopRunning: false, aiProcessing: false, aiInChain: false,
     
     slapActive: false,
-    
-    // TIMING (Simplified)
     lastSpacebarTime: 0,
     
     playerYellows: 0, playerReds: 0,
@@ -23,7 +21,6 @@ const gameState = {
 
     difficulty: 1,
 
-    // --- SCOREBOARD STATE ---
     p1Rounds: 0, aiRounds: 0,
     p1Slaps: 0, aiSlaps: 0
 };
@@ -47,57 +44,36 @@ window.onload = function() {
     if (storedDiff) gameState.difficulty = parseInt(storedDiff);
     gameState.playerTotal = 26; gameState.aiTotal = 26;
     
-    // INPUT LISTENERS
     document.addEventListener('keydown', handleInput);
     
-    // DECK CLICK LISTENER
     const pDeck = document.getElementById('player-draw-deck');
     if(pDeck) pDeck.onclick = handlePlayerDeckClick;
 
-    // INITIALIZE SCOREBOARD
     updateScoreboardWidget();
-
     startRound(); 
 };
 
 function handleInput(e) {
     if (e.code === 'Space') {
         e.preventDefault();
-
-        // 0. SAFETY CHECK
         if (!gameState.gameActive) return;
 
         const now = Date.now();
-
-        // 1. SPAM CHECK (400ms lockout)
-        if (now - gameState.lastSpacebarTime < 400) { 
-            console.log("Ignored: Spam Protection");
-            return; 
-        }
+        if (now - gameState.lastSpacebarTime < 400) { return; }
         gameState.lastSpacebarTime = now;
 
-        // 2. BAD SLAP (No Match)
         if (!gameState.slapActive) { 
-            console.log("Penalty: Bad Slap");
             issuePenalty('player', 'BAD SLAP'); 
             return; 
         }
-
-        // 3. VALID SLAP (Player Wins Immediately)
-        console.log("Slap Valid! Player Wins!");
         resolveSlap('player');
     }
 }
 
 function issuePenalty(target, reason) {
     let yellows;
-    if (target === 'player') {
-        gameState.playerYellows++;
-        yellows = gameState.playerYellows;
-    } else {
-        gameState.aiYellows++;
-        yellows = gameState.aiYellows;
-    }
+    if (target === 'player') { gameState.playerYellows++; yellows = gameState.playerYellows; } 
+    else { gameState.aiYellows++; yellows = gameState.aiYellows; }
 
     if (yellows >= 2) {
         if (target === 'player') { gameState.playerYellows = 0; gameState.playerReds++; }
@@ -108,7 +84,6 @@ function issuePenalty(target, reason) {
 }
 
 function executeRedCardPenalty(offender) {
-    // Offender +3, Victim -3
     const victim = (offender === 'player') ? 'ai' : 'player';
     let penaltyAmount = 3;
     
@@ -116,9 +91,8 @@ function executeRedCardPenalty(offender) {
     let victimDeck = (victim === 'player') ? gameState.playerDeck : gameState.aiDeck;
     
     for (let i = 0; i < penaltyAmount; i++) {
-        if (victimDeck.length > 0) {
-            victimDeck.pop();
-        } else if (victimHand.length > 0) {
+        if (victimDeck.length > 0) { victimDeck.pop(); } 
+        else if (victimHand.length > 0) {
             let cardToRemove = victimHand.pop();
             if (cardToRemove && cardToRemove.element) cardToRemove.element.remove();
         }
@@ -164,10 +138,8 @@ function checkSlapCondition() {
         gameState.slapActive = false;
         return;
     }
-
     const topL = gameState.centerPileLeft[gameState.centerPileLeft.length - 1];
     const topR = gameState.centerPileRight[gameState.centerPileRight.length - 1];
-
     if (topL.rank === topR.rank) {
         gameState.slapActive = true;
         triggerAISlap();
@@ -201,12 +173,12 @@ function resolveSlap(winner) {
         txt.innerText = "PLAYER SLAPS WON!";
         overlay.style.backgroundColor = "rgba(0, 200, 0, 0.9)"; 
         gameState.aiTotal += pilesTotal;
-        gameState.p1Slaps++; // SCOREBOARD UPDATE
+        gameState.p1Slaps++; 
     } else {
         txt.innerText = "AI SLAPS WON!";
         overlay.style.backgroundColor = "rgba(200, 0, 0, 0.9)"; 
         gameState.playerTotal += pilesTotal;
-        gameState.aiSlaps++; // SCOREBOARD UPDATE
+        gameState.aiSlaps++; 
     }
 
     gameState.centerPileLeft = []; gameState.centerPileRight = [];
@@ -214,7 +186,7 @@ function resolveSlap(winner) {
     document.getElementById('center-pile-right').innerHTML = '';
     
     updateScoreboard();
-    updateScoreboardWidget(); // REFRESH WIDGET
+    updateScoreboardWidget();
 
     setTimeout(() => {
         overlay.classList.add('hidden');
@@ -249,20 +221,21 @@ function startRound() {
     const aHandCards = aAllCards.splice(0, aHandSize);
     gameState.aiDeck = aAllCards;
 
+    // RESET BORROW TAGS ON NEW ROUND
+    document.getElementById('borrowed-player').classList.add('hidden');
+    document.getElementById('borrowed-ai').classList.add('hidden');
+
+    // CHECK SHORTAGE AT START
     if (gameState.playerDeck.length === 0 && gameState.aiDeck.length > 1) {
         const steal = Math.floor(gameState.aiDeck.length / 2);
         gameState.playerDeck = gameState.aiDeck.splice(0, steal);
         document.getElementById('borrowed-player').classList.remove('hidden');
-    } else {
-        document.getElementById('borrowed-player').classList.add('hidden');
     }
 
     if (gameState.aiDeck.length === 0 && gameState.playerDeck.length > 1) {
         const steal = Math.floor(gameState.playerDeck.length / 2);
         gameState.aiDeck = gameState.playerDeck.splice(0, steal);
         document.getElementById('borrowed-ai').classList.remove('hidden');
-    } else {
-        document.getElementById('borrowed-ai').classList.add('hidden');
     }
 
     dealSmartHand(pHandCards, 'player');
@@ -331,8 +304,6 @@ function checkDeckVisibility() {
 }
 function endRound(winner) {
     gameState.gameActive = false;
-    
-    // SCOREBOARD UPDATE
     if (winner === 'player') {
         gameState.aiTotal = 52 - gameState.playerTotal;
         gameState.p1Rounds++; 
@@ -342,8 +313,7 @@ function endRound(winner) {
         gameState.aiRounds++; 
         showRoundMessage("ROUND LOST!", `AI starts next round with ${gameState.aiTotal} cards.`);
     }
-    
-    updateScoreboardWidget(); // REFRESH WIDGET
+    updateScoreboardWidget();
 }
 function setCardFaceUp(img, card, owner) {
     img.src = card.imgSrc; img.classList.remove('card-face-down'); card.isFaceUp = true;
@@ -371,9 +341,7 @@ function handlePlayerDeckClick() {
 }
 function checkDrawCondition() { if (gameState.playerReady && gameState.aiReady) setTimeout(() => startCountdown(), 500); }
 function startCountdown() {
-    // PAUSE GAME IMMEDIATELY (Fixes playing during countdown)
     gameState.gameActive = false; 
-
     const overlay = document.getElementById('countdown-overlay'); 
     overlay.classList.remove('hidden');
     let count = 3; overlay.innerText = count;
@@ -389,19 +357,17 @@ function startCountdown() {
         else { 
             clearInterval(timer); 
             overlay.classList.add('hidden'); 
-            performReveal(); // This function sets gameActive = true again
+            performReveal(); 
         }
     }, 800);
 }
+
+// --- FIXED REVEAL & SCORING LOGIC ---
 function performReveal() {
     document.getElementById('player-draw-deck').classList.remove('deck-ready');
     document.getElementById('ai-draw-deck').classList.remove('deck-ready');
     
-    // 1. Reset Borrowed Tags (Fixes "Staying Forever")
-    document.getElementById('borrowed-player').classList.add('hidden');
-    document.getElementById('borrowed-ai').classList.add('hidden');
-
-    // 2. Check for Shortage & Borrow (NO SCORE CHANGE)
+    // 1. Check for Shortage & Borrow (Move Cards)
     if (gameState.playerDeck.length === 0 && gameState.aiDeck.length > 0) {
         const stealAmount = Math.floor(gameState.aiDeck.length / 2);
         if (stealAmount > 0) {
@@ -419,10 +385,24 @@ function performReveal() {
         }
     }
     
-    // 3. Play Cards (Score Decreases here only)
-    gameState.playerTotal--; 
-    gameState.aiTotal--;
+    // 2. SCORING FIX: The "Ownership" Rule
+    // If Player is borrowing, they are using AI's cards -> AI loses the point
+    const playerBorrowing = !document.getElementById('borrowed-player').classList.contains('hidden');
+    const aiBorrowing = !document.getElementById('borrowed-ai').classList.contains('hidden');
 
+    if (playerBorrowing) {
+        gameState.aiTotal--; // AI pays for Player's card
+    } else {
+        gameState.playerTotal--; // Player pays for own card
+    }
+
+    if (aiBorrowing) {
+        gameState.playerTotal--; // Player pays for AI's card
+    } else {
+        gameState.aiTotal--; // AI pays for own card
+    }
+
+    // 3. Render Cards
     if (gameState.playerDeck.length > 0) { let pCard = gameState.playerDeck.pop(); gameState.centerPileRight.push(pCard); renderCenterPile('right', pCard); }
     if (gameState.aiDeck.length > 0) { let aCard = gameState.aiDeck.pop(); gameState.centerPileLeft.push(aCard); renderCenterPile('left', aCard); }
     
@@ -436,6 +416,7 @@ function performReveal() {
     checkSlapCondition();
     if (!gameState.aiLoopRunning) startAILoop();
 }
+
 function renderCenterPile(side, card) {
     const id = side === 'left' ? 'center-pile-left' : 'center-pile-right';
     const container = document.getElementById(id);
@@ -461,13 +442,10 @@ function attemptAIMove() {
     if (bestMove) {
         gameState.aiProcessing = true; 
         setTimeout(() => {
-            // NEW: Abort if game paused during wait
             if (!gameState.gameActive) { 
                 gameState.aiProcessing = false; 
                 return; 
             }
-
-            // Re-check validity in case board changed
             let targetPile = (bestMove.t === 'left') ? gameState.centerPileLeft : gameState.centerPileRight;
             if (!checkPileLogic(bestMove.c, targetPile)) { gameState.aiProcessing = false; return; }
             
@@ -484,33 +462,16 @@ function attemptAIMove() {
         }, reactionDelay);
         return; 
     }
-    // If no immediate move found:
     if (!bestMove) {
-        // 1. Check if we need to play a hidden card first
         const hiddenCardsLeft = gameState.aiHand.filter(c => !c.isFaceUp).length;
-        
-        // 2. ONLY Ready up if hand is empty OR all cards are revealed & stuck
         if (activeCards.length === 4 || hiddenCardsLeft === 0) {
             if (!gameState.aiReady) {
                 gameState.aiProcessing = true;
                 setTimeout(() => {
-                    // DOUBLE CHECK: Before clicking ready, did a move appear?
                     const freshActive = gameState.aiHand.filter(c => c.isFaceUp);
                     const canMoveNow = freshActive.some(c => checkPileLogic(c, gameState.centerPileLeft) || checkPileLogic(c, gameState.centerPileRight));
-                    
-                    if (!canMoveNow && !gameState.gameActive) {
-                        // Game paused (maybe round ended), do nothing
-                        gameState.aiProcessing = false;
-                        return;
-                    }
-
-                    if (canMoveNow) {
-                        // Abort Ready, we can play!
-                        gameState.aiProcessing = false;
-                        return;
-                    }
-
-                    // Safe to Ready Up
+                    if (!canMoveNow && !gameState.gameActive) { gameState.aiProcessing = false; return; }
+                    if (canMoveNow) { gameState.aiProcessing = false; return; }
                     gameState.aiReady = true; 
                     document.getElementById('ai-draw-deck').classList.add('deck-ready');
                     gameState.aiProcessing = false; 
@@ -611,7 +572,6 @@ function checkPileLogic(card, targetPile) {
     if (targetPile.length === 0) return false; const targetCard = targetPile[targetPile.length - 1]; const diff = Math.abs(card.value - targetCard.value); return (diff === 1 || diff === 12);
 }
 function playCardToCenter(card, imgElement) {
-    // 1. STOP IF GAME OVER OR PAUSED (Fixes AI playing after round ends)
     if (!gameState.gameActive) return false;
 
     let target = null; let side = '';
@@ -628,7 +588,6 @@ function playCardToCenter(card, imgElement) {
     else { if (isLeftLegal) { target = gameState.centerPileLeft; side = 'left'; } else if (isRightLegal) { target = gameState.centerPileRight; side = 'right'; } }
     
     if (target) {
-        // 2. UNREADY BOTH PLAYERS ON ANY MOVE (Fixes Ready Button Logic)
         gameState.playerReady = false; 
         gameState.aiReady = false;
         document.getElementById('player-draw-deck').classList.remove('deck-ready');
@@ -644,7 +603,7 @@ function playCardToCenter(card, imgElement) {
             if (gameState.aiTotal <= 0) { showEndGame("AI WINS THE MATCH!", false); return true; }
             if (gameState.aiHand.length === 0) endRound('ai');
         }
-        gameState.playerReady = false; gameState.aiReady = false; document.getElementById('player-draw-deck').classList.remove('deck-ready'); document.getElementById('ai-draw-deck').classList.remove('deck-ready');
+        
         checkDeckVisibility(); imgElement.remove(); renderCenterPile(side, card); updateScoreboard();
         checkSlapCondition(); 
         return true; 
@@ -663,15 +622,12 @@ function showEndGame(title, isWin) {
     modal.classList.remove('hidden');
 }
 
-// --- SCOREBOARD WIDGET UPDATE ---
 function updateScoreboardWidget() {
-    // Names (Static for Single Player)
     const p1Name = document.getElementById('sb-p1-name');
     const p2Name = document.getElementById('sb-p2-name');
     if(p1Name) p1Name.innerText = "You";
     if(p2Name) p2Name.innerText = "AI";
 
-    // Scores
     const p1R = document.getElementById('sb-p1-rounds');
     const p2R = document.getElementById('sb-p2-rounds');
     const p1S = document.getElementById('sb-p1-slaps');
