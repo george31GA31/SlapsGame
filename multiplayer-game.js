@@ -1,5 +1,5 @@
 /* =========================================
-   ISF MULTIPLAYER ENGINE v9.0 (Robust Sync + Smooth Physics)
+   ISF MULTIPLAYER ENGINE v9.1 (Refresh Fix + Wall Restore)
    ========================================= */
 
 const gameState = {
@@ -14,7 +14,7 @@ const gameState = {
     matchEnded: false,
     
     playerReady: false, aiReady: false,
-    drawLock: false, // Prevents double clicking decks
+    drawLock: false, 
     
     isHost: false,
     conn: null,
@@ -53,7 +53,7 @@ window.onload = function() {
     initNetwork();
     updateScoreboardWidget();
 
-    // PANIC LOOP: If Guest has no cards, keep asking until we get them
+    // PANIC LOOP: Keeps Guest asking for cards until they arrive
     setInterval(() => {
         if (!gameState.isHost && gameState.playerHand.length === 0 && gameState.conn && gameState.conn.open) {
             console.log("Hand empty! Requesting deal...");
@@ -62,7 +62,7 @@ window.onload = function() {
     }, 2000);
 };
 
-// --- ROBUST NETWORK SETUP ---
+// --- NETWORK SETUP ---
 function initNetwork() {
     const role = localStorage.getItem('isf_role');
     const code = localStorage.getItem('isf_code');
@@ -88,8 +88,7 @@ function initNetwork() {
     });
 
     peer.on('error', (err) => {
-        console.error("Peer Error:", err.type);
-        // RETRY LOGIC: If Guest can't find Host, try again in 1s
+        // RETRY LOGIC
         if (!gameState.isHost && err.type === 'peer-unavailable') {
             console.log("Host not ready. Retrying in 1s...");
             setTimeout(() => connectToHost(peer, code), 1000);
@@ -108,7 +107,6 @@ function handleConnection(connection) {
     connection.on('open', () => {
         console.log("CONNECTED!");
         send({ type: 'NAME_REPLY', name: gameState.myName });
-        // Request cards immediately
         if (!gameState.isHost) send({ type: 'REQUEST_DEAL', name: gameState.myName });
     });
 
@@ -119,7 +117,7 @@ function send(data) {
     if (gameState.conn && gameState.conn.open) gameState.conn.send(data);
 }
 
-// --- NETWORK DATA HANDLER ---
+// --- DATA HANDLER ---
 function processNetworkData(data) {
     switch (data.type) {
         case 'NAME_REPLY':
@@ -132,12 +130,13 @@ function processNetworkData(data) {
             if (gameState.isHost) {
                 gameState.opponentName = data.name || "Opponent";
                 updateNamesUI();
-                // Only deal if we haven't already (or if they crashed and need a re-sync)
-                if(gameState.playerHand.length === 0 || data.force) startRound(); 
-                else {
-                    // If we already have a game, just sync them to current state
-                    // (For now, just restart round to be safe)
-                    startRound();
+                
+                // CRITICAL FIX: STOP RE-SHUFFLING
+                // If we already have cards, just send the current ones.
+                if(gameState.playerHand.length > 0) {
+                    sendCurrentState();
+                } else {
+                    startRound(); 
                 }
             }
             break;
@@ -208,6 +207,7 @@ function startRound() {
     let fullDeck = createDeck();
     shuffle(fullDeck);
     
+    // Safety checks
     if (gameState.playerTotal <= 0) { sendGameOver("YOU WIN!", true); showEndGame("YOU WIN!", true); return; }
     if (gameState.aiTotal <= 0) { sendGameOver(gameState.opponentName + " WINS!", false); showEndGame(gameState.opponentName + " WINS!", false); return; }
 
@@ -225,6 +225,11 @@ function startRound() {
     dealSmartHand(aHandCards, 'ai');
     updateScoreboard();
 
+    sendCurrentState();
+}
+
+// Helper to send existing cards without reshuffling
+function sendCurrentState() {
     const cleanDeck = (deck) => deck.map(c => ({ suit: c.suit, rank: c.rank, value: c.value, id: c.id }));
     const cleanHand = (hand) => hand.map(c => ({ suit: c.suit, rank: c.rank, value: c.value, id: c.id }));
 
@@ -258,7 +263,6 @@ function dealSyncedHand(cardsData, owner) {
     dealSmartHand(cards, owner);
 }
 
-// --- RENDER LOGIC ---
 function dealSmartHand(cards, owner) {
     const container = document.getElementById(`${owner}-foundation-area`);
     container.innerHTML = ''; 
@@ -289,7 +293,6 @@ function dealSmartHand(cards, owner) {
             card.element = img;
             
             const isTopCard = (index === pile.length - 1);
-            
             img.style.left = `${currentLeftPercent}%`;
             let stackOffset = index * 5; 
             
@@ -310,10 +313,14 @@ function dealSmartHand(cards, owner) {
     });
 }
 
-// --- SMOOTH DRAGGING (Fixed Lag) ---
+// --- PHYSICS (With Wall Restored) ---
 function makeDraggable(img, cardData) {
     img.onmousedown = (e) => {
         e.preventDefault();
+        
+        // 1. Snapshot Legality on Click (For the Wall)
+        const isInitiallyLegal = checkLegalPlay(cardData);
+
         gameState.globalZ++;
         img.style.zIndex = gameState.globalZ;
         img.style.transition = 'none';
@@ -331,8 +338,10 @@ function makeDraggable(img, cardData) {
             let newLeft = pageX - shiftX - boxRect.left;
             let newTop = pageY - shiftY - boxRect.top;
             
-            // REMOVED THE WALL CHECK HERE
-            // You can now drag freely anywhere. We only check legality on drop.
+            // THE WALL IS BACK (Prevents pulling illegal cards out)
+            if (newTop < 0) { 
+                if (!gameState.gameActive || !isInitiallyLegal) newTop = 0; 
+            }
             
             img.style.left = newLeft + 'px';
             img.style.top = newTop + 'px';
@@ -342,7 +351,6 @@ function makeDraggable(img, cardData) {
         
         function onMouseMove(event) { 
             moveAt(event.pageX, event.pageY);
-            // Send drag updates
             if(gameState.gameActive) {
                 const boxRect = box.getBoundingClientRect();
                 const currentLeftPx = parseFloat(img.style.left);
@@ -358,12 +366,10 @@ function makeDraggable(img, cardData) {
             document.removeEventListener('mouseup', onMouseUp);
             img.style.transition = 'all 0.1s ease-out';
             
-            // Only try to play if dragged UP out of the area
             if (gameState.gameActive && parseInt(img.style.top) < -10) {
                 const dropSide = getDropSide(event);
                 playCardToCenter(cardData, img, dropSide);
             } else {
-                // Return to hand if dropped inside
                 img.style.left = cardData.originalLeft;
                 img.style.top = cardData.originalTop;
             }
@@ -410,7 +416,6 @@ function playCardToCenter(card, imgElement, dropSide) {
     if (dropSide === 'left' && !isLeftLegal) { snapBack(imgElement, card); return false; }
     if (dropSide === 'right' && !isRightLegal) { snapBack(imgElement, card); return false; }
 
-    // ATOMIC MOVE: Vanish immediately
     if(imgElement) imgElement.remove();
 
     const moveId = `${gameState.myName}-${Date.now()}`;
@@ -566,12 +571,10 @@ function performReveal() {
         renderCenterPile('left', c);
     }
 
-    // Critical: Reset lock so next round can start
     gameState.drawLock = false; 
     gameState.gameActive = true;
     updateScoreboard();
     
-    // Clear ready visuals
     gameState.playerReady = false; 
     gameState.aiReady = false;
     document.getElementById('player-draw-deck').classList.remove('deck-ready');
@@ -673,6 +676,11 @@ function showEndGame(msg, isWin) {
 }
 function sendGameOver(msg, isWin) {
     send({ type: 'GAME_OVER', msg: msg, isWin: isWin });
+}
+
+function quitMatch() {
+    send({ type: 'OPPONENT_LEFT' });
+    window.location.href = 'index.html';
 }
 
 function setCardFaceUp(img, card, owner) {
