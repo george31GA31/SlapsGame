@@ -313,6 +313,9 @@ function makeDraggable(img, cardData) {
     img.onmousedown = (e) => {
         e.preventDefault();
         
+        // 1. Snapshot Legality (The Wall Check)
+        const isInitiallyLegal = checkLegalPlay(cardData);
+
         gameState.globalZ++;
         img.style.zIndex = gameState.globalZ;
         img.style.transition = 'none';
@@ -325,16 +328,17 @@ function makeDraggable(img, cardData) {
         
         const box = document.getElementById('player-foundation-area');
         
+        // THROTTLE VARS
+        let lastSentTime = 0;
+        
         function moveAt(pageX, pageY) {
             const boxRect = box.getBoundingClientRect();
             let newLeft = pageX - shiftX - boxRect.left;
             let newTop = pageY - shiftY - boxRect.top;
             
-            // --- THE PHYSICAL WALL (Exactly as in game.js) ---
+            // THE WALL: If illegal, clamp to top edge
             if (newTop < 0) { 
-                if (!gameState.gameActive || !checkLegalPlay(cardData)) {
-                    newTop = 0; 
-                }
+                if (!gameState.gameActive || !isInitiallyLegal) newTop = 0; 
             }
             
             img.style.left = newLeft + 'px';
@@ -346,7 +350,10 @@ function makeDraggable(img, cardData) {
         function onMouseMove(event) { 
             moveAt(event.pageX, event.pageY);
             
-            if(gameState.gameActive) {
+            // THROTTLED NETWORK UPDATE (Max once per 50ms)
+            const now = Date.now();
+            if(gameState.gameActive && (now - lastSentTime > 50)) {
+                lastSentTime = now;
                 const boxRect = box.getBoundingClientRect();
                 const currentLeftPx = parseFloat(img.style.left);
                 const currentTopPx = parseFloat(img.style.top);
@@ -361,10 +368,12 @@ function makeDraggable(img, cardData) {
             document.removeEventListener('mouseup', onMouseUp);
             img.style.transition = 'all 0.1s ease-out';
             
+            // Drop Logic
             if (gameState.gameActive && parseInt(img.style.top) < -10) {
                 const dropSide = getDropSide(event);
                 playCardToCenter(cardData, img, dropSide);
             } else {
+                // Snap back if dropped inside/illegally
                 img.style.left = cardData.originalLeft;
                 img.style.top = cardData.originalTop;
             }
@@ -374,7 +383,6 @@ function makeDraggable(img, cardData) {
         document.addEventListener('mouseup', onMouseUp);
     };
 }
-
 // --- MIRROR FIX 2: Opponent Movement ---
 function executeOpponentDrag(cardId, leftPct, topPct) {
     const card = gameState.aiHand.find(c => c.id === cardId);
@@ -496,11 +504,24 @@ function handleMoveRejected(data) {
 }
 
 function renderOpponentMove(cardData, side) {
-    const card = gameState.aiHand.find(c => c.id === cardData.id);
-    if (card && card.element) card.element.remove();
-    gameState.aiHand = gameState.aiHand.filter(c => c.id !== cardData.id);
-    gameState.aiTotal--;
+    // 1. Find the card object in the AI Hand
+    const cardIndex = gameState.aiHand.findIndex(c => c.id === cardData.id);
+    
+    if (cardIndex !== -1) {
+        const card = gameState.aiHand[cardIndex];
+        // Remove the visual element from the top area
+        if (card.element) card.element.remove();
+        // Remove from data array
+        gameState.aiHand.splice(cardIndex, 1);
+        gameState.aiTotal--;
+    } else {
+        // Fallback: If not found in hand (maybe sync issue), just decrement total
+        gameState.aiTotal = Math.max(0, gameState.aiTotal - 1);
+    }
+
+    // 2. Add to Center Pile
     renderCenterPile(side, cardData);
+    
     updateScoreboard();
     checkSlapCondition();
 }
@@ -560,11 +581,12 @@ function shuffle(array) {
     } 
 }
 
-// --- TURBO REVEAL (INSTANT) ---
 function performReveal() {
+    // 1. Clear Piles
     document.getElementById('center-pile-left').innerHTML = '';
     document.getElementById('center-pile-right').innerHTML = '';
 
+    // 2. Render Cards
     if (gameState.playerDeck.length > 0) {
         let c = gameState.playerDeck.pop();
         gameState.centerPileRight.push(c);
@@ -576,14 +598,17 @@ function performReveal() {
         renderCenterPile('left', c);
     }
 
+    // 3. UNLOCK GAME STATE (Crucial)
     gameState.drawLock = false; 
     gameState.gameActive = true;
-    updateScoreboard();
     
+    // 4. RESET READY FLAGS (Fixes Glowing Deck)
     gameState.playerReady = false; 
     gameState.aiReady = false;
     document.getElementById('player-draw-deck').classList.remove('deck-ready');
     document.getElementById('ai-draw-deck').classList.remove('deck-ready');
+    
+    updateScoreboardWidget();
 }
 
 function handlePlayerDeckClick() {
