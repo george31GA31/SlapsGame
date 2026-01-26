@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ISF - Tournament Arena</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700;900&display=swap" rel="stylesheet">
+    
+    <style>
+        /* --- DARK THEME BASE --- */
+        body {
+            background-color: #1a1a1a;
+            background-image: radial-gradient(circle at center, #2a2a2a 0%, #000000 100%);
+            color: white;
+            font-family: 'Roboto', sans-serif;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            overflow: hidden; 
+        }
+
+        /* --- LAYOUT GRID --- */
+        .tournament-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr; /* Two equal columns */
+            gap: 20px;
+            width: 90%;
+            max-width: 900px;
+            height: auto;
+        }
+
+        .right-column {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        /* --- CARD STYLE --- */
+        .t-card {
+            background: rgba(0, 0, 0, 0.6);
+            border: 1px solid #333;
+            border-radius: 15px;
+            padding: 30px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            transition: transform 0.2s;
+        }
+
+        .t-card:hover {
+            border-color: #555;
+            transform: translateY(-2px);
+        }
+
+        .t-card.large {
+            height: 100%; /* Fill the left column */
+            justify-content: space-around; /* Spread content out */
+        }
+
+        /* --- TYPOGRAPHY --- */
+        h2 {
+            font-weight: 900;
+            font-size: 1.5rem;
+            margin: 15px 0 20px 0;
+            text-transform: uppercase;
+            font-style: italic;
+            letter-spacing: 1px;
+        }
+
+        .icon-large {
+            font-size: 3rem;
+            color: #00ccff;
+            margin-bottom: 10px;
+        }
+
+        /* --- INPUTS --- */
+        .modern-input {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid #444;
+            border-radius: 8px;
+            padding: 12px;
+            font-size: 1rem;
+            color: white;
+            text-align: center;
+            width: 80%;
+            outline: none;
+            font-weight: bold;
+            text-transform: uppercase;
+            margin-bottom: 15px;
+            transition: 0.3s;
+        }
+        .modern-input:focus {
+            border-color: #00ccff;
+            background: rgba(0, 0, 0, 0.6);
+        }
+
+        /* --- BUTTONS --- */
+        .btn-blue {
+            background: linear-gradient(135deg, #00c6ff, #0072ff);
+            border: none;
+            color: white;
+            padding: 15px 0;
+            font-size: 1.1rem;
+            font-weight: 900;
+            border-radius: 50px;
+            cursor: pointer;
+            text-transform: uppercase;
+            width: 90%;
+            box-shadow: 0 0 15px rgba(0, 114, 255, 0.3);
+            transition: 0.2s;
+        }
+        .btn-blue:hover {
+            transform: scale(1.02);
+            box-shadow: 0 0 25px rgba(0, 114, 255, 0.6);
+        }
+
+        .btn-outline {
+            background: transparent;
+            border: 2px solid #00ccff;
+            color: white;
+            padding: 12px 0;
+            font-size: 1rem;
+            font-weight: 900;
+            border-radius: 50px;
+            cursor: pointer;
+            text-transform: uppercase;
+            width: 90%;
+            transition: 0.2s;
+        }
+        .btn-outline:hover {
+            background: rgba(0, 204, 255, 0.1);
+            color: #00ccff;
+        }
+
+        .divider {
+            margin: 15px 0;
+            font-size: 0.8rem;
+            color: #666;
+            font-weight: bold;
+        }
+
+        /* --- BACK BUTTON --- */
+        .bottom-nav {
+            margin-top: 30px;
+        }
+        .btn-text {
+            background: none;
+            border: none;
+            color: #888;
+            font-size: 1rem;
+            font-weight: 900;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .btn-text:hover { color: white; }
+
+    </style>
+</head>
+<body>
+
+    <div class="tournament-grid">
+        
+        <div class="t-card large">
+            <div>
+                <i class="fa-solid fa-users icon-large"></i>
+                <h2>Play Friends</h2>
+            </div>
+            
+            <div style="width: 100%; display: flex; flex-direction: column; align-items: center;">
+                <input type="text" class="modern-input" placeholder="ENTER NICKNAME">
+                <button class="btn-blue">Host Tournament</button>
+            </div>
+
+            <div class="divider">OR</div>
+
+            <div style="width: 100%; display: flex; flex-direction: column; align-items: center;">
+                <input type="text" class="modern-input" placeholder="ENTER ISF-CODE">
+                <button class="btn-outline"><i class="fa-solid fa-plug"></i> Join Tournament</button>
+            </div>
+        </div>
+
+        <div class="right-column">
+            
+            <div class="t-card">
+                <i class="fa-solid fa-globe icon-large"></i>
+                <h2>Connect to Online Tournament</h2>
+                <input type="text" class="modern-input" placeholder="ENTER NICKNAME">
+                <button class="btn-blue">Join Tournament</button>
+            </div>
+
+            <div class="t-card">
+                <i class="fa-solid fa-robot icon-large"></i>
+                <h2>AI Bot Tournament</h2>
+                <button class="btn-blue">Play Tournament</button>
+            </div>
+
+        </div>
+    </div>
+
+    <div class="bottom-nav">
+        <button class="btn-text" onclick="window.location.href='index.html'">Back Home</button>
+    </div>
+
+</body>
+</html>
