@@ -548,7 +548,6 @@ function executeOpponentDrag(cardId, leftPct, topPct) {
     card.element.style.zIndex = 200;
 }
 
-// --- CARD PLAYING (Host adjudication) ---
 function playCardToCenter(card, imgElement, dropSide) {
     if (!gameState.gameActive) return false;
 
@@ -557,9 +556,9 @@ function playCardToCenter(card, imgElement, dropSide) {
 
     if (dropSide !== 'left' && dropSide !== 'right') return false;
 
-    // Must be legal on the pile you dropped on
     if (dropSide === 'left' && !isLeftLegal) return false;
     if (dropSide === 'right' && !isRightLegal) return false;
+    if (imgElement) imgElement.remove();
 
     // Ask host to adjudicate (host decides which arrives first)
     return requestMoveToHost(card, imgElement, dropSide);
@@ -935,16 +934,17 @@ function startCountdown(broadcast) {
         } else {
             clearInterval(timer);
             overlay.classList.add('hidden');
-            performReveal();
+            ();
         }
     }, 800);
 }
 
 function performReveal() {
+    // 1. Clear Ready States
     document.getElementById('player-draw-deck').classList.remove('deck-ready');
     document.getElementById('ai-draw-deck').classList.remove('deck-ready');
 
-    // Borrow Logic (Do not clear tags here)
+    // 2. Handle Borrowing (Logic Only)
     if (gameState.playerDeck.length === 0 && gameState.aiDeck.length > 0) {
         const steal = Math.floor(gameState.aiDeck.length / 2);
         if (steal > 0) {
@@ -952,7 +952,6 @@ function performReveal() {
             document.getElementById('borrowed-player').classList.remove('hidden');
         }
     }
-
     if (gameState.aiDeck.length === 0 && gameState.playerDeck.length > 0) {
         const steal = Math.floor(gameState.playerDeck.length / 2);
         if (steal > 0) {
@@ -961,26 +960,26 @@ function performReveal() {
         }
     }
 
-    // Scoring Logic
+    // 3. Scoring Penalties for Borrowing
     const pBorrowing = !document.getElementById('borrowed-player').classList.contains('hidden');
     const aBorrowing = !document.getElementById('borrowed-ai').classList.contains('hidden');
 
-    if (pBorrowing) {
-        gameState.aiTotal -= 2;
-    } else if (aBorrowing) {
-        gameState.playerTotal -= 2;
-    } else {
+    if (pBorrowing) gameState.aiTotal -= 2; // AI pays for Player's card
+    else if (aBorrowing) gameState.playerTotal -= 2; // Player pays for AI's card
+    else {
         gameState.playerTotal--;
         gameState.aiTotal--;
     }
 
-    // Play Cards and Render
+    // 4. TURBO RENDER (Clear piles first to prevent lag)
+    document.getElementById('center-pile-left').innerHTML = '';
+    document.getElementById('center-pile-right').innerHTML = '';
+
     if (gameState.playerDeck.length > 0) {
         let c = gameState.playerDeck.pop();
         gameState.centerPileRight.push(c);
         renderCenterPile('right', c);
     }
-
     if (gameState.aiDeck.length > 0) {
         let c = gameState.aiDeck.pop();
         gameState.centerPileLeft.push(c);
@@ -993,6 +992,9 @@ function performReveal() {
     gameState.aiReady = false;
 
     checkSlapCondition();
+    
+    // Release the lock that might be holding up input
+    gameState.drawLock = false; 
 }
 
 function handleInput(e) {
