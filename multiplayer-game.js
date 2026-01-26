@@ -698,8 +698,7 @@ function tryFlipCard(img, card) {
 }
 
 function cardKey(c) {
-    // Stable enough for ghosting and matching
-    return `${c.suit}:${c.rank}:${c.value}:${c.owner}:${c.laneIndex}`;
+    return c.id;
 }
 
 function makeDraggable(img, cardData) {
@@ -901,13 +900,16 @@ function requestMoveToHost(cardData, dropSide) {
         card: packCardWithMeta(cardData)
     };
 
-    if (gameState.isHost) {
-        // CRITICAL FIX: Host processes their own move as 'player'
-        adjudicateMove(req, 'player');
-    } else {
-        // Guest sends request (Host will receive it and treat it as 'ai')
-        sendNet({ type: 'MOVE_REQ', move: req });
+    if (!gameState.isHost) {
+    // LOCK card locally until host responds
+    if (cardData.element) {
+        cardData.element.style.pointerEvents = 'none';
+        cardData.element.style.opacity = '0.7';
     }
+    sendNet({ type: 'MOVE_REQ', move: req });
+} else {
+    adjudicateMove(req, 'player');
+}
 }
 function adjudicateMove(m, moverOverride) {
     // If no override provided, assume it came from network (AI/Opponent)
@@ -993,17 +995,23 @@ function applyMoveAuthoritative(mover, cardObj, side, reqId) {
     };
 }
 
-function revealNewTopAfterPlay(owner, laneIdx) {
-    const hand = (owner === 'player') ? gameState.playerHand : gameState.aiHand;
-    const laneCards = hand.filter(c => c.laneIndex === laneIdx);
+function revealNewTopAfterPlay(owner) {
+    const hand = owner === 'player' ? gameState.playerHand : gameState.aiHand;
+    if (!hand || hand.length === 0) return;
 
-    if (laneCards.length > 0) {
-        const newTop = laneCards[laneCards.length - 1];
-        if (!newTop.isFaceUp && newTop.element) {
-            setCardFaceUp(newTop.element, newTop, owner);
-        }
+    // Find cards that still exist in DOM
+    const liveCards = hand.filter(c => c.element && c.element.isConnected);
+
+    if (liveCards.length === 0) return;
+
+    // The last rendered card in this owner's foundation is the top card
+    const topCard = liveCards[liveCards.length - 1];
+
+    if (!topCard.isFaceUp && topCard.element) {
+        setCardFaceUp(topCard.element, topCard, owner);
     }
 }
+
 
 function applyMoveFromHost(a) {
     // Remove any drag ghost for this card id (best effort)
@@ -1021,11 +1029,8 @@ function applyMoveFromHost(a) {
     const mover = a.mover;
     const hand = (mover === 'player') ? gameState.playerHand : gameState.aiHand;
 
-    const idx = hand.findIndex(c =>
-        c.suit === a.card.suit &&
-        c.rank === a.card.rank &&
-        c.value === a.card.value
-    );
+   const idx = hand.findIndex(c => c.id === a.card.id);
+
 
     let cardObj = null;
 
@@ -1055,18 +1060,16 @@ function applyMoveFromHost(a) {
 }
 
 function rejectMoveFromHost(j) {
-    // Snap back the last dragged card on this client
     const c = gameState.lastDraggedCard;
     const el = gameState.lastDraggedEl;
     if (!c || !el) return;
 
+    el.style.pointerEvents = 'auto';
+    el.style.opacity = '1';
+
     if (c.originalLeft != null) el.style.left = c.originalLeft;
     if (c.originalTop != null) el.style.top = c.originalTop;
 }
-
-/* ================================
-   DECK READY / COUNTDOWN / REVEAL (host-authoritative)
-   ================================ */
 
 function handlePlayerDeckClick() {
     if (!gameState.gameActive) {
