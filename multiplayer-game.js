@@ -1,13 +1,5 @@
 /* =========================================
    MULTIPLAYER GAME.JS (Human vs Human)
-   - Uses your existing PeerJS lobby pages:
-     - multiplayer-setup.html (Play a friend)
-     - matchmaking.html (Public matchmaking)
-   - Reads localStorage:
-     - isf_role = "host" | "join" | "guest"
-     - isf_code = host peer id (e.g. "ISF-1234" or "isf-public-match-v1-0")
-     - isf_my_name = nickname
-   - Keeps UI structure intact (uses your existing element IDs, including ai-*).
    ========================================= */
 
 const gameState = {
@@ -441,7 +433,7 @@ async function startRoundHostAuthoritative() {
     if (bp) bp.classList.add('hidden');
     if (ba) ba.classList.add('hidden');
 
-    // Initial shortage borrow (same as your original logic)
+    // Initial shortage borrow
     if (gameState.playerDeck.length === 0 && gameState.aiDeck.length > 1) {
         const steal = Math.floor(gameState.aiDeck.length / 2);
         gameState.playerDeck = gameState.aiDeck.splice(0, steal);
@@ -456,10 +448,9 @@ async function startRoundHostAuthoritative() {
     await preloadCardImages([...pHandCards, ...aHandCards]);
 
     dealSmartHand(pHandCards, 'player');
-    dealSmartHand(aHandCards, 'ai'); // 'ai' reused as opponent
+    dealSmartHand(aHandCards, 'ai');
 
     resetCenterPiles();
-
     checkDeckVisibility();
 
     gameState.gameActive = false;
@@ -469,10 +460,35 @@ async function startRoundHostAuthoritative() {
     updateScoreboard();
     updateScoreboardWidget();
 
-    // Send full state to joiner
-    sendNet({ type: 'ROUND_START', state: exportState() });
-}
+    // --- CRITICAL FIX: SWAP DATA FOR GUEST ---
+    // We cannot use exportState() because that sends MY hand as YOUR hand.
+    // We must manually construct the state so the Guest receives the OPPOSITE data.
+    
+    const guestState = {
+        // Swap Totals
+        playerTotal: gameState.aiTotal,
+        aiTotal: gameState.playerTotal,
 
+        // Swap Decks
+        playerDeck: gameState.aiDeck.map(packCard),
+        aiDeck: gameState.playerDeck.map(packCard),
+
+        // Swap Hands (Mirroring)
+        playerHand: gameState.aiHand.map(packCardWithMeta),
+        aiHand: gameState.playerHand.map(packCardWithMeta),
+
+        // Swap Center Piles 
+        // (Host's "Left" is the Guest's pile, so it becomes Guest's "Right")
+        centerPileLeft: gameState.centerPileRight.map(packCard),
+        centerPileRight: gameState.centerPileLeft.map(packCard),
+
+        // Swap Borrow Flags
+        borrowedPlayer: !document.getElementById('borrowed-ai').classList.contains('hidden'),
+        borrowedAi: !document.getElementById('borrowed-player').classList.contains('hidden')
+    };
+
+    sendNet({ type: 'ROUND_START', state: guestState });
+}
 async function startRoundJoinerFromState(state) {
     importState(state);
 
