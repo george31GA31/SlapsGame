@@ -198,10 +198,18 @@
             </div>
 
             <div class="t-card">
-                <i class="fa-solid fa-robot icon-large"></i>
-                <h2>AI Bot Tournament</h2>
-                <button class="btn-blue">Play Tournament</button>
-            </div>
+    <i class="fa-solid fa-robot icon-large"></i>
+    <h2>AI Bot Tournament</h2>
+    <button class="btn-blue" onclick="startBotTournament()">Play Tournament</button>
+</div>
+
+<script>
+    function startBotTournament() {
+        // Reset progress to Round 0 (Round of 16)
+        localStorage.setItem('isf_tourney_round', 0);
+        window.location.href = 'tournament-match.html';
+    }
+</script>
 
         </div>
     </div>
