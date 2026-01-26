@@ -1,5 +1,5 @@
 /* =========================================
-   ISF MULTIPLAYER ENGINE v9.1 (Refresh Fix + Wall Restore)
+   ISF MULTIPLAYER ENGINE v10.0 (Mirrored + Wall Fix)
    ========================================= */
 
 const gameState = {
@@ -78,9 +78,7 @@ function initNetwork() {
 
     peer.on('open', (id) => {
         console.log("My Peer ID: " + id);
-        if (!gameState.isHost) {
-            connectToHost(peer, code);
-        }
+        if (!gameState.isHost) connectToHost(peer, code);
     });
 
     peer.on('connection', (conn) => {
@@ -88,7 +86,6 @@ function initNetwork() {
     });
 
     peer.on('error', (err) => {
-        // RETRY LOGIC
         if (!gameState.isHost && err.type === 'peer-unavailable') {
             console.log("Host not ready. Retrying in 1s...");
             setTimeout(() => connectToHost(peer, code), 1000);
@@ -130,14 +127,8 @@ function processNetworkData(data) {
             if (gameState.isHost) {
                 gameState.opponentName = data.name || "Opponent";
                 updateNamesUI();
-                
-                // CRITICAL FIX: STOP RE-SHUFFLING
-                // If we already have cards, just send the current ones.
-                if(gameState.playerHand.length > 0) {
-                    sendCurrentState();
-                } else {
-                    startRound(); 
-                }
+                if(gameState.playerHand.length > 0) sendCurrentState();
+                else startRound(); 
             }
             break;
 
@@ -207,7 +198,6 @@ function startRound() {
     let fullDeck = createDeck();
     shuffle(fullDeck);
     
-    // Safety checks
     if (gameState.playerTotal <= 0) { sendGameOver("YOU WIN!", true); showEndGame("YOU WIN!", true); return; }
     if (gameState.aiTotal <= 0) { sendGameOver(gameState.opponentName + " WINS!", false); showEndGame(gameState.opponentName + " WINS!", false); return; }
 
@@ -228,7 +218,6 @@ function startRound() {
     sendCurrentState();
 }
 
-// Helper to send existing cards without reshuffling
 function sendCurrentState() {
     const cleanDeck = (deck) => deck.map(c => ({ suit: c.suit, rank: c.rank, value: c.value, id: c.id }));
     const cleanHand = (hand) => hand.map(c => ({ suit: c.suit, rank: c.rank, value: c.value, id: c.id }));
@@ -263,10 +252,16 @@ function dealSyncedHand(cardsData, owner) {
     dealSmartHand(cards, owner);
 }
 
+// --- RENDERING (MIRROR FIX) ---
 function dealSmartHand(cards, owner) {
     const container = document.getElementById(`${owner}-foundation-area`);
     container.innerHTML = ''; 
     if (owner === 'player') gameState.playerHand = []; else gameState.aiHand = [];
+
+    // MIRROR FIX 1: Reverse Opponent's array so 3-4-7-8 becomes 8-7-4-3
+    if (owner === 'ai') {
+        cards = [...cards].reverse(); 
+    }
 
     const piles = [[], [], [], []];
     let idx = 0;
@@ -313,14 +308,11 @@ function dealSmartHand(cards, owner) {
     });
 }
 
-// --- PHYSICS (With Wall Restored) ---
+// --- PHYSICS (WALL RESTORED) ---
 function makeDraggable(img, cardData) {
     img.onmousedown = (e) => {
         e.preventDefault();
         
-        // 1. Snapshot Legality on Click (For the Wall)
-        const isInitiallyLegal = checkLegalPlay(cardData);
-
         gameState.globalZ++;
         img.style.zIndex = gameState.globalZ;
         img.style.transition = 'none';
@@ -338,9 +330,11 @@ function makeDraggable(img, cardData) {
             let newLeft = pageX - shiftX - boxRect.left;
             let newTop = pageY - shiftY - boxRect.top;
             
-            // THE WALL IS BACK (Prevents pulling illegal cards out)
+            // --- THE PHYSICAL WALL (Exactly as in game.js) ---
             if (newTop < 0) { 
-                if (!gameState.gameActive || !isInitiallyLegal) newTop = 0; 
+                if (!gameState.gameActive || !checkLegalPlay(cardData)) {
+                    newTop = 0; 
+                }
             }
             
             img.style.left = newLeft + 'px';
@@ -351,6 +345,7 @@ function makeDraggable(img, cardData) {
         
         function onMouseMove(event) { 
             moveAt(event.pageX, event.pageY);
+            
             if(gameState.gameActive) {
                 const boxRect = box.getBoundingClientRect();
                 const currentLeftPx = parseFloat(img.style.left);
@@ -380,6 +375,7 @@ function makeDraggable(img, cardData) {
     };
 }
 
+// --- MIRROR FIX 2: Opponent Movement ---
 function executeOpponentDrag(cardId, leftPct, topPct) {
     const card = gameState.aiHand.find(c => c.id === cardId);
     if (!card || !card.element) return;
@@ -388,9 +384,18 @@ function executeOpponentDrag(cardId, leftPct, topPct) {
     if (!box) return;
 
     const cardH = card.element.offsetHeight;
+    const cardW = card.element.offsetWidth; // approx needed for left mirroring
+
+    // 1. MIRROR X-AXIS: If they move Left (5%), I see Right (95%)
+    // Adjust by card width relative to box width to keep alignment perfect
+    const boxRect = box.getBoundingClientRect();
+    const widthOffset = (cardW / boxRect.width) * 100; 
+    const mirroredLeft = 100 - leftPct - widthOffset;
+
+    // 2. MIRROR Y-AXIS: If they move Up (Towards center), I see Down (Towards center)
     const mirroredTop = 100 - topPct - ((cardH / boxRect.height) * 100);
     
-    card.element.style.left = leftPct + '%'; 
+    card.element.style.left = mirroredLeft + '%'; 
     card.element.style.top = mirroredTop + '%';
     card.element.style.zIndex = 200;
 }
