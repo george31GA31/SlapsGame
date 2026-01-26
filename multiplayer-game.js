@@ -462,7 +462,9 @@ async function startRoundHostAuthoritative() {
     // --- CRITICAL FIX: SWAP DATA FOR GUEST ---
     // We cannot use exportState() because that sends MY hand as YOUR hand.
     // We must manually construct the state so the Guest receives the OPPOSITE data.
-    
+    const borrowedAiEl = document.getElementById('borrowed-ai');
+    const borrowedPlayerEl = document.getElementById('borrowed-player');
+
     const guestState = {
         // Swap Totals
         playerTotal: gameState.aiTotal,
@@ -476,17 +478,17 @@ async function startRoundHostAuthoritative() {
         playerHand: gameState.aiHand.map(packCardWithMeta),
         aiHand: gameState.playerHand.map(packCardWithMeta),
 
-        // Swap Center Piles 
-        // (Host's "Left" is the Guest's pile, so it becomes Guest's "Right")
+        // Swap Center Piles
         centerPileLeft: gameState.centerPileRight.map(packCard),
         centerPileRight: gameState.centerPileLeft.map(packCard),
 
         // Swap Borrow Flags
-        borrowedPlayer: !document.getElementById('borrowed-ai').classList.contains('hidden'),
-        borrowedAi: !document.getElementById('borrowed-player').classList.contains('hidden')
+        borrowedPlayer: borrowedAiEl ? !borrowedAiEl.classList.contains('hidden') : false,
+        borrowedAi: borrowedPlayerEl ? !borrowedPlayerEl.classList.contains('hidden') : false
     };
 
     sendNet({ type: 'ROUND_START', state: guestState });
+
 }
 async function startRoundJoinerFromState(state) {
     importState(state);
@@ -604,25 +606,26 @@ function dealSmartHand(cards, owner) {
     if (!container) return;
 
     container.innerHTML = '';
+
+    // Reset the correct hand array and then refill it
     if (owner === 'player') gameState.playerHand = [];
     else gameState.aiHand = [];
 
-    // Build 4 piles
     const piles = [[], [], [], []];
-    let idx = 0;
-    
+
     if (cards.length >= 10) {
+        let cardIdx = 0;
         [4, 3, 2, 1].forEach((size, i) => {
-            for (let j = 0; j < size; j++) piles[i].push(cards[idx++]);
+            for (let j = 0; j < size; j++) piles[i].push(cards[cardIdx++]);
         });
     } else {
-        cards.forEach(card => { piles[idx].push(card); idx = (idx + 1) % 4; });
+        let pileIdx = 0;
+        cards.forEach(card => {
+            piles[pileIdx].push(card);
+            pileIdx = (pileIdx + 1) % 4;
+        });
     }
 
-    // MIRROR LOGIC:
-    // Host lanes: 3, 2, 1, 0 (Visual Left->Right: D, C, B, A)
-    // Guest lanes: 0, 1, 2, 3 (Visual Left->Right: A, B, C, D)
-    // This creates a perfect mirror naturally. 
     const laneOrder = (owner === 'ai') ? [3, 2, 1, 0] : [0, 1, 2, 3];
 
     laneOrder.forEach((laneIdx, displayIdx) => {
@@ -651,11 +654,13 @@ function dealSmartHand(cards, owner) {
             card.element = img;
             container.appendChild(img);
 
+            // CRITICAL: store the card in the correct hand array
             if (owner === 'player') gameState.playerHand.push(card);
             else gameState.aiHand.push(card);
         });
     });
-}}
+}
+
 
 /* ================================
    CARD FACE / FLIP / DRAG
