@@ -194,6 +194,11 @@ function handleNet(msg) {
             startRoundHostAuthoritative();
         }
         return;
+    if (msg.type === 'OPPONENT_LEFT') {
+        alert("Opponent has left the match.");
+        window.location.href = 'index.html';
+        return;
+    }
     }
 
     if (msg.type === 'ROUND_START') {
@@ -978,7 +983,7 @@ function applyMoveAuthoritative(mover, cardObj, side, reqId) {
     checkSlapCondition();
 
     // Reveal new top card for mover lane (host knows the real stack)
-    revealNewTopAfterPlay(mover, cardObj.laneIndex);
+    revealNewTopAfterPlay(mover);
 
     // End checks
     if (gameState.playerTotal <= 0) showEndGame("YOU WIN THE MATCH!", true);
@@ -1014,12 +1019,10 @@ function revealNewTopAfterPlay(owner) {
 
 
 function applyMoveFromHost(a) {
-    // Remove any drag ghost for this card id (best effort)
-    const ghost = gameState.opponentDragGhosts.get(cardKey(a.card));
-    if (ghost) {
-        ghost.remove();
-        gameState.opponentDragGhosts.delete(cardKey(a.card));
-    }
+for (const [k, el] of gameState.opponentDragGhosts.entries()) {
+    if (el && el.remove) el.remove();
+}
+gameState.opponentDragGhosts.clear();
 
     // Update totals from host
     gameState.playerTotal = a.playerTotal;
@@ -1053,10 +1056,13 @@ function applyMoveFromHost(a) {
 
     updateScoreboard();
     checkSlapCondition();
-
-    // Reveal new top card locally if mover was player (we can do it)
-    // For opponent, the host will also have flipped their top; we mirror using the meta in state only if you sync hands.
-    // Best effort: do nothing here.
+// If *I* was the mover on this client, reveal my new top card
+if (a.mover === 'player') {
+    revealNewTopAfterPlay('player');
+} else {
+    // optional: if you want opponent top reveal locally too
+    // revealNewTopAfterPlay('ai');
+}
 }
 
 function rejectMoveFromHost(j) {
@@ -1262,14 +1268,22 @@ function renderCenterPile(side, card) {
     const img = document.createElement('img');
     img.src = card.imgSrc;
     img.className = 'game-card';
+    img.style.position = 'absolute';           // important
     img.style.left = '50%';
     img.style.top = '50%';
 
     const rot = Math.random() * 20 - 10;
     img.style.transform = `translate(-50%, -50%) rotate(${rot}deg)`;
 
+    // FIX 4: deterministic stacking and no random opacity
+    gameState.globalZ++;
+    img.style.zIndex = String(gameState.globalZ);
+    img.style.opacity = '1';
+    img.style.pointerEvents = 'none';
+
     container.appendChild(img);
 }
+
 
 /* ================================
    DECK / SCOREBOARD (kept)
@@ -1387,4 +1401,10 @@ async function preloadCardImages(cards) {
         Promise.all(tasks),
         new Promise(resolve => setTimeout(resolve, 2500))
     ]);
+}
+function quitMatch() {
+    // Tell the opponent we are leaving so they don't get stuck
+    sendNet({ type: 'OPPONENT_LEFT' });
+    // Go back to main menu
+    window.location.href = 'index.html';
 }
