@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tournament Match</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        body {
+            background-color: #1a1a1a;
+            background-image: radial-gradient(circle at center, #2a2a2a 0%, #000000 100%);
+            color: white;
+            font-family: 'Roboto', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+            text-align: center;
+        }
+
+        /* --- TEXT STYLES --- */
+        h1 {
+            font-size: 3rem;
+            font-weight: 900;
+            margin: 0;
+            text-transform: uppercase;
+            font-style: italic;
+            letter-spacing: 2px;
+            opacity: 0; /* Hidden start */
+            transform: translateY(-50px);
+        }
+
+        h2 {
+            font-size: 1.5rem;
+            color: #ccc;
+            margin-top: 10px;
+            margin-bottom: 60px;
+            text-transform: uppercase;
+            font-weight: 700;
+            opacity: 0; /* Hidden start */
+            transform: translateY(-30px);
+        }
+
+        /* --- BUTTON STYLES --- */
+        .btn-play {
+            background: #333; /* Grey Start */
+            color: #888;
+            border: none;
+            padding: 20px 80px;
+            font-size: 1.5rem;
+            font-weight: 900;
+            border-radius: 50px;
+            cursor: not-allowed;
+            text-transform: uppercase;
+            box-shadow: none;
+            transition: all 0.5s ease;
+            opacity: 0;
+            pointer-events: none; /* Can't click yet */
+        }
+
+        /* The "Active" Blue State */
+        .btn-play.active {
+            background: linear-gradient(135deg, #00c6ff, #0072ff);
+            color: white;
+            cursor: pointer;
+            box-shadow: 0 0 20px rgba(0, 114, 255, 0.5);
+            pointer-events: all;
+            opacity: 1;
+        }
+        .btn-play.active:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 40px rgba(0, 114, 255, 0.8);
+        }
+
+        /* --- ANIMATIONS --- */
+        @keyframes flyIn {
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .anim-text-1 { animation: flyIn 0.8s ease-out forwards 0.2s; }
+        .anim-text-2 { animation: flyIn 0.8s ease-out forwards 0.6s; }
+        .anim-btn    { animation: flyIn 1s ease-out forwards 1.2s; }
+
+        /* --- TROPHY SCREEN (Hidden by default) --- */
+        .hidden { display: none !important; }
+
+        .trophy-container {
+            animation: popIn 1s ease;
+        }
+        .fa-trophy {
+            font-size: 8rem;
+            color: gold;
+            text-shadow: 0 0 50px rgba(255, 215, 0, 0.6);
+            margin-bottom: 20px;
+        }
+        .confetti {
+            position: absolute;
+            width: 10px; height: 10px;
+            background: #f00;
+            animation: fall 3s linear infinite;
+        }
+        @keyframes fall {
+            0% { transform: translateY(-100vh) rotate(0deg); opacity: 1; }
+            100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="match-ui">
+        <h1 id="round-name" class="anim-text-1">ROUND OF 16</h1>
+        <h2 id="bot-level"  class="anim-text-2">LEVEL 1 BOT</h2>
+        
+        <button id="play-btn" class="btn-play anim-btn" onclick="startMatch()">
+            PLAY MATCH
+        </button>
+    </div>
+
+    <div id="winner-ui" class="hidden trophy-container">
+        <i class="fa-solid fa-trophy"></i>
+        <h1 style="opacity:1; transform:none; color:gold;">CHAMPION!</h1>
+        <p style="font-size:1.2rem; color:#fff;">CONGRATULATIONS</p>
+        <br>
+        <button class="btn-play active" onclick="window.location.href='index.html'" style="opacity:1;">
+            MAIN MENU
+        </button>
+        <div id="confetti-zone"></div>
+    </div>
+
+    <script>
+        // DEFINITION OF THE TOURNAMENT TREE
+        const tournamentData = [
+            { name: "ROUND OF 16",    bot: "LEVEL 1 BOT",  diff: 1 },
+            { name: "QUARTER FINALS", bot: "LEVEL 3 BOT",  diff: 3 },
+            { name: "SEMI FINALS",    bot: "LEVEL 7 BOT",  diff: 7 },
+            { name: "GRAND FINAL",    bot: "LEVEL 10 BOT", diff: 10 }
+        ];
+
+        window.onload = function() {
+            // 1. Get current round (Default to 0 if starting fresh)
+            let roundIdx = parseInt(localStorage.getItem('isf_tourney_round'));
+            if(isNaN(roundIdx)) roundIdx = 0;
+
+            // 2. CHECK IF WON
+            if (roundIdx >= tournamentData.length) {
+                showWinnerScreen();
+                return;
+            }
+
+            // 3. Setup Text
+            const data = tournamentData[roundIdx];
+            document.getElementById('round-name').innerText = data.name;
+            document.getElementById('bot-level').innerText = data.bot;
+
+            // 4. Button Animation Logic
+            const btn = document.getElementById('play-btn');
+            // Wait for CSS fade in, then turn it Blue/Active
+            setTimeout(() => {
+                btn.classList.add('active');
+            }, 1500);
+        };
+
+        function startMatch() {
+            let roundIdx = parseInt(localStorage.getItem('isf_tourney_round')) || 0;
+            const data = tournamentData[roundIdx];
+
+            // Setup Game settings
+            localStorage.setItem('gamemode', 'tournament'); // Tell game.js we are in tourney
+            localStorage.setItem('slapsDifficulty', data.diff); // Set bot level
+            
+            window.location.href = 'game.html';
+        }
+
+        function showWinnerScreen() {
+            document.getElementById('match-ui').classList.add('hidden');
+            document.getElementById('winner-ui').classList.remove('hidden');
+            createConfetti();
+            // Reset round for next time
+            localStorage.setItem('isf_tourney_round', 0);
+        }
+
+        function createConfetti() {
+            const colors = ['#f00', '#0f0', '#00f', '#ff0', '#0ff', '#f0f'];
+            for(let i=0; i<50; i++) {
+                const c = document.createElement('div');
+                c.className = 'confetti';
+                c.style.left = Math.random() * 100 + 'vw';
+                c.style.background = colors[Math.floor(Math.random()*colors.length)];
+                c.style.animationDuration = (Math.random() * 2 + 2) + 's';
+                c.style.animationDelay = (Math.random() * 2) + 's';
+                document.getElementById('confetti-zone').appendChild(c);
+            }
+        }
+    </script>
+</body>
+</html>
