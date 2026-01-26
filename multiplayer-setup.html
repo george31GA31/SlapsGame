@@ -7,55 +7,140 @@
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700;900&display=swap" rel="stylesheet">
+
+<style>
+    /* --- DARK THEME STYLES --- */
+    body.matchmaking-body {
+        background-color: #1a1a1a;
+        background-image: radial-gradient(circle at center, #2a2a2a 0%, #000000 100%);
+        color: white;
+        font-family: 'Roboto', sans-serif;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        margin: 0;
+        overflow: hidden;
+    }
+
+    .setup-container {
+        text-align: center;
+        background: rgba(0, 0, 0, 0.5); /* Slight box background */
+        padding: 40px;
+        border-radius: 20px;
+        border: 1px solid #333;
+        box-shadow: 0 0 30px rgba(0,0,0,0.8);
+        width: 100%;
+        max-width: 500px;
+    }
+
+    h1 {
+        font-weight: 900;
+        font-size: 2.5rem;
+        margin-bottom: 30px;
+        text-transform: uppercase;
+        font-style: italic;
+    }
+
+    .modern-input {
+        background: rgba(255, 255, 255, 0.1);
+        border: 2px solid #444;
+        border-radius: 8px;
+        padding: 15px;
+        font-size: 1.2rem;
+        color: white;
+        text-align: center;
+        width: 80%;
+        outline: none;
+        font-weight: bold;
+        text-transform: uppercase;
+        margin-bottom: 20px;
+        transition: 0.3s;
+    }
+
+    .modern-input:focus {
+        border-color: #00ccff;
+        background: rgba(0, 0, 0, 0.6);
+    }
+
+    .btn-action-large {
+        background: linear-gradient(135deg, #00c6ff, #0072ff);
+        border: none;
+        color: white;
+        padding: 15px 30px;
+        font-size: 1.1rem;
+        font-weight: 900;
+        border-radius: 50px;
+        cursor: pointer;
+        text-transform: uppercase;
+        width: 100%;
+        margin-bottom: 10px;
+        box-shadow: 0 5px 15px rgba(0, 114, 255, 0.4);
+        transition: transform 0.2s;
+    }
+
+    .btn-action-large:hover { transform: scale(1.05); }
+
+    .btn-join-action {
+        background: transparent;
+        border: 2px solid #00ccff;
+        color: #00ccff;
+        padding: 15px 30px;
+        font-size: 1.1rem;
+        font-weight: 900;
+        border-radius: 50px;
+        cursor: pointer;
+        text-transform: uppercase;
+        width: 100%;
+        transition: 0.2s;
+    }
+    .btn-join-action:hover { background: #00ccff; color: black; }
+
+    .divider { margin: 15px 0; color: #666; font-weight: bold; font-size: 0.9rem; }
+    
+    .hidden { display: none; }
+    
+    /* Code Display Styling (For Host Logic) */
+    .host-code-display { margin-top: 20px; }
+    .code-label { display: block; color: #888; margin-bottom: 5px; }
+    .the-code { font-size: 2.5rem; color: #00ccff; font-weight: 900; letter-spacing: 3px; }
+    .waiting-text { margin-top: 10px; color: #aaa; font-style: italic; }
+</style>
 </head>
-<body class="setup-page">
+<body class="matchmaking-body">
 
-    <div class="app-container">
+    <div class="setup-container" id="lobby-card">
         
-        <nav class="sidebar-left">
-            <div class="logo-area"><img src="assets/ISF_pink.png" alt="ISF" class="isf-logo"></div>
-            <ul class="nav-links">
-               <li><a href="index.html"><i class="fa-solid fa-arrow-left"></i> Back to Home</a></li>
-            </ul>
-        </nav>
+        <i class="fa-solid fa-users" style="color: #00ccff; font-size: 3rem; margin-bottom: 10px;"></i>
+        <h1>PLAY A FRIEND</h1>
 
-        <main class="game-board-area" style="flex-direction: column;">
+        <input type="text" id="nickname" class="modern-input" placeholder="ENTER NICKNAME" maxlength="12">
+
+        <div id="lobby-actions-container">
             
-            <div class="setup-card" id="lobby-card">
-                
-                <div class="setup-header">
-                    <i class="fa-solid fa-users" style="color: #3498db;"></i>
-                    <h1>PLAY A FRIEND</h1>
-                </div>
+            <button class="btn-action-large" id="btn-host" onclick="hostGame()">
+                <i class="fa-solid fa-server"></i> HOST MATCH
+            </button>
 
-                <div class="input-group">
-                    <label>ENTER YOUR NICKNAME</label>
-                    <input type="text" id="nickname" class="lobby-input" placeholder="e.g. George" maxlength="10">
-                </div>
+            <div class="divider">OR</div>
 
-                <div class="lobby-actions" id="lobby-actions-container">
-                    <div class="lobby-col">
-                        <button class="btn-lobby" id="btn-host" onclick="hostGame()">
-                            <i class="fa-solid fa-server"></i> HOST MATCH
-                        </button>
-                    </div>
+            <input type="text" id="join-code" class="modern-input" style="width: 60%; font-size: 1rem; padding: 10px;" placeholder="ENTER ISF-CODE">
+            
+            <button class="btn-join-action" id="btn-join" onclick="joinGame()">
+                <i class="fa-solid fa-plug"></i> JOIN MATCH
+            </button>
+            
+            <div id="status-join" class="status-text hidden" style="margin-top:10px; color:#00ccff;">Connecting...</div>
+        </div>
 
-                    <div class="divider">OR</div>
+        <button class="btn-action-large hidden" id="btn-start-multi" onclick="launchGame()" style="margin-top: 20px; background: linear-gradient(135deg, #00ff00, #009900);">
+            START MATCH
+        </button>
 
-                    <div class="lobby-col">
-                        <input type="text" id="join-code" class="lobby-input small" placeholder="Enter ISF-XXXX Code">
-                        <button class="btn-lobby secondary" id="btn-join" onclick="joinGame()">
-                            <i class="fa-solid fa-plug"></i> JOIN MATCH
-                        </button>
-                        <div id="status-join" class="status-text hidden">Connecting...</div>
-                    </div>
-                </div>
-
-                <button class="btn-start hidden" id="btn-start-multi" onclick="launchGame()">START MATCH</button>
-            </div>
-
-        </main>
+        <button onclick="window.location.href='index.html'" style="background:transparent; border:none; color:#666; margin-top:20px; cursor:pointer; font-weight:bold;">
+            BACK TO HOME
+        </button>
     </div>
 
     <script>
