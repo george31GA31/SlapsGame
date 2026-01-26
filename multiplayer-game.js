@@ -72,22 +72,21 @@ const CARD_BACK_SRC = 'assets/cards/back_of_card.png';
 const PLAYER_LANES = [5, 29, 53, 77];
 
 class Card {
-    constructor(suit, rank, value) {
+    constructor(suit, rank, value, id) {
         this.suit = suit;
         this.rank = rank;
         this.value = value;
+        // Use provided ID or generate new one
+        this.id = id || Math.random().toString(36).substr(2, 9);
         this.imgSrc = `assets/cards/${rank}_of_${suit}.png`;
         this.isFaceUp = false;
-        this.owner = null;      // 'player' | 'ai' (ai reused as opponent)
+        this.owner = null;
         this.element = null;
         this.laneIndex = 0;
-
-        // drag memory
         this.originalLeft = null;
         this.originalTop = null;
     }
 }
-
 /* ================================
    BOOTSTRAP
    ================================ */
@@ -537,7 +536,7 @@ function resetCenterPiles() {
    ================================ */
 
 function packCard(c) {
-    return { suit: c.suit, rank: c.rank, value: c.value };
+    return { suit: c.suit, rank: c.rank, value: c.value, id: c.id };
 }
 
 function packCardWithMeta(c) {
@@ -545,6 +544,7 @@ function packCardWithMeta(c) {
         suit: c.suit,
         rank: c.rank,
         value: c.value,
+        id: c.id,
         isFaceUp: !!c.isFaceUp,
         owner: c.owner,
         laneIndex: c.laneIndex
@@ -552,13 +552,13 @@ function packCardWithMeta(c) {
 }
 
 function unpackCard(obj) {
-    const c = new Card(obj.suit, obj.rank, obj.value);
+    // USE THE EXISTING ID (Crucial for sync)
+    const c = new Card(obj.suit, obj.rank, obj.value, obj.id);
     c.isFaceUp = !!obj.isFaceUp;
     c.owner = obj.owner ?? null;
     c.laneIndex = obj.laneIndex ?? 0;
     return c;
 }
-
 function exportState() {
     const borrowedPlayer = !document.getElementById('borrowed-player')?.classList.contains('hidden');
     const borrowedAi = !document.getElementById('borrowed-ai')?.classList.contains('hidden');
@@ -607,20 +607,22 @@ function dealSmartHand(cards, owner) {
     if (owner === 'player') gameState.playerHand = [];
     else gameState.aiHand = [];
 
-    // Build 4 piles like your original
+    // Build 4 piles
     const piles = [[], [], [], []];
+    let idx = 0;
+    
     if (cards.length >= 10) {
-        let cardIdx = 0;
         [4, 3, 2, 1].forEach((size, i) => {
-            for (let j = 0; j < size; j++) piles[i].push(cards[cardIdx++]);
+            for (let j = 0; j < size; j++) piles[i].push(cards[idx++]);
         });
     } else {
-        let pileIdx = 0;
-        cards.forEach(card => { piles[pileIdx].push(card); pileIdx = (pileIdx + 1) % 4; });
+        cards.forEach(card => { piles[idx].push(card); idx = (idx + 1) % 4; });
     }
 
-    // Mirror opponent lane order:
-    // If opponent has 3 4 7 8 left->right on THEIR screen, you see 8 7 4 3 left->right.
+    // MIRROR LOGIC:
+    // Host lanes: 3, 2, 1, 0 (Visual Left->Right: D, C, B, A)
+    // Guest lanes: 0, 1, 2, 3 (Visual Left->Right: A, B, C, D)
+    // This creates a perfect mirror naturally. 
     const laneOrder = (owner === 'ai') ? [3, 2, 1, 0] : [0, 1, 2, 3];
 
     laneOrder.forEach((laneIdx, displayIdx) => {
@@ -653,7 +655,7 @@ function dealSmartHand(cards, owner) {
             else gameState.aiHand.push(card);
         });
     });
-}
+}}
 
 /* ================================
    CARD FACE / FLIP / DRAG
