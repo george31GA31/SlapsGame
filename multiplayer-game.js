@@ -459,9 +459,10 @@ async function startRoundHostAuthoritative() {
     updateScoreboard();
     updateScoreboardWidget();
 
-    // --- CRITICAL FIX: SWAP DATA FOR GUEST ---
-    // We cannot use exportState() because that sends MY hand as YOUR hand.
-    // We must manually construct the state so the Guest receives the OPPOSITE data.
+        // Keep the ORIGINAL dealt order so both sides rebuild piles identically
+    const pHandOrdered = [...pHandCards];
+    const aHandOrdered = [...aHandCards];
+
     const borrowedAiEl = document.getElementById('borrowed-ai');
     const borrowedPlayerEl = document.getElementById('borrowed-player');
 
@@ -470,13 +471,15 @@ async function startRoundHostAuthoritative() {
         playerTotal: gameState.aiTotal,
         aiTotal: gameState.playerTotal,
 
-        // Swap Decks
+        // Swap Decks (optional, but fine to keep)
         playerDeck: gameState.aiDeck.map(packCard),
         aiDeck: gameState.playerDeck.map(packCard),
 
-        // Swap Hands (Mirroring)
-        playerHand: gameState.aiHand.map(packCardWithMeta),
-        aiHand: gameState.playerHand.map(packCardWithMeta),
+        // IMPORTANT: send ORIGINAL hand order (NOT gameState.aiHand / playerHand)
+        // Guest "playerHand" = Host opponent hand
+        playerHand: aHandOrdered.map(packCard),
+        // Guest "aiHand" = Host player hand (their opponent)
+        aiHand: pHandOrdered.map(packCard),
 
         // Swap Center Piles
         centerPileLeft: gameState.centerPileRight.map(packCard),
@@ -488,6 +491,7 @@ async function startRoundHostAuthoritative() {
     };
 
     sendNet({ type: 'ROUND_START', state: guestState });
+
 
 }
 async function startRoundJoinerFromState(state) {
