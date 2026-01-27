@@ -536,6 +536,14 @@ function resetCenterPiles() {
     gameState.centerPileLeft = [];
     gameState.centerPileRight = [];
 
+    // --- ADDED: CLEANUP GHOSTS ---
+    // Since ghosts are now permanent, we must delete them when the round resets
+    if (gameState.opponentDragGhosts) {
+        gameState.opponentDragGhosts.forEach(el => el.remove());
+        gameState.opponentDragGhosts.clear();
+    }
+    // -----------------------------
+
     const l = document.getElementById('center-pile-left');
     const r = document.getElementById('center-pile-right');
     if (l) l.innerHTML = '';
@@ -546,11 +554,6 @@ function resetCenterPiles() {
 
     gameState.slapActive = false;
 }
-
-/* ================================
-   SERIALISATION
-   ================================ */
-
 function packCard(c) {
     return { suit: c.suit, rank: c.rank, value: c.value, id: c.id };
 }
@@ -742,12 +745,28 @@ function makeDraggable(img, cardData) {
         let shiftX = e.clientX - startRect.left;
         let shiftY = e.clientY - startRect.top;
 
+        // HELPER: Calculate Center-Based Coordinates
+        function getCenterNormals(currLeft, currTop, containerW, containerH) {
+            const elW = img.offsetWidth;
+            const elH = img.offsetHeight;
+            
+            // Find Center of the card relative to the box
+            const centerX = currLeft + (elW / 2);
+            const centerY = currTop + (elH / 2);
+            
+            // Normalize (0.0 to 1.0)
+            const nx = (containerW > 0) ? (centerX / containerW) : 0;
+            const ny = (containerH > 0) ? (centerY / containerH) : 0;
+            
+            return { nx, ny };
+        }
+
         function moveAt(pageX, pageY, sendDrag) {
             const boxRect = box.getBoundingClientRect();
             let newLeft = pageX - shiftX - boxRect.left;
             let newTop = pageY - shiftY - boxRect.top;
 
-            // Physical wall (blocks exiting upwards unless legal)
+            // Physical wall
             if (newTop < 0) {
                 if (!gameState.gameActive || !checkLegalPlay(cardData)) newTop = 0;
             }
@@ -756,11 +775,9 @@ function makeDraggable(img, cardData) {
             img.style.top = newTop + 'px';
 
             if (sendDrag) {
-                const nx = (boxRect.width > 0) ? (newLeft / boxRect.width) : 0;
-                const ny = (boxRect.height > 0) ? (newTop / boxRect.height) : 0;
+                const { nx, ny } = getCenterNormals(newLeft, newTop, boxRect.width, boxRect.height);
                 sendNet({
                     type: 'DRAG',
-                    // ADDED: src property
                     drag: { id: cardKey(cardData), nx, ny, phase: 'move', src: cardData.imgSrc }
                 });
             }
@@ -771,11 +788,10 @@ function makeDraggable(img, cardData) {
             const boxRect = box.getBoundingClientRect();
             const startLeft = e.pageX - shiftX - boxRect.left;
             const startTop = e.pageY - shiftY - boxRect.top;
-            const nx = (boxRect.width > 0) ? (startLeft / boxRect.width) : 0;
-            const ny = (boxRect.height > 0) ? (startTop / boxRect.height) : 0;
+            const { nx, ny } = getCenterNormals(startLeft, startTop, boxRect.width, boxRect.height);
+            
             sendNet({ 
                 type: 'DRAG', 
-                // ADDED: src property
                 drag: { id: cardKey(cardData), nx, ny, phase: 'start', src: cardData.imgSrc } 
             });
         }
@@ -792,20 +808,18 @@ function makeDraggable(img, cardData) {
 
             img.style.transition = 'all 0.1s ease-out';
 
-            // Attempt play if dragged upward out of foundation
             if (gameState.gameActive && parseInt(img.style.top) < -10) {
                 const dropSide = getDropSide(img, event); 
                 requestMoveToHost(cardData, dropSide);
             } else {
-                // Drag End
+                // Drag End - Send final position
                 const boxRect = box.getBoundingClientRect();
-                const left = parseFloat(img.style.left) || 0;
-                const top = parseFloat(img.style.top) || 0;
-                const nx = (boxRect.width > 0) ? (left / boxRect.width) : 0;
-                const ny = (boxRect.height > 0) ? (top / boxRect.height) : 0;
+                const currLeft = parseFloat(img.style.left) || 0;
+                const currTop = parseFloat(img.style.top) || 0;
+                const { nx, ny } = getCenterNormals(currLeft, currTop, boxRect.width, boxRect.height);
+                
                 sendNet({ 
                     type: 'DRAG', 
-                    // ADDED: src property
                     drag: { id: cardKey(cardData), nx, ny, phase: 'end', src: cardData.imgSrc } 
                 });
             }
@@ -821,35 +835,31 @@ function applyOpponentDrag(d) {
 
     const boxRect = box.getBoundingClientRect();
 
-    // Mirror coordinates (opponent drags up, we see them drag down)
-    const mx = 1 - d.nx;
-    const my = 1 - d.ny;
+    // Mirror coordinates (Center-based)
+    // Opponent's Left (0) is our Right (1)
+    // Opponent's Top (0) is our Bottom (1)
+    const centerMx = 1 - d.nx;
+    const centerMy = 1 - d.ny;
 
-    // Unique key for the ghost map
     const ghostId = d.id; 
     let el = gameState.opponentDragGhosts.get(ghostId);
 
-    // --- FIND THE REAL CARD ELEMENT ---
-    // The ID sent over network includes 'player', but locally it's 'ai'.
-    // So we match by Suit/Rank/Value to be safe.
+    // Find Real Card to hide it
     let realCard = null;
     if (d.id) {
-        const parts = d.id.split(':'); // "hearts:2:2:player:0"
+        const parts = d.id.split(':');
         if (parts.length >= 3) {
-            const s = parts[0]; 
-            const r = parts[1];
-            const v = parseInt(parts[2]);
-            // Find it in the AI hand
+            // Reconstruct logic to find card in AI hand
+            // (Assuming id format is suit:rank:value:owner:lane)
+            // But we can also just rely on ID matching if available or fuzzy match
+            const s = parts[0]; const r = parts[1]; const v = parseInt(parts[2]);
             realCard = gameState.aiHand.find(c => c.suit === s && c.rank === r && c.value === v);
         }
     }
 
     // 1. CREATE PHASE
     if (d.phase === 'start') {
-        // HIDE THE REAL CARD so it looks like it was picked up
-        if (realCard && realCard.element) {
-            realCard.element.style.opacity = '0';
-        }
+        if (realCard && realCard.element) realCard.element.style.opacity = '0';
 
         if (!el) {
             el = document.createElement('img');
@@ -869,32 +879,28 @@ function applyOpponentDrag(d) {
 
     if (!el) return;
 
-    // 2. POSITION PHASE
+    // 2. POSITION PHASE (Center Alignment)
+    // Use offsetWidth if available, else fallback to standard width calc
     const ghostWidth = el.offsetWidth || (window.innerHeight * 0.12); 
     const ghostHeight = ghostWidth * 1.45;
 
-    el.style.left = ((mx * boxRect.width) - (ghostWidth / 2)) + 'px';
-    el.style.top = ((my * boxRect.height) - (ghostHeight / 2)) + 'px';
+    // Calculate Top/Left by subtracting half the size from the Center coordinate
+    el.style.left = ((centerMx * boxRect.width) - (ghostWidth / 2)) + 'px';
+    el.style.top = ((centerMy * boxRect.height) - (ghostHeight / 2)) + 'px';
 
-    // 3. CLEANUP PHASE
+    // 3. END PHASE (PERSISTENCE)
     if (d.phase === 'end') {
-        // We delay the cleanup slightly to allow a valid move to process first.
-        // If the move is valid, 'applyMoveFromHost' will remove the realCard entirely.
-        // If the move is invalid (dropped in space), we restore the realCard.
+        // DO NOT remove the ghost. 
+        // We leave it there to represent the card at its new dropped location.
+        // The real card stays hidden (opacity 0).
         
-        setTimeout(() => {
-            // Remove Ghost
-            const e = gameState.opponentDragGhosts.get(ghostId);
-            if (e) {
-                e.remove();
-                gameState.opponentDragGhosts.delete(ghostId);
-            }
-
-            // Restore Real Card (if it still exists in hand)
-            if (realCard && realCard.element) {
-                realCard.element.style.opacity = '1';
-            }
-        }, 200); 
+        // Note: If the move was a valid PLAY, 'applyMoveFromHost' will arrive 
+        // shortly and remove this ghost automatically. 
+        // If it was just a re-arrange, this ghost stays put.
+        
+        if (realCard && realCard.element) {
+            realCard.element.style.opacity = '0';
+        }
     }
 }
 function getDropSide(imgElement, mouseEvent) {
