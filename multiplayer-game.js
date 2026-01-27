@@ -181,12 +181,8 @@ function handleNet(msg) {
     if (msg.type === 'HANDSHAKE') {
         gameState.opponentName = msg.name || 'OPPONENT';
         updateScoreboardWidget();
-    }
-    if (msg.type === 'OPPONENT_LEFT') {
-        alert("Opponent has left the match.");
-        window.location.href = 'index.html';
-        return;
-    }
+
+        // Reply once if needed
         if (!gameState.handshakeDone) {
             gameState.handshakeDone = true;
             sendNet({ type: 'HANDSHAKE', name: gameState.myName });
@@ -835,49 +831,44 @@ function applyOpponentDrag(d) {
     const ghostId = d.id; 
     let el = gameState.opponentDragGhosts.get(ghostId);
 
+    // 1. CREATE PHASE
     if (d.phase === 'start') {
         if (!el) {
-            // 1. Create an IMG instead of a DIV for full fidelity
+            // Create an actual Image element
             el = document.createElement('img');
             
-            // 2. Use the exact same class as board cards so size/shadow matches
+            // Apply the exact same classes your real cards use
+            // 'game-card' handles size (12vh) and shadow
+            // 'opponent-card' handles the 180 degree rotation
             el.className = 'game-card opponent-card'; 
             
-            // 3. Set the source to the actual card image sent over network
+            // Set source (with fallback to card back if missing)
             el.src = d.src || 'assets/cards/back_of_card.png';
             
-            // 4. Styling adjustments for the ghost
+            // Critical styling for the ghost
             el.style.position = 'absolute';
             el.style.zIndex = 5000;
-            el.style.pointerEvents = 'none';
-            el.style.transition = 'none'; // No transition for instant drag following
+            el.style.pointerEvents = 'none'; // Click-through
+            el.style.transition = 'none';    // Instant movement
+            el.style.opacity = '1';          // Solid, not see-through
             
-            // Append to the opponent's area
+            // Append to DOM
             box.appendChild(el);
             gameState.opponentDragGhosts.set(ghostId, el);
         }
     }
 
     if (!el) return;
-
-    // 5. Update Position
-    // We calculate left/top based on the container size
-    // Note: CSS .game-card defines width as 12vh. 
-    // We center the element on the mouse pointer by subtracting half its estimated width/height
-    // Since we don't know exact pixels, we can just place it top-left and rely on the drag offset usually.
-    // But centering is safer for visual alignment.
-    
-    const ghostWidth = el.offsetWidth || (window.innerHeight * 0.12); // approx 12vh
+    const ghostWidth = el.offsetWidth || (window.innerHeight * 0.12); 
     const ghostHeight = ghostWidth * 1.45;
 
+    // Center the card on the coordinate
     el.style.left = ((mx * boxRect.width) - (ghostWidth / 2)) + 'px';
     el.style.top = ((my * boxRect.height) - (ghostHeight / 2)) + 'px';
 
-    // 6. Handle Drop / End
+    // 3. CLEANUP PHASE
     if (d.phase === 'end') {
-        // We leave the card there for a split second so the user sees where it was dropped
-        // Then we remove it. If the move was valid, the game logic will spawn the real card in the center.
-        // If invalid, this disappearance looks like a "snap back" to the hand.
+        // Leave it for 150ms so it doesn't vanish instantly upon release
         setTimeout(() => {
             const e = gameState.opponentDragGhosts.get(ghostId);
             if (e) {
@@ -887,10 +878,6 @@ function applyOpponentDrag(d) {
         }, 150);
     }
 }
-/* ================================
-   DROP SIDE DETECTION (kept)
-   ================================ */
-
 function getDropSide(imgElement, mouseEvent) {
     const leftPileEl = document.getElementById('center-pile-left');
     const rightPileEl = document.getElementById('center-pile-right');
@@ -1453,25 +1440,4 @@ async function preloadCardImages(cards) {
         Promise.all(tasks),
         new Promise(resolve => setTimeout(resolve, 2500))
     ]);
-}
-function quitMatch() {
-    console.log("Quitting match...");
-
-    // 1. Tell the opponent we are leaving
-    // We wrap in try/catch in case connection is already dead
-    try {
-        sendNet({ type: 'OPPONENT_LEFT' });
-    } catch (e) {
-        console.error("Connection already closed", e);
-    }
-
-    // 2. Small delay to let the network packet leave your computer
-    setTimeout(() => {
-        // 3. Destroy peer connection to free up ports
-        if (gameState.peer) {
-            gameState.peer.destroy();
-        }
-        // 4. Go Home
-        window.location.href = 'index.html';
-    }, 100); 
 }
