@@ -957,44 +957,65 @@ function adjudicateMove(m, moverOverride) {
 }
 
 function applyMoveAuthoritative(mover, cardObj, side, reqId) {
-    // Update piles
+    // 1. Update piles
     const targetPile = (side === 'left') ? gameState.centerPileLeft : gameState.centerPileRight;
     targetPile.push(cardObj);
 
-    // Remove from mover hand
+    // 2. Remove from mover hand
+    let hand = null;
     if (mover === 'player') {
+        hand = gameState.playerHand;
         gameState.playerHand = gameState.playerHand.filter(c => c !== cardObj);
         gameState.playerTotal--;
     } else {
+        hand = gameState.aiHand;
         gameState.aiHand = gameState.aiHand.filter(c => c !== cardObj);
         gameState.aiTotal--;
     }
 
-    // Update UI on host (remove element + render)
+    // 3. Update UI on host
     if (cardObj.element) cardObj.element.remove();
     renderCenterPile(side, cardObj);
 
     updateScoreboard();
     checkSlapCondition();
 
-    // Reveal new top card for mover lane (host knows the real stack)
-    revealNewTopAfterPlay(mover, cardObj.laneIndex);
+    // 4. Handle Reveal (Host Side)
+    // We get the NEW top card of that lane to see if we need to send it to the guest
+    let newTopCardPayload = null;
+    const laneCards = hand.filter(c => c.laneIndex === cardObj.laneIndex); // Filter the *updated* hand
+    
+    if (laneCards.length > 0) {
+        const newTop = laneCards[laneCards.length - 1];
+        
+        // If I am the Host ('player'), I must send my new card to the Guest
+        if (mover === 'player') {
+            newTopCardPayload = packCardWithMeta(newTop);
+        }
+        
+        // Local Flip Logic:
+        // If AI/Opponent moved, auto-flip for Host to see.
+        // If Host moved, DO NOTHING (Host must click manually).
+        if (mover === 'ai' && !newTop.isFaceUp && newTop.element) {
+            setCardFaceUp(newTop.element, newTop, 'ai');
+        }
+    }
 
     // End checks
     if (gameState.playerTotal <= 0) showEndGame("YOU WIN THE MATCH!", true);
     if (gameState.aiTotal <= 0) showEndGame("OPPONENT WINS THE MATCH!", false);
 
-    // Payload includes new totals so both clients stay synced
+    // 5. Send Payload
     return {
         reqId,
         mover,
         side,
         card: packCardWithMeta(cardObj),
         playerTotal: gameState.playerTotal,
-        aiTotal: gameState.aiTotal
+        aiTotal: gameState.aiTotal,
+        newTopCard: newTopCardPayload // <--- The crucial addition
     };
 }
-
 function revealNewTopAfterPlay(owner, laneIdx) {
     const hand = (owner === 'player') ? gameState.playerHand : gameState.aiHand;
     const laneCards = hand.filter(c => c.laneIndex === laneIdx);
@@ -1015,53 +1036,62 @@ function revealNewTopAfterPlay(owner, laneIdx) {
             }
         }
     }
-}function applyMoveFromHost(a) {
-    // Remove any drag ghost for this card id (best effort)
+}
+function applyMoveFromHost(a) {
+    // 1. Perspective Swap (CRITICAL FIX)
+    // If Host says "Player moved", that is "AI/Opponent" for the Guest.
+    // If Host says "AI moved", that is "Player/Me" for the Guest.
+    const localMover = (a.mover === 'player') ? 'ai' : 'player';
+
+    // 2. Remove any drag ghost
     const ghost = gameState.opponentDragGhosts.get(cardKey(a.card));
     if (ghost) {
         ghost.remove();
         gameState.opponentDragGhosts.delete(cardKey(a.card));
     }
 
-    // Update totals from host
+    // 3. Update totals
     gameState.playerTotal = a.playerTotal;
     gameState.aiTotal = a.aiTotal;
 
-    // Locate card in the correct local hand list
-    const mover = a.mover;
-    const hand = (mover === 'player') ? gameState.playerHand : gameState.aiHand;
+    // 4. Locate card in the CORRECT local hand (using swapped mover)
+    const hand = (localMover === 'player') ? gameState.playerHand : gameState.aiHand;
 
-    const idx = hand.findIndex(c =>
-        c.suit === a.card.suit &&
-        c.rank === a.card.rank &&
-        c.value === a.card.value
-    );
-
+    // Use ID for perfect matching
+    const idx = hand.findIndex(c => c.id === a.card.id);
     let cardObj = null;
 
     if (idx !== -1) {
         cardObj = hand[idx];
         hand.splice(idx, 1);
     } else {
-        // Fallback: reconstruct if not found
         cardObj = unpackCard(a.card);
     }
 
-    // Remove element if present
+    // 5. Remove element from the hand UI
     if (cardObj.element) cardObj.element.remove();
 
-    // Push to correct pile and render
+    // 6. Render to Center Pile
     const pile = (a.side === 'left') ? gameState.centerPileLeft : gameState.centerPileRight;
     pile.push(cardObj);
-
     renderCenterPile(a.side, cardObj);
 
     updateScoreboard();
     checkSlapCondition();
 
-    // Reveal new top card locally if mover was player (we can do it)
-    // For opponent, the host will also have flipped their top; we mirror using the meta in state only if you sync hands.
-    // Best effort: do nothing here.
+    // 7. Handle New Top Card Reveal (Fixes the "Guest can't see new card" bug)
+    // If the Host sent new card data (meaning Host moved), we find that card and flip it.
+    if (a.newTopCard && localMover === 'ai') {
+        const newCardId = a.newTopCard.id;
+        
+        // Find the card in the Opponent's hand by ID
+        const newCardObj = gameState.aiHand.find(c => c.id === newCardId);
+        
+        if (newCardObj && newCardObj.element) {
+            // Force the flip visually so Guest sees the new card
+            setCardFaceUp(newCardObj.element, newCardObj, 'ai');
+        }
+    }
 }
 
 function rejectMoveFromHost(j) {
