@@ -1236,40 +1236,50 @@ body:has(.setup-card) .top-bar {
     cursor: default;
 }
 /* =========================================
-   UPDATES: WIDER PANEL & LOGO FIXES
+   UPDATES: WIDER PANEL (1/3 Page) & LOGO FIXES
    ========================================= */
 
-/* 1. Make Right Sidebar Bigger */
+/* 1. Right Sidebar - Set to 1/3 of the screen width */
 .sidebar-right {
-    width: 450px !important; /* Increased from 320px */
+    width: 33vw !important; /* 33% of Viewport Width */
+    min-width: 400px; /* Safety: Don't let it get too small on laptops */
+    padding: 30px !important; /* Add more breathing room */
 }
 
-/* Make the play boxes taller to match the new width */
+/* Adjust the play boxes to fit the wider space nicely */
+.modes-grid {
+    gap: 20px !important;
+}
+
 .mode-box {
-    height: 180px !important; 
+    height: 18vh !important; /* Responsive height (taller on tall screens) */
+    min-height: 150px;
+    max-height: 220px;
 }
 
-/* Scale the text inside buttons up slightly */
+/* Scale text/buttons for the larger panel */
 .mode-box h3 {
-    font-size: 1.1rem !important;
+    font-size: 1.2rem !important;
 }
-
 .btn-mode-play {
     font-size: 1rem !important;
-    padding: 10px 0 !important; /* Wider click area */
+    padding: 12px 0 !important;
+    width: 85% !important;
 }
 
-/* 2. Style the New Logo Image */
+/* 2. Fix the Logo Size in the Left Sidebar */
 .sidebar-logo {
     width: 100%;
-    max-width: 220px; /* Limits size so it doesn't overflow */
-    margin-bottom: 40px;
+    max-width: 160px; /* Restrict width so it isn't huge */
+    height: auto;
     display: block;
+    margin-bottom: 40px;
+    margin-left: 0; /* Align left to match menu text */
 }
 
-/* Remove the old text class styles to be safe */
+/* Ensure the old text is definitely hidden */
 .logo-text-blue {
-    display: none;
+    display: none !important;
 }
 
 /* 3. Remove Yellow Highlight from Home Button */
@@ -1277,9 +1287,11 @@ body:has(.setup-card) .top-bar {
     background: transparent !important;
     border-left: none !important;
     color: #ccc !important; /* Matches other links */
+    padding-left: 20px !important; /* Reset padding shift */
 }
 
-/* Optional: Add simple white hover for active state instead */
+/* Add a simple white hover effect instead */
 .nav-links li.active a:hover {
     color: #fff !important;
+    background: rgba(255, 255, 255, 0.05) !important;
 }
