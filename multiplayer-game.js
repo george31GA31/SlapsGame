@@ -198,12 +198,8 @@ function handleNet(msg) {
         }
         return;
     }
-    if (msg.type === 'OPPONENT_LEFT') {
-        alert("Opponent has left the match.");
-        window.location.href = 'index.html';
-        return;
-    }
-    }
+
+    // --- The error was here (duplicate block and extra bracket removed) ---
 
     if (msg.type === 'ROUND_START') {
         if (!gameState.isHost) {
@@ -213,7 +209,6 @@ function handleNet(msg) {
     }
 
     if (msg.type === 'READY') {
-        // Opponent clicked their deck
         gameState.aiReady = true;
         const oDeck = document.getElementById('ai-draw-deck');
         if (oDeck) oDeck.classList.add('deck-ready');
@@ -237,9 +232,10 @@ function handleNet(msg) {
     }
 
     if (msg.type === 'MOVE_REQ') {
-        if (gameState.isHost) adjudicateMove(msg.move, 'ai'); // Network requests always come from Opponent
+        if (gameState.isHost) adjudicateMove(msg.move, 'ai');
         return;
     }
+    
     if (msg.type === 'MOVE_APPLY') {
         applyMoveFromHost(msg.apply);
         return;
@@ -255,7 +251,6 @@ function handleNet(msg) {
         return;
     }
 }
-
 /* ================================
    INPUT / SLAP LOGIC (kept)
    ================================ */
@@ -1027,10 +1022,11 @@ function revealNewTopAfterPlay(owner, laneIdx) {
 }
 
 function applyMoveFromHost(a) {
-for (const [k, el] of gameState.opponentDragGhosts.entries()) {
-    if (el && el.remove) el.remove();
-}
-gameState.opponentDragGhosts.clear();
+    // Clear ghosts
+    for (const [k, el] of gameState.opponentDragGhosts.entries()) {
+        if (el && el.remove) el.remove();
+    }
+    gameState.opponentDragGhosts.clear();
 
     // Update totals from host
     gameState.playerTotal = a.playerTotal;
@@ -1038,43 +1034,40 @@ gameState.opponentDragGhosts.clear();
 
     // Locate card in the correct local hand list
     const mover = a.mover;
-const hand = (mover === 'player') ? gameState.playerHand : gameState.aiHand;
+    const hand = (mover === 'player') ? gameState.playerHand : gameState.aiHand;
 
-const idx = hand.findIndex(c => c.id === a.card.id);
+    const idx = hand.findIndex(c => c.id === a.card.id);
 
-let cardObj = null;
+    let cardObj = null;
 
-if (idx !== -1) {
-    cardObj = hand[idx];
-    hand.splice(idx, 1);
-} else {
-    cardObj = unpackCard(a.card);
-}
+    if (idx !== -1) {
+        cardObj = hand[idx];
+        hand.splice(idx, 1);
+    } else {
+        cardObj = unpackCard(a.card);
+    }
 
-// Optional: if this was my pending card, restore it before moving to centre
-if (cardObj.element) {
-    cardObj.element.style.opacity = '1';
-    cardObj.element.style.pointerEvents = 'none';
-}
+    // Optional: if this was my pending card, restore it before moving to centre
+    if (cardObj.element) {
+        cardObj.element.style.opacity = '1';
+        cardObj.element.style.pointerEvents = 'none';
+    }
 
-// DO NOT remove element here if you want smooth visuals
-// if (cardObj.element) cardObj.element.remove();
+    const pile = (a.side === 'left') ? gameState.centerPileLeft : gameState.centerPileRight;
+    pile.push(cardObj);
 
-const pile = (a.side === 'left') ? gameState.centerPileLeft : gameState.centerPileRight;
-pile.push(cardObj);
+    renderCenterPile(a.side, cardObj);
 
-renderCenterPile(a.side, cardObj);
-
-updateScoreboard();
-checkSlapCondition();
-// If *I* was the mover on this client, reveal my new top card
-if (a.mover === 'player') {
-    revealNewTopAfterPlay('player', a.card.laneIndex);
-}
-} else {
-    // optional: if you want opponent top reveal locally too
-    // revealNewTopAfterPlay('ai');
-}
+    updateScoreboard();
+    checkSlapCondition();
+    
+    // If *I* was the mover on this client, reveal my new top card
+    if (a.mover === 'player') {
+        revealNewTopAfterPlay('player', a.card.laneIndex);
+    } else {
+        // optional: if you want opponent top reveal locally too
+        // revealNewTopAfterPlay('ai', a.card.laneIndex);
+    }
 }
 
 function rejectMoveFromHost(j) {
