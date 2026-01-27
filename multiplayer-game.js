@@ -169,58 +169,20 @@ window.onload = async function () {
    MATCH INFO (matchmaking/setup integration)
 -------------------------------- */
 function loadMatchInfo() {
-    // Try localStorage keys
     const ls = window.localStorage;
 
-    const myName = pickFirst(
-        ls.getItem("slaps_myName"),
-        ls.getItem("myName"),
-        ls.getItem("playerName"),
-        getParam("myName"),
-        getParam("name")
-    );
+    // Your matchmaking keys
+    const role = ls.getItem("isf_role");     // "host" | "guest"
+    const code = ls.getItem("isf_code");     // lobby id used as peer id for host
+    const myName = ls.getItem("isf_my_name");
+    const oppName = ls.getItem("isf_opponent_name");
 
-    const oppName = pickFirst(
-        ls.getItem("slaps_opponentName"),
-        ls.getItem("opponentName"),
-        ls.getItem("enemyName"),
-        getParam("opponentName"),
-        getParam("oppName")
-    );
-
-    const oppId = pickFirst(
-        ls.getItem("slaps_opponentPeerId"),
-        ls.getItem("opponentPeerId"),
-        ls.getItem("opponentId"),
-        ls.getItem("peerToConnect"),
-        getParam("opponent"),
-        getParam("peer"),
-        getParam("join")
-    );
-
-    const myId = pickFirst(
-        ls.getItem("slaps_myPeerId"),
-        ls.getItem("myPeerId"),
-        ls.getItem("peerId"),
-        getParam("myPeerId"),
-        getParam("id")
-    );
-
-    const isHost = getBool(
-        pickFirst(
-            ls.getItem("slaps_isHost"),
-            ls.getItem("isHost"),
-            getParam("host"),
-            getParam("isHost")
-        )
-    );
+    gameState.isHost = (role === "host");
+    gameState.opponentPeerId = code;        // in your system this is the lobby peer id
+    gameState.myPeerId = gameState.isHost ? code : null;
 
     if (myName) gameState.myName = myName;
     if (oppName) gameState.opponentName = oppName;
-
-    gameState.opponentPeerId = oppId;
-    gameState.myPeerId = myId;
-    gameState.isHost = isHost;
 }
 
 /* -----------------------------
@@ -341,14 +303,14 @@ function attachConnection(conn) {
     gameState.conn = conn;
 
     conn.on("open", () => {
-        // Basic hello
-        sendNet({ t: "HELLO", name: gameState.myName, isHost: gameState.isHost });
+    sendNet({ type: "HANDSHAKE", name: gameState.myName });
+    sendNet({ t: "HELLO", name: gameState.myName, isHost: gameState.isHost });
 
-        // If we are not host, request state
-        if (!gameState.isHost) {
-            sendNet({ t: "REQUEST_STATE" });
-        }
-    });
+    if (!gameState.isHost) {
+        sendNet({ t: "REQUEST_STATE" });
+    }
+});
+
 
     conn.on("data", (msg) => {
         handleNet(msg);
@@ -383,10 +345,17 @@ function sendNet(obj) {
 function handleNet(msg) {
     if (!msg || typeof msg !== "object") return;
 
+    // NORMALISE: allow both message styles
+    // matchmaking sends { type: "HANDSHAKE" }
+    if (!msg.t && msg.type) msg.t = msg.type;
+
     switch (msg.t) {
-        case "HELLO":
-            if (msg.name) gameState.opponentName = msg.name;
-            updateScoreboardWidget();
+        case "HANDSHAKE":
+            if (msg.name) {
+                gameState.opponentName = msg.name;
+                localStorage.setItem("isf_opponent_name", msg.name);
+                updateScoreboardWidget();
+            }
             break;
 
         case "REQUEST_STATE":
@@ -438,6 +407,9 @@ function handleNet(msg) {
         case "QUIT":
             showOpponentQuit("The other player has quit the match.");
             break;
+    }
+    break;
+
 
         default:
             break;
@@ -901,8 +873,16 @@ function handleInput(e) {
     if (now - gameState.lastSpacebarTime < 250) return;
     gameState.lastSpacebarTime = now;
 
-    sendNet({ t: "SLAP", at: now, who: "player" });
+    if (gameState.isHost) {
+        // Host adjudicates immediately
+        hostHandleSlap({ t: "SLAP", at: now, who: "player" });
+        // Host must sync after adjudication
+        sendNet({ t: "STATE_PATCH", patch: buildPatchForSync() });
+    } else {
+        sendNet({ t: "SLAP", at: now, who: "player" });
+    }
 }
+
 
 function hostHandleSlap(msg) {
     // Host decides if slap is valid
@@ -1114,39 +1094,42 @@ function checkDeckVisibility() {
 -------------------------------- */
 function handlePlayerDeckClick() {
     if (gameState.matchEnded) return;
+    if (gameState.playerReady) return;
 
-    // If we are not active, clicking means "ready" like your single-player flow
-    if (!gameState.playerReady) {
-        gameState.playerReady = true;
+    gameState.playerReady = true;
 
-        const pDeck = document.getElementById("player-draw-deck");
-        if (pDeck) pDeck.classList.add("deck-ready");
+    const pDeck = document.getElementById("player-draw-deck");
+    if (pDeck) pDeck.classList.add("deck-ready");
 
+    if (gameState.isHost) {
+        // Host does not send READY to itself. Host broadcasts state.
+        sendNet({ t: "STATE_PATCH", patch: buildPatchForSync() });
+
+        // If opponent already ready, host triggers countdown
+        if (gameState.aiReady && !gameState.countdownRunning && !gameState.drawLock) {
+            gameState.drawLock = true;
+            sendNet({ t: "COUNTDOWN" });
+            startCountdownVisual(true);
+        }
+    } else {
+        // Guest notifies host
         sendNet({ t: "READY", who: "player" });
     }
 }
 
-function hostHandleReady(who) {
-    // who is always "player" from client POV.
-    // Host maps sender to correct side using connection direction.
-    // In this simplified setup: host is always "player" locally, opponent is "ai".
-    // READY from opponent means aiReady.
-    // READY from host local click we handle separately (host also clicks locally).
-    if (who === "player") {
-        // This message came from the remote client (opponent)
-        gameState.aiReady = true;
-    }
 
-    // Host also has its own click setting playerReady.
-    // If both ready, host triggers countdown then reveal.
+function hostHandleReady(who) {
+    // READY arriving over the connection is always the remote player
+    gameState.aiReady = true;
+
+    // Sync ready glow
+    sendNet({ t: "STATE_PATCH", patch: buildPatchForSync() });
+
     if (gameState.playerReady && gameState.aiReady && !gameState.countdownRunning && !gameState.drawLock) {
         gameState.drawLock = true;
         sendNet({ t: "COUNTDOWN" });
         startCountdownVisual(true);
     }
-
-    const patch = buildPatchForSync();
-    sendNet({ t: "STATE_PATCH", patch });
 }
 
 function startCountdownVisual(isHostWillReveal = false) {
@@ -1444,8 +1427,21 @@ function attemptPlayCardToCenter(card, imgElement, dropSide, snapBackFn) {
     }
 
     // Freeze interaction while waiting for host response
+    // Freeze interaction while waiting for adjudication
     imgElement.style.pointerEvents = "none";
 
+    if (gameState.isHost) {
+        // Host adjudicates immediately for its own moves
+        const result = hostHandleLocalMove(card.id, dropSide);
+
+        if (!result) {
+            imgElement.style.pointerEvents = "";
+            snapBackFn();
+        }
+        return;
+    }
+
+    // Guest: ask host
     sendNet({
         t: "MOVE_ATTEMPT",
         cardId: card.id,
@@ -1453,11 +1449,8 @@ function attemptPlayCardToCenter(card, imgElement, dropSide, snapBackFn) {
         at: Date.now()
     });
 
-    // Store a pending resolver on the element
     imgElement.dataset.pendingPlay = "1";
     imgElement.dataset.pendingCardId = card.id;
-
-    // If host rejects, we snap back in handleMoveResult
 }
 
 /* -----------------------------
@@ -1543,6 +1536,55 @@ function hostHandleMoveAttempt(msg) {
     sendNet({ t: "MOVE_RESULT", ok: true, cardId, playedTo: targetSide, patch });
     // Apply locally too
     applyPatch(patch);
+}
+
+function hostHandleLocalMove(cardId, side) {
+    if (gameState.matchEnded) return false;
+    if (!gameState.gameActive) return false;
+
+    const idx = gameState.playerHand.findIndex(c => c.id === cardId);
+    if (idx === -1) return false;
+
+    const card = gameState.playerHand[idx];
+    if (!card.isFaceUp) return false;
+
+    const isLeftLegal = checkPileLogic(card, gameState.centerPileLeft);
+    const isRightLegal = checkPileLogic(card, gameState.centerPileRight);
+
+    let target = null;
+    let targetSide = null;
+
+    if (side === "left" && isLeftLegal) { target = gameState.centerPileLeft; targetSide = "left"; }
+    if (side === "right" && isRightLegal) { target = gameState.centerPileRight; targetSide = "right"; }
+    if (!target) return false;
+
+    // Apply
+    target.push(card);
+    gameState.playerHand.splice(idx, 1);
+    gameState.playerTotal--;
+
+    revealNextTopInLane("player", card.laneIndex);
+
+    gameState.playerReady = false;
+    gameState.aiReady = false;
+
+    if (gameState.playerTotal <= 0) {
+        endMatchHost("YOU WIN THE MATCH!", true);
+        return true;
+    }
+
+    if (gameState.playerHand.length === 0) {
+        hostEndRound("player");
+        return true;
+    }
+
+    checkSlapCondition();
+
+    const patch = buildPatchForSync();
+    applyPatch(patch);
+    sendNet({ t: "MOVE_RESULT", ok: true, cardId, playedTo: targetSide, patch });
+
+    return true;
 }
 
 function revealNextTopInLane(owner, laneIdx) {
@@ -1808,8 +1850,18 @@ function handleOpponentDrag(msg) {
     card.element.style.top = (y - ir.height / 2) + "px";
 
     if (msg.stage === "end") {
-        // Host will later broadcast authoritative state after a successful move.
-        // If it was just a reposition, we let the next STATE_PATCH re-render it.
+        // Convert fixed position into absolute position within ai-foundation-area
+        const boxRect = br;
+        const ir2 = card.element.getBoundingClientRect();
+
+        const leftPx = (x - ir2.width / 2) - boxRect.left;
+        const topPx = (y - ir2.height / 2) - boxRect.top;
+
+        box.appendChild(card.element);
+        card.element.style.position = "absolute";
+        card.element.style.left = leftPx + "px";
+        card.element.style.top = topPx + "px";
+        card.element.style.zIndex = 9998;
         card.element.style.transition = "all 0.08s ease-out";
     }
 }
