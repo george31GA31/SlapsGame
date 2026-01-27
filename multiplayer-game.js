@@ -246,6 +246,16 @@ function handleNet(msg) {
         if (!gameState.isHost) startRoundJoinerFromState(msg.state);
         return;
     }
+   if (msg.type === 'OPPONENT_FLIP') {
+        // Find the card in the Opponent's hand by ID
+        const card = gameState.aiHand.find(c => c.id === msg.cardId);
+        
+        // If found, flip it visually
+        if (card && card.element) {
+            setCardFaceUp(card.element, card, 'ai');
+        }
+        return;
+    }
 }
 
 /* ================================
@@ -695,7 +705,15 @@ function setCardFaceDown(img, card, owner) {
 
 function tryFlipCard(img, card) {
     const liveCards = gameState.playerHand.filter(c => c.isFaceUp).length;
-    if (liveCards < 4) setCardFaceUp(img, card, 'player');
+    
+    // Only allow flip if we have fewer than 4 face-up cards
+    if (liveCards < 4) {
+        // 1. Flip locally
+        setCardFaceUp(img, card, 'player');
+        
+        // 2. Tell the opponent we flipped this specific card
+        sendNet({ type: 'OPPONENT_FLIP', cardId: card.id });
+    }
 }
 
 function cardKey(c) {
@@ -962,13 +980,10 @@ function applyMoveAuthoritative(mover, cardObj, side, reqId) {
     targetPile.push(cardObj);
 
     // 2. Remove from mover hand
-    let hand = null;
     if (mover === 'player') {
-        hand = gameState.playerHand;
         gameState.playerHand = gameState.playerHand.filter(c => c !== cardObj);
         gameState.playerTotal--;
     } else {
-        hand = gameState.aiHand;
         gameState.aiHand = gameState.aiHand.filter(c => c !== cardObj);
         gameState.aiTotal--;
     }
@@ -980,26 +995,8 @@ function applyMoveAuthoritative(mover, cardObj, side, reqId) {
     updateScoreboard();
     checkSlapCondition();
 
-    // 4. Handle Reveal (Host Side)
-    // We get the NEW top card of that lane to see if we need to send it to the guest
-    let newTopCardPayload = null;
-    const laneCards = hand.filter(c => c.laneIndex === cardObj.laneIndex); // Filter the *updated* hand
-    
-    if (laneCards.length > 0) {
-        const newTop = laneCards[laneCards.length - 1];
-        
-        // If I am the Host ('player'), I must send my new card to the Guest
-        if (mover === 'player') {
-            newTopCardPayload = packCardWithMeta(newTop);
-        }
-        
-        // Local Flip Logic:
-        // If AI/Opponent moved, auto-flip for Host to see.
-        // If Host moved, DO NOTHING (Host must click manually).
-        if (mover === 'ai' && !newTop.isFaceUp && newTop.element) {
-            setCardFaceUp(newTop.element, newTop, 'ai');
-        }
-    }
+    // 4. NO AUTO-FLIP HERE. 
+    // We wait for the 'OPPONENT_FLIP' message (if Guest) or Manual Click (if Host).
 
     // End checks
     if (gameState.playerTotal <= 0) showEndGame("YOU WIN THE MATCH!", true);
@@ -1012,8 +1009,7 @@ function applyMoveAuthoritative(mover, cardObj, side, reqId) {
         side,
         card: packCardWithMeta(cardObj),
         playerTotal: gameState.playerTotal,
-        aiTotal: gameState.aiTotal,
-        newTopCard: newTopCardPayload // <--- The crucial addition
+        aiTotal: gameState.aiTotal
     };
 }
 function revealNewTopAfterPlay(owner, laneIdx) {
