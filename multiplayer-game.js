@@ -181,8 +181,12 @@ function handleNet(msg) {
     if (msg.type === 'HANDSHAKE') {
         gameState.opponentName = msg.name || 'OPPONENT';
         updateScoreboardWidget();
-
-        // Reply once if needed
+    }
+    if (msg.type === 'OPPONENT_LEFT') {
+        alert("Opponent has left the match.");
+        window.location.href = 'index.html';
+        return;
+    }
         if (!gameState.handshakeDone) {
             gameState.handshakeDone = true;
             sendNet({ type: 'HANDSHAKE', name: gameState.myName });
@@ -821,56 +825,66 @@ function applyOpponentDrag(d) {
 
     const boxRect = box.getBoundingClientRect();
 
-    // Mirror coordinates (opponent drags up, we see them drag down)
+    // Mirror coordinates:
+    // Opponent drags "Right" (x goes 0 -> 1) => We see "Left" (1 -> 0)
+    // Opponent drags "Up" (y goes 0 -> 1) => We see "Down" (1 -> 0)
     const mx = 1 - d.nx;
     const my = 1 - d.ny;
 
-    let el = gameState.opponentDragGhosts.get(d.id);
+    // Unique key for this ghost
+    const ghostId = d.id; 
+    let el = gameState.opponentDragGhosts.get(ghostId);
 
     if (d.phase === 'start') {
         if (!el) {
-            el = document.createElement('div');
-            el.className = 'opponent-drag-ghost';
+            // 1. Create an IMG instead of a DIV for full fidelity
+            el = document.createElement('img');
+            
+            // 2. Use the exact same class as board cards so size/shadow matches
+            el.className = 'game-card opponent-card'; 
+            
+            // 3. Set the source to the actual card image sent over network
+            el.src = d.src || 'assets/cards/back_of_card.png';
+            
+            // 4. Styling adjustments for the ghost
             el.style.position = 'absolute';
-            el.style.width = '60px'; // Approx card width
-            el.style.height = '90px';
-            el.style.borderRadius = '6px';
-            el.style.pointerEvents = 'none';
             el.style.zIndex = 5000;
+            el.style.pointerEvents = 'none';
+            el.style.transition = 'none'; // No transition for instant drag following
             
-            // FIX 1: Use the Real Image Source sent over network
-            if (d.src) {
-                el.style.backgroundImage = `url(${d.src})`;
-            } else {
-                // Fallback just in case
-                el.style.backgroundImage = `url(${CARD_BACK_SRC})`;
-            }
-
-            el.style.backgroundSize = 'cover';
-            el.style.boxShadow = '0 10px 20px rgba(0,0,0,0.5)'; // Nicer shadow
-            
-            // FIX 2: Solid Opacity (No longer translucent)
-            el.style.opacity = '1.0'; 
-
+            // Append to the opponent's area
             box.appendChild(el);
-            gameState.opponentDragGhosts.set(d.id, el);
+            gameState.opponentDragGhosts.set(ghostId, el);
         }
     }
 
     if (!el) return;
 
-    el.style.left = (mx * boxRect.width) + 'px';
-    el.style.top = (my * boxRect.height) + 'px';
+    // 5. Update Position
+    // We calculate left/top based on the container size
+    // Note: CSS .game-card defines width as 12vh. 
+    // We center the element on the mouse pointer by subtracting half its estimated width/height
+    // Since we don't know exact pixels, we can just place it top-left and rely on the drag offset usually.
+    // But centering is safer for visual alignment.
+    
+    const ghostWidth = el.offsetWidth || (window.innerHeight * 0.12); // approx 12vh
+    const ghostHeight = ghostWidth * 1.45;
 
+    el.style.left = ((mx * boxRect.width) - (ghostWidth / 2)) + 'px';
+    el.style.top = ((my * boxRect.height) - (ghostHeight / 2)) + 'px';
+
+    // 6. Handle Drop / End
     if (d.phase === 'end') {
-        // Keep it briefly to bridge the gap until the real card renders
+        // We leave the card there for a split second so the user sees where it was dropped
+        // Then we remove it. If the move was valid, the game logic will spawn the real card in the center.
+        // If invalid, this disappearance looks like a "snap back" to the hand.
         setTimeout(() => {
-            const e = gameState.opponentDragGhosts.get(d.id);
+            const e = gameState.opponentDragGhosts.get(ghostId);
             if (e) {
                 e.remove();
-                gameState.opponentDragGhosts.delete(d.id);
+                gameState.opponentDragGhosts.delete(ghostId);
             }
-        }, 120);
+        }, 150);
     }
 }
 /* ================================
@@ -1439,4 +1453,25 @@ async function preloadCardImages(cards) {
         Promise.all(tasks),
         new Promise(resolve => setTimeout(resolve, 2500))
     ]);
+}
+function quitMatch() {
+    console.log("Quitting match...");
+
+    // 1. Tell the opponent we are leaving
+    // We wrap in try/catch in case connection is already dead
+    try {
+        sendNet({ type: 'OPPONENT_LEFT' });
+    } catch (e) {
+        console.error("Connection already closed", e);
+    }
+
+    // 2. Small delay to let the network packet leave your computer
+    setTimeout(() => {
+        // 3. Destroy peer connection to free up ports
+        if (gameState.peer) {
+            gameState.peer.destroy();
+        }
+        // 4. Go Home
+        window.location.href = 'index.html';
+    }, 100); 
 }
