@@ -3,38 +3,31 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ISF - International Slaps Federation</title>
+    <title>ISF Online - Home</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&family=Cinzel:wght@700&display=swap" rel="stylesheet">
 </head>
 <body>
 
-    <div class="top-bar">
-        <div class="logo-area">
-            <img src="assets/ISF_pink.png" alt="ISF" class="isf-logo">
-            <span class="logo-text">SLAPS.com</span>
-        </div>
-        <div class="auth-buttons">
-            <button class="btn-join">Join</button>
-            <button class="btn-login">Log In</button>
-        </div>
-    </div>
-
-    <div class="main-container">
+    <div class="app-container">
         
         <nav class="sidebar-left">
+            <div class="logo-area-sidebar">
+                <span class="logo-text-blue">ISF Online</span>
+            </div>
+
             <ul class="nav-links">
-                <li class="active"><a href="#"><i class="fa-solid fa-house"></i> Home</a></li>
-                <li><a href="how-to-play.html"><i class="fa-solid fa-book-open"></i> How to Play</a></li>
-                <li><a href="https://sprucewilliams.github.io/Slaps-Online/matchtable.html"><i class="fa-solid fa-table-list"></i> Game History</a></li>
-                <li><a href="https://sprucewilliams.github.io/Slaps-Online/ratingtable.html"><i class="fa-solid fa-trophy"></i> Leaderboard</a></li>
-                <li><a href="assets/SLAPS rules and regs v1.2-compressed.pdf" target="_blank"><i class="fa-solid fa-scale-balanced"></i> Rules & Regs</a></li>
+                <li class="active"><a href="#">Home</a></li>
+                <li><a href="how-to-play.html">How to Play</a></li>
+                <li><a href="https://sprucewilliams.github.io/Slaps-Online/matchtable.html">Game History</a></li>
+                <li><a href="https://sprucewilliams.github.io/Slaps-Online/ratingtable.html">Leaderboard</a></li>
+                <li><a href="assets/SLAPS rules and regs v1.2-compressed.pdf" target="_blank">Rules & Regs</a></li>
             </ul>
 
-            <div class="sidebar-bottom">
-                <li><a href="#"><i class="fa-solid fa-comments"></i> Forums</a></li>
-                <li><a href="#"><i class="fa-solid fa-gear"></i> Settings</a></li>
+            <div class="sidebar-footer">
+                <li><a href="#">Settings</a></li>
+                <li><a href="#">Report a Bug</a></li>
             </div>
         </nav>
 
@@ -44,40 +37,57 @@
             </div>
         </main>
 
-        <aside class="game-modes-grid">
+        <aside class="sidebar-right">
             
-            <div class="mode-card" onclick="window.location.href='multiplayer-setup.html'">
-                <div class="mode-icon"><img src="assets/cards/ace_of_hearts.png" alt="Friend"></div>
-                <div class="mode-info">
-                    <h3>Play a Friend</h3>
-                    <span>Host or Join</span>
-                </div>
+            <div class="auth-row">
+                <button class="btn-guest">PLAY AS<br>GUEST</button>
+                <button class="btn-login-blue">LOG IN</button>
+                <button class="btn-signup-gray">SIGN UP</button>
             </div>
 
-            <div class="mode-card green" onclick="window.location.href='setup.html'">
-                <div class="mode-icon"><i class="fa-solid fa-robot"></i></div>
-                <div class="mode-info">
-                    <h3>Play Bots</h3>
-                    <span>Challenge AI</span>
+            <div class="modes-grid">
+                
+                <div class="mode-box" onclick="window.location.href='multiplayer-setup.html'">
+                    <div class="mode-icon">
+                        <i class="fa-solid fa-handshake"></i>
+                    </div>
+                    <h3>PLAY A<br>FRIEND</h3>
+                    <button class="btn-mode-play">PLAY</button>
                 </div>
-            </div>
 
-            <div class="mode-card blue" onclick="window.location.href='matchmaking.html'">
-    <div class="mode-icon"><i class="fa-solid fa-globe"></i></div>
-    <div class="mode-info">
-        <h3>Play Online</h3>
-        <span>Matchmaking</span>
-    </div>
-</div>
-
-            <div class="mode-card gold" onclick="window.location.href='tournament-setup.html'">
-                <div class="mode-icon"><i class="fa-solid fa-trophy"></i></div>
-                <div class="mode-info">
-                    <h3>Tournaments</h3>
-                    <span>Join Arena</span>
+                <div class="mode-box" onclick="window.location.href='setup.html'">
+                    <div class="mode-icon">
+                        <i class="fa-solid fa-robot"></i>
+                    </div>
+                    <h3>PLAY AI<br>BOT</h3>
+                    <button class="btn-mode-play">PLAY</button>
                 </div>
-            </div>
 
+                <div class="mode-box" onclick="window.location.href='matchmaking.html'">
+                    <div class="mode-icon">
+                        <i class="fa-solid fa-globe"></i>
+                    </div>
+                    <h3>PLAY<br>ONLINE</h3>
+                    <button class="btn-mode-play">PLAY</button>
+                </div>
+
+                <div class="mode-box" onclick="window.location.href='tournament-setup.html'">
+                    <div class="mode-icon">
+                        <i class="fa-solid fa-trophy"></i>
+                    </div>
+                    <h3>PLAY<br>TOURNAMENT</h3>
+                    <button class="btn-mode-play">PLAY</button>
+                </div>
+
+                <div class="mode-box disabled">
+                    <div class="mode-icon">
+                        <i class="fa-solid fa-medal"></i>
+                    </div>
+                    <h3>PLAY<br>LEAGUE</h3>
+                    <button class="btn-mode-coming">COMING SOON</button>
+                </div>
+
+            </div>
         </aside>
 
     </div>
