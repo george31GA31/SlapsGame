@@ -821,61 +821,80 @@ function applyOpponentDrag(d) {
 
     const boxRect = box.getBoundingClientRect();
 
-    // Mirror coordinates:
-    // Opponent drags "Right" (x goes 0 -> 1) => We see "Left" (1 -> 0)
-    // Opponent drags "Up" (y goes 0 -> 1) => We see "Down" (1 -> 0)
+    // Mirror coordinates (opponent drags up, we see them drag down)
     const mx = 1 - d.nx;
     const my = 1 - d.ny;
 
-    // Unique key for this ghost
+    // Unique key for the ghost map
     const ghostId = d.id; 
     let el = gameState.opponentDragGhosts.get(ghostId);
 
+    // --- FIND THE REAL CARD ELEMENT ---
+    // The ID sent over network includes 'player', but locally it's 'ai'.
+    // So we match by Suit/Rank/Value to be safe.
+    let realCard = null;
+    if (d.id) {
+        const parts = d.id.split(':'); // "hearts:2:2:player:0"
+        if (parts.length >= 3) {
+            const s = parts[0]; 
+            const r = parts[1];
+            const v = parseInt(parts[2]);
+            // Find it in the AI hand
+            realCard = gameState.aiHand.find(c => c.suit === s && c.rank === r && c.value === v);
+        }
+    }
+
     // 1. CREATE PHASE
     if (d.phase === 'start') {
+        // HIDE THE REAL CARD so it looks like it was picked up
+        if (realCard && realCard.element) {
+            realCard.element.style.opacity = '0';
+        }
+
         if (!el) {
-            // Create an actual Image element
             el = document.createElement('img');
-            
-            // Apply the exact same classes your real cards use
-            // 'game-card' handles size (12vh) and shadow
-            // 'opponent-card' handles the 180 degree rotation
             el.className = 'game-card opponent-card'; 
-            
-            // Set source (with fallback to card back if missing)
             el.src = d.src || 'assets/cards/back_of_card.png';
             
-            // Critical styling for the ghost
             el.style.position = 'absolute';
             el.style.zIndex = 5000;
-            el.style.pointerEvents = 'none'; // Click-through
-            el.style.transition = 'none';    // Instant movement
-            el.style.opacity = '1';          // Solid, not see-through
+            el.style.pointerEvents = 'none';
+            el.style.transition = 'none';
+            el.style.opacity = '1';
             
-            // Append to DOM
             box.appendChild(el);
             gameState.opponentDragGhosts.set(ghostId, el);
         }
     }
 
     if (!el) return;
+
+    // 2. POSITION PHASE
     const ghostWidth = el.offsetWidth || (window.innerHeight * 0.12); 
     const ghostHeight = ghostWidth * 1.45;
 
-    // Center the card on the coordinate
     el.style.left = ((mx * boxRect.width) - (ghostWidth / 2)) + 'px';
     el.style.top = ((my * boxRect.height) - (ghostHeight / 2)) + 'px';
 
     // 3. CLEANUP PHASE
     if (d.phase === 'end') {
-        // Leave it for 150ms so it doesn't vanish instantly upon release
+        // We delay the cleanup slightly to allow a valid move to process first.
+        // If the move is valid, 'applyMoveFromHost' will remove the realCard entirely.
+        // If the move is invalid (dropped in space), we restore the realCard.
+        
         setTimeout(() => {
+            // Remove Ghost
             const e = gameState.opponentDragGhosts.get(ghostId);
             if (e) {
                 e.remove();
                 gameState.opponentDragGhosts.delete(ghostId);
             }
-        }, 150);
+
+            // Restore Real Card (if it still exists in hand)
+            if (realCard && realCard.element) {
+                realCard.element.style.opacity = '1';
+            }
+        }, 200); 
     }
 }
 function getDropSide(imgElement, mouseEvent) {
