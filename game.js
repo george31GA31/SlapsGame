@@ -595,86 +595,71 @@ function attemptAIMove() {
     }
 }
 // --- INTELLIGENT SCORING SYSTEM ---
+// --- INTELLIGENT SCORING SYSTEM (Fixed Recursive Logic) ---
 function scoreMove(card, targetSide) {
     let score = 0;
     
-    // Simulate the Chain: How many cards can AI play in a row starting with this one?
-    // And what is the FINAL card of that chain?
-    const chainResult = calculateChain(card, targetSide);
+    // 1. Gather Player Info for Safety Checks
+    const playerVisible = gameState.playerHand.filter(c => c.isFaceUp);
+    const playerValues = playerVisible.map(c => c.value);
+    
+    // 2. Simulate Best Chain (Recursive)
+    // We pass playerValues so the chain builder knows to prefer Safe Endings
+    const chainResult = getBestChain(card, gameState.aiHand, playerValues);
+    
     const cardsInChain = chainResult.count;
     const finalCardValue = chainResult.finalValue;
     const finalCardRank = chainResult.finalRank;
 
-    // --- 1. COMBO PRIORITY ---
-    // Base score is getting rid of cards. More cards = better.
+    // --- 3. COMBO PRIORITY ---
     score += (cardsInChain * 100);
 
-    // --- 2. SLAP SETUP PRIORITY ---
-    // Does the move (or the chain) result in the two piles matching?
+    // --- 4. SLAP SETUP PRIORITY ---
     const otherPile = (targetSide === 'left') ? gameState.centerPileRight : gameState.centerPileLeft;
     if (otherPile.length > 0) {
         const otherTop = otherPile[otherPile.length - 1];
         if (otherTop.rank === finalCardRank) {
-            score += 2000; // MASSIVE bonus for setting up a slap
+            score += 2000; // HUGE bonus for setting up a slap
         }
     }
 
-    // --- 3. WIN CONDITION OVERRIDE ---
-    // If playing this chain empties hand, ignore all defense.
+    // --- 5. WIN CONDITION ---
     if (gameState.aiHand.length - cardsInChain <= 0) {
         score += 10000; 
         return { card, target: targetSide, score }; 
     }
 
-    // --- 4. DEFENSIVE / STALEMATE LOGIC ---
-    // "Do not play cards which will allow me to win a round"
-    
-    // Only care if AI has > 3 cards. If AI is desperate (<3), it plays aggressively.
+    // --- 6. DEFENSIVE LOGIC ---
+    // Only apply defense if AI has > 3 cards
     if (gameState.aiHand.length > 3) {
         
-        // Check Player's visible cards
-        const playerVisible = gameState.playerHand.filter(c => c.isFaceUp);
-        
-        // Condition A: Player has 2 or fewer cards left (High Danger)
+        // Danger A: Player almost out (<= 2 cards)
         if (gameState.playerHand.length <= 2) {
-            // Does my move allow ANY player card to be played?
-            // My move puts 'finalCardValue' on top. 
-            // Player needs 'finalCardValue +/- 1'.
-            const helpsPlayer = playerVisible.some(pc => {
-                const diff = Math.abs(pc.value - finalCardValue);
-                return (diff === 1 || diff === 12);
-            });
-
-            if (helpsPlayer) {
-                score -= 5000; // Do not do this.
+            if (!isSafe(finalCardValue, playerValues)) {
+                score -= 5000; // Block this move
             }
         }
         
-        // Condition B: Player has 4 or fewer cards (Chain Danger)
-        // "If I have 2 cards that link eg a 6 and a 7"
+        // Danger B: Player has combo ready (<= 4 cards)
         else if (gameState.playerHand.length <= 4) {
-            // Check if player has a "Link" (two cards separated by 1)
-            // e.g. Player has 6 and 7. They want a 5 or 8.
-            // If I play a 5, they play 6 then 7. That is bad.
+            // Check if 'finalCardValue' bridges a gap in player's hand
+            // e.g. Player has 6 & 7. We shouldn't play 5.
             
-            // 1. Find links in player hand
-            // Sort visible values
-            let pValues = playerVisible.map(c => c.value).sort((a,b) => a-b);
+            // Sort values to find sequences
+            let pSorted = [...playerValues].sort((a,b) => a-b);
             
-            for(let val of pValues) {
-                // If I play 'finalCardValue', does it bridge to 'val'?
+            for(let val of pSorted) {
+                // If I play 'finalCardValue', does it allow 'val'?
                 const diff = Math.abs(val - finalCardValue);
                 if (diff === 1 || diff === 12) {
-                    // This allows player to play 'val'.
-                    // Does 'val' have a subsequent link in player's hand?
-                    // e.g. I play 5. Player plays 6. Does Player have 7?
+                    // It helps the player. Does the player have a follow-up?
                     const nextValHigh = (val === 13) ? 1 : val + 1;
                     const nextValLow  = (val === 1) ? 13 : val - 1;
                     
-                    const hasChain = pValues.includes(nextValHigh) || pValues.includes(nextValLow);
+                    const hasChain = pSorted.includes(nextValHigh) || pSorted.includes(nextValLow);
                     
                     if (hasChain) {
-                        score -= 2000; // Strong penalty for enabling a player chain
+                        score -= 2000; // Block this move
                     }
                 }
             }
@@ -684,38 +669,73 @@ function scoreMove(card, targetSide) {
     return { card, target: targetSide, score };
 }
 
-// Helper to look ahead in AI's own hand
-function calculateChain(startCard, targetSide) {
-    let count = 1;
-    let currentVal = startCard.value;
-    let currentRank = startCard.rank;
-    
-    // Get other face-up AI cards (excluding the one we are playing)
-    // We sort them so we can find potential chains
-    let available = gameState.aiHand.filter(c => c.isFaceUp && c !== startCard);
-    
-    let keepChaining = true;
-    while(keepChaining) {
-        // Look for card +/- 1 from currentVal
-        let nextCardIndex = available.findIndex(c => {
-            const diff = Math.abs(c.value - currentVal);
-            return (diff === 1 || diff === 12);
-        });
+// --- RECURSIVE CHAIN SOLVER ---
+// Finds the longest chain. If tied, picks the one that ends SAFELY.
+function getBestChain(startCard, hand, playerValues) {
+    // Candidates: Face-up cards that can follow startCard
+    const candidates = hand.filter(c => {
+        if (!c.isFaceUp || c === startCard) return false;
+        const diff = Math.abs(c.value - startCard.value);
+        return (diff === 1 || diff === 12);
+    });
+
+    // Base Case: No more cards to chain
+    if (candidates.length === 0) {
+        return { 
+            count: 1, 
+            finalValue: startCard.value, 
+            finalRank: startCard.rank 
+        };
+    }
+
+    let bestResult = null;
+
+    // Recursive Step: Try every candidate path
+    for (const nextCard of candidates) {
+        // Remove used card from future checks
+        const remainingHand = hand.filter(c => c !== nextCard);
         
-        if (nextCardIndex !== -1) {
-            // Found a card to continue chain
-            count++;
-            let nextCard = available[nextCardIndex];
-            currentVal = nextCard.value;
-            currentRank = nextCard.rank;
-            // Remove from available so we don't count it twice
-            available.splice(nextCardIndex, 1); 
-        } else {
-            keepChaining = false;
+        const res = getBestChain(nextCard, remainingHand, playerValues);
+        
+        // Construct result for this path
+        const currentChain = {
+            count: res.count + 1,
+            finalValue: res.finalValue,
+            finalRank: res.finalRank
+        };
+
+        if (!bestResult) {
+            bestResult = currentChain;
+            continue;
+        }
+
+        // --- COMPARISON LOGIC ---
+        // 1. Always prefer longer chains
+        if (currentChain.count > bestResult.count) {
+            bestResult = currentChain;
+        } 
+        // 2. If lengths are equal, prefer the SAFE one
+        else if (currentChain.count === bestResult.count) {
+            const currentIsSafe = isSafe(currentChain.finalValue, playerValues);
+            const bestIsSafe = isSafe(bestResult.finalValue, playerValues);
+            
+            // If current is safe and best wasn't, switch!
+            if (currentIsSafe && !bestIsSafe) {
+                bestResult = currentChain;
+            }
         }
     }
     
-    return { count, finalValue: currentVal, finalRank: currentRank };
+    return bestResult;
+}
+
+// Helper to check if a value is safe for the player
+function isSafe(val, pValues) {
+    // It is safe if NO player card can be played on 'val'
+    return !pValues.some(p => {
+        const diff = Math.abs(p - val);
+        return (diff === 1 || diff === 12);
+    });
 }
 
 function isTopOffPile(card) { 
