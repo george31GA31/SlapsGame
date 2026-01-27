@@ -87,9 +87,23 @@ class Card {
         this.originalTop = null;
     }
 }
-/* ================================
-   BOOTSTRAP
-   ================================ */
+function getDragLayer() {
+    let layer = document.getElementById('drag-layer');
+    if (!layer) {
+        layer = document.createElement('div');
+        layer.id = 'drag-layer';
+        layer.style.position = 'fixed';
+        layer.style.left = '0';
+        layer.style.top = '0';
+        layer.style.width = '100vw';
+        layer.style.height = '100vh';
+        layer.style.pointerEvents = 'none';
+        layer.style.zIndex = '9999999';
+        document.body.appendChild(layer);
+    }
+    return layer;
+}
+
 
 window.onload = function () {
     document.addEventListener('keydown', handleInput);
@@ -722,47 +736,94 @@ function makeDraggable(img, cardData) {
         const box = document.getElementById('player-foundation-area');
         if (!box) return;
 
+        // Save original DOM position so we can restore on reject/snapback
+        const originalParent = img.parentElement;
+        const originalNextSibling = img.nextSibling;
+
+        // Compute initial drag offsets from the element rect
         const startRect = img.getBoundingClientRect();
-        let shiftX = e.clientX - startRect.left;
-        let shiftY = e.clientY - startRect.top;
+        const shiftX = e.clientX - startRect.left;
+        const shiftY = e.clientY - startRect.top;
 
-        function moveAt(pageX, pageY, sendDrag) {
+        // Move to top-level drag layer so it renders above everything
+        const dragLayer = getDragLayer();
+        dragLayer.appendChild(img);
+
+        // Dragged element now uses viewport positioning
+        img.style.position = 'fixed';
+        img.style.left = `${startRect.left}px`;
+        img.style.top = `${startRect.top}px`;
+
+        // Store restore info on the card (used by reject handlers too)
+        cardData._dragRestore = { originalParent, originalNextSibling };
+
+        function moveAt(clientX, clientY, sendDrag) {
             const boxRect = box.getBoundingClientRect();
-            let newLeft = pageX - shiftX - boxRect.left;
-            let newTop = pageY - shiftY - boxRect.top;
 
-            // Your "physical wall" (only blocks exiting upwards unless legal)
-            if (newTop < 0) {
-                if (!gameState.gameActive || !checkLegalPlay(cardData)) newTop = 0;
+            // Local coordinates relative to foundation box (for your legality wall + net normalisation)
+            let localLeft = (clientX - shiftX) - boxRect.left;
+            let localTop  = (clientY - shiftY) - boxRect.top;
+
+            // Your physical wall logic (blocks going "up" out of foundation unless legal)
+            if (localTop < 0) {
+                if (!gameState.gameActive || !checkLegalPlay(cardData)) localTop = 0;
             }
 
-            img.style.left = newLeft + 'px';
-            img.style.top = newTop + 'px';
+            // Convert local box coords back to viewport coords for rendering in fixed layer
+            const viewLeft = boxRect.left + localLeft;
+            const viewTop  = boxRect.top + localTop;
+
+            img.style.left = viewLeft + 'px';
+            img.style.top = viewTop + 'px';
 
             if (sendDrag) {
-                const nx = (boxRect.width > 0) ? (newLeft / boxRect.width) : 0;
-                const ny = (boxRect.height > 0) ? (newTop / boxRect.height) : 0;
-                sendNet({
-                    type: 'DRAG',
-                    drag: { id: cardKey(cardData), nx, ny, phase: 'move' }
-                });
+                const nx = (boxRect.width > 0) ? (localLeft / boxRect.width) : 0;
+                const ny = (boxRect.height > 0) ? (localTop / boxRect.height) : 0;
+                sendNet({ type: 'DRAG', drag: { id: cardKey(cardData), nx, ny, phase: 'move' } });
             }
         }
 
-        // drag start
+        // drag start net message (use local coords)
         {
             const boxRect = box.getBoundingClientRect();
-            const startLeft = e.pageX - shiftX - boxRect.left;
-            const startTop = e.pageY - shiftY - boxRect.top;
-            const nx = (boxRect.width > 0) ? (startLeft / boxRect.width) : 0;
-            const ny = (boxRect.height > 0) ? (startTop / boxRect.height) : 0;
+            const localLeft = (e.clientX - shiftX) - boxRect.left;
+            const localTop  = (e.clientY - shiftY) - boxRect.top;
+            const nx = (boxRect.width > 0) ? (localLeft / boxRect.width) : 0;
+            const ny = (boxRect.height > 0) ? (localTop / boxRect.height) : 0;
             sendNet({ type: 'DRAG', drag: { id: cardKey(cardData), nx, ny, phase: 'start' } });
         }
 
-        moveAt(e.pageX, e.pageY, false);
+        moveAt(e.clientX, e.clientY, false);
+
+        function restoreToFoundation() {
+            const restore = cardData._dragRestore;
+            if (restore && restore.originalParent) {
+                // Restore DOM position
+                if (restore.originalNextSibling && restore.originalNextSibling.parentNode === restore.originalParent) {
+                    restore.originalParent.insertBefore(img, restore.originalNextSibling);
+                } else {
+                    restore.originalParent.appendChild(img);
+                }
+            }
+
+            // Restore positioning mode back to how foundation expects it
+            img.style.position = 'absolute';
+            img.style.left = cardData.originalLeft ?? img.style.left;
+            img.style.top = cardData.originalTop ?? img.style.top;
+            img.style.transition = 'all 0.1s ease-out';
+
+            // Tell opponent drag ended (use whatever local coords we last had, but end phase is enough)
+            const boxRect = box.getBoundingClientRect();
+            const rect = img.getBoundingClientRect();
+            const localLeft = rect.left - boxRect.left;
+            const localTop  = rect.top - boxRect.top;
+            const nx = (boxRect.width > 0) ? (localLeft / boxRect.width) : 0;
+            const ny = (boxRect.height > 0) ? (localTop / boxRect.height) : 0;
+            sendNet({ type: 'DRAG', drag: { id: cardKey(cardData), nx, ny, phase: 'end' } });
+        }
 
         function onMouseMove(event) {
-            moveAt(event.pageX, event.pageY, true);
+            moveAt(event.clientX, event.clientY, true);
         }
 
         function onMouseUp(event) {
@@ -771,18 +832,24 @@ function makeDraggable(img, cardData) {
 
             img.style.transition = 'all 0.1s ease-out';
 
-            // Attempt play if dragged upward out of foundation
-            if (gameState.gameActive && parseInt(img.style.top) < -10) {
-                const dropSide = getDropSide(img, event); // 'left' | 'right' | null
+            // Detect "attempt play" using LOCAL top relative to foundation box
+            const boxRect = box.getBoundingClientRect();
+            const rect = img.getBoundingClientRect();
+            const localTop = rect.top - boxRect.top;
+
+            if (gameState.gameActive && localTop < -10) {
+                const dropSide = getDropSide(img, event); // still uses clientX/clientY, fine
                 requestMoveToHost(cardData, dropSide);
+
+                // IMPORTANT: do NOT restore here.
+                // - If host accepts, renderCenterPile will reparent and restyle it.
+                // - If host rejects, rejectMoveFromHost will restore.
+                // - If not dropped on a pile, requestMoveToHost snaps back (we will handle below).
+                if (dropSide !== 'left' && dropSide !== 'right') {
+                    restoreToFoundation();
+                }
             } else {
-                // drag end position
-                const boxRect = box.getBoundingClientRect();
-                const left = parseFloat(img.style.left) || 0;
-                const top = parseFloat(img.style.top) || 0;
-                const nx = (boxRect.width > 0) ? (left / boxRect.width) : 0;
-                const ny = (boxRect.height > 0) ? (top / boxRect.height) : 0;
-                sendNet({ type: 'DRAG', drag: { id: cardKey(cardData), nx, ny, phase: 'end' } });
+                restoreToFoundation();
             }
         }
 
@@ -790,6 +857,7 @@ function makeDraggable(img, cardData) {
         document.addEventListener('mouseup', onMouseUp);
     };
 }
+
 
 function applyOpponentDrag(d) {
     const box = document.getElementById('ai-foundation-area');
@@ -1075,12 +1143,24 @@ function rejectMoveFromHost(j) {
     const el = gameState.lastDraggedEl;
     if (!c || !el) return;
 
+    // Restore DOM parent if it was moved to drag layer
+    const restore = c._dragRestore;
+    if (restore && restore.originalParent) {
+        if (restore.originalNextSibling && restore.originalNextSibling.parentNode === restore.originalParent) {
+            restore.originalParent.insertBefore(el, restore.originalNextSibling);
+        } else {
+            restore.originalParent.appendChild(el);
+        }
+    }
+
+    el.style.position = 'absolute';
     el.style.pointerEvents = 'auto';
     el.style.opacity = '1';
 
     if (c.originalLeft != null) el.style.left = c.originalLeft;
     if (c.originalTop != null) el.style.top = c.originalTop;
 }
+
 
 function handlePlayerDeckClick() {
     if (!gameState.gameActive) {
