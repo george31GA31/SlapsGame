@@ -1235,3 +1235,51 @@ body:has(.setup-card) .top-bar {
     width: 90%;
     cursor: default;
 }
+/* =========================================
+   UPDATES: WIDER PANEL & LOGO FIXES
+   ========================================= */
+
+/* 1. Make Right Sidebar Bigger */
+.sidebar-right {
+    width: 450px !important; /* Increased from 320px */
+}
+
+/* Make the play boxes taller to match the new width */
+.mode-box {
+    height: 180px !important; 
+}
+
+/* Scale the text inside buttons up slightly */
+.mode-box h3 {
+    font-size: 1.1rem !important;
+}
+
+.btn-mode-play {
+    font-size: 1rem !important;
+    padding: 10px 0 !important; /* Wider click area */
+}
+
+/* 2. Style the New Logo Image */
+.sidebar-logo {
+    width: 100%;
+    max-width: 220px; /* Limits size so it doesn't overflow */
+    margin-bottom: 40px;
+    display: block;
+}
+
+/* Remove the old text class styles to be safe */
+.logo-text-blue {
+    display: none;
+}
+
+/* 3. Remove Yellow Highlight from Home Button */
+.nav-links li.active a {
+    background: transparent !important;
+    border-left: none !important;
+    color: #ccc !important; /* Matches other links */
+}
+
+/* Optional: Add simple white hover for active state instead */
+.nav-links li.active a:hover {
+    color: #fff !important;
+}
