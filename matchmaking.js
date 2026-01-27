@@ -118,17 +118,19 @@ function handleMatchFound(role, code, defaultOpponentName) {
     if (conn) {
         conn.send({ type: 'HANDSHAKE', name: myName });
         conn.on('data', (data) => {
-            if (data.type === 'HANDSHAKE') {
-                statusText.innerText = `CONNECTED TO ${data.name.toUpperCase()}`;
-                
-                localStorage.setItem('isf_role', role);
-                localStorage.setItem('isf_code', code);
-                localStorage.setItem('isf_my_name', myName); // Ensure name is passed to game
-                
-                setTimeout(() => {
-                    window.location.href = 'multiplayer-game.html';
-                }, 2000);
-            }
+           if (data.type === 'HANDSHAKE') {
+    statusText.innerText = `CONNECTED TO ${data.name.toUpperCase()}`;
+    
+    localStorage.setItem('isf_role', role);
+    localStorage.setItem('isf_code', code);
+    localStorage.setItem('isf_my_name', myName);
+    localStorage.setItem('isf_opponent_name', data.name); // NEW
+    
+    setTimeout(() => {
+        window.location.href = 'multiplayer-game.html';
+    }, 2000);
+}
+
         });
     }
 }
