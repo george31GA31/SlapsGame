@@ -747,7 +747,7 @@ function makeDraggable(img, cardData) {
             let newLeft = pageX - shiftX - boxRect.left;
             let newTop = pageY - shiftY - boxRect.top;
 
-            // Your "physical wall" (only blocks exiting upwards unless legal)
+            // Physical wall (blocks exiting upwards unless legal)
             if (newTop < 0) {
                 if (!gameState.gameActive || !checkLegalPlay(cardData)) newTop = 0;
             }
@@ -760,19 +760,24 @@ function makeDraggable(img, cardData) {
                 const ny = (boxRect.height > 0) ? (newTop / boxRect.height) : 0;
                 sendNet({
                     type: 'DRAG',
-                    drag: { id: cardKey(cardData), nx, ny, phase: 'move' }
+                    // ADDED: src property
+                    drag: { id: cardKey(cardData), nx, ny, phase: 'move', src: cardData.imgSrc }
                 });
             }
         }
 
-        // drag start
+        // Drag Start
         {
             const boxRect = box.getBoundingClientRect();
             const startLeft = e.pageX - shiftX - boxRect.left;
             const startTop = e.pageY - shiftY - boxRect.top;
             const nx = (boxRect.width > 0) ? (startLeft / boxRect.width) : 0;
             const ny = (boxRect.height > 0) ? (startTop / boxRect.height) : 0;
-            sendNet({ type: 'DRAG', drag: { id: cardKey(cardData), nx, ny, phase: 'start' } });
+            sendNet({ 
+                type: 'DRAG', 
+                // ADDED: src property
+                drag: { id: cardKey(cardData), nx, ny, phase: 'start', src: cardData.imgSrc } 
+            });
         }
 
         moveAt(e.pageX, e.pageY, false);
@@ -789,16 +794,20 @@ function makeDraggable(img, cardData) {
 
             // Attempt play if dragged upward out of foundation
             if (gameState.gameActive && parseInt(img.style.top) < -10) {
-                const dropSide = getDropSide(img, event); // 'left' | 'right' | null
+                const dropSide = getDropSide(img, event); 
                 requestMoveToHost(cardData, dropSide);
             } else {
-                // drag end position
+                // Drag End
                 const boxRect = box.getBoundingClientRect();
                 const left = parseFloat(img.style.left) || 0;
                 const top = parseFloat(img.style.top) || 0;
                 const nx = (boxRect.width > 0) ? (left / boxRect.width) : 0;
                 const ny = (boxRect.height > 0) ? (top / boxRect.height) : 0;
-                sendNet({ type: 'DRAG', drag: { id: cardKey(cardData), nx, ny, phase: 'end' } });
+                sendNet({ 
+                    type: 'DRAG', 
+                    // ADDED: src property
+                    drag: { id: cardKey(cardData), nx, ny, phase: 'end', src: cardData.imgSrc } 
+                });
             }
         }
 
@@ -806,14 +815,13 @@ function makeDraggable(img, cardData) {
         document.addEventListener('mouseup', onMouseUp);
     };
 }
-
 function applyOpponentDrag(d) {
     const box = document.getElementById('ai-foundation-area');
     if (!box) return;
 
     const boxRect = box.getBoundingClientRect();
 
-    // Mirror and flip (right+up becomes left+down)
+    // Mirror coordinates (opponent drags up, we see them drag down)
     const mx = 1 - d.nx;
     const my = 1 - d.ny;
 
@@ -824,15 +832,26 @@ function applyOpponentDrag(d) {
             el = document.createElement('div');
             el.className = 'opponent-drag-ghost';
             el.style.position = 'absolute';
-            el.style.width = '60px';
+            el.style.width = '60px'; // Approx card width
             el.style.height = '90px';
             el.style.borderRadius = '6px';
             el.style.pointerEvents = 'none';
-            el.style.opacity = '0.85';
             el.style.zIndex = 5000;
-            el.style.backgroundImage = `url(${CARD_BACK_SRC})`;
+            
+            // FIX 1: Use the Real Image Source sent over network
+            if (d.src) {
+                el.style.backgroundImage = `url(${d.src})`;
+            } else {
+                // Fallback just in case
+                el.style.backgroundImage = `url(${CARD_BACK_SRC})`;
+            }
+
             el.style.backgroundSize = 'cover';
-            el.style.boxShadow = '0 0 10px rgba(0,0,0,0.6)';
+            el.style.boxShadow = '0 10px 20px rgba(0,0,0,0.5)'; // Nicer shadow
+            
+            // FIX 2: Solid Opacity (No longer translucent)
+            el.style.opacity = '1.0'; 
+
             box.appendChild(el);
             gameState.opponentDragGhosts.set(d.id, el);
         }
@@ -844,6 +863,7 @@ function applyOpponentDrag(d) {
     el.style.top = (my * boxRect.height) + 'px';
 
     if (d.phase === 'end') {
+        // Keep it briefly to bridge the gap until the real card renders
         setTimeout(() => {
             const e = gameState.opponentDragGhosts.get(d.id);
             if (e) {
@@ -853,7 +873,6 @@ function applyOpponentDrag(d) {
         }, 120);
     }
 }
-
 /* ================================
    DROP SIDE DETECTION (kept)
    ================================ */
