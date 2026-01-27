@@ -1001,13 +1001,21 @@ function revealNewTopAfterPlay(owner, laneIdx) {
 
     if (laneCards.length > 0) {
         const newTop = laneCards[laneCards.length - 1];
+        
+        // If the new top card is currently Face Down...
         if (!newTop.isFaceUp && newTop.element) {
-            setCardFaceUp(newTop.element, newTop, owner);
+            
+            // LOGIC CHANGE: 
+            // If it belongs to the AI/Opponent, auto-flip it so the Host can see the new card.
+            // If it belongs to the PLAYER (Host), do NOTHING. 
+            // The Host must manually click their own card to flip it.
+            
+            if (owner === 'ai') {
+                setCardFaceUp(newTop.element, newTop, owner);
+            }
         }
     }
-}
-
-function applyMoveFromHost(a) {
+}function applyMoveFromHost(a) {
     // Remove any drag ghost for this card id (best effort)
     const ghost = gameState.opponentDragGhosts.get(cardKey(a.card));
     if (ghost) {
