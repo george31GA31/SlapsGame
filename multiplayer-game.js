@@ -1079,26 +1079,26 @@ function revealNewTopAfterPlay(owner, laneIdx) {
     }
 }
 function applyMoveFromHost(a) {
-    // 1. Perspective Swap (CRITICAL FIX)
-    // If Host says "Player moved", that is "AI/Opponent" for the Guest.
-    // If Host says "AI moved", that is "Player/Me" for the Guest.
+    // 1. Perspective Swap (Mover)
     const localMover = (a.mover === 'player') ? 'ai' : 'player';
 
-    // 2. Remove any drag ghost
+    // 2. Perspective Swap (Center Piles) -- CRITICAL FIX
+    // Host's Left is Guest's Right, and vice versa.
+    const localSide = (a.side === 'left') ? 'right' : 'left';
+
+    // 3. Remove Drag Ghost
     const ghost = gameState.opponentDragGhosts.get(cardKey(a.card));
     if (ghost) {
         ghost.remove();
         gameState.opponentDragGhosts.delete(cardKey(a.card));
     }
 
-    // 3. Update totals
+    // 4. Update Totals
     gameState.playerTotal = a.playerTotal;
     gameState.aiTotal = a.aiTotal;
 
-    // 4. Locate card in the CORRECT local hand (using swapped mover)
+    // 5. Locate Card in Hand
     const hand = (localMover === 'player') ? gameState.playerHand : gameState.aiHand;
-
-    // Use ID for perfect matching
     const idx = hand.findIndex(c => c.id === a.card.id);
     let cardObj = null;
 
@@ -1109,27 +1109,24 @@ function applyMoveFromHost(a) {
         cardObj = unpackCard(a.card);
     }
 
-    // 5. Remove element from the hand UI
+    // 6. Remove UI Element
     if (cardObj.element) cardObj.element.remove();
 
-    // 6. Render to Center Pile
-    const pile = (a.side === 'left') ? gameState.centerPileLeft : gameState.centerPileRight;
+    // 7. Render to the CORRECT (Swapped) Pile
+    const pile = (localSide === 'left') ? gameState.centerPileLeft : gameState.centerPileRight;
     pile.push(cardObj);
-    renderCenterPile(a.side, cardObj);
+    
+    // Pass 'localSide' instead of 'a.side'
+    renderCenterPile(localSide, cardObj);
 
     updateScoreboard();
     checkSlapCondition();
 
-    // 7. Handle New Top Card Reveal (Fixes the "Guest can't see new card" bug)
-    // If the Host sent new card data (meaning Host moved), we find that card and flip it.
+    // 8. Handle New Top Card Reveal
     if (a.newTopCard && localMover === 'ai') {
         const newCardId = a.newTopCard.id;
-        
-        // Find the card in the Opponent's hand by ID
         const newCardObj = gameState.aiHand.find(c => c.id === newCardId);
-        
         if (newCardObj && newCardObj.element) {
-            // Force the flip visually so Guest sees the new card
             setCardFaceUp(newCardObj.element, newCardObj, 'ai');
         }
     }
@@ -1303,20 +1300,24 @@ function applyRevealFromHost(payload) {
     gameState.playerTotal = payload.playerTotal;
     gameState.aiTotal = payload.aiTotal;
 
-    // Ensure deck-ready classes are cleared
+    // Clear deck-ready classes
     document.getElementById('player-draw-deck')?.classList.remove('deck-ready');
     document.getElementById('ai-draw-deck')?.classList.remove('deck-ready');
 
-    // Render the centre cards (joiner has no deck state to pop from, so we use payload)
+    // --- SWAP LOGIC FOR CENTER CARDS ---
+    
+    // 1. Host's "Right" card goes to Guest's "Left" pile
     if (payload.right) {
         const c = unpackCard(payload.right);
-        gameState.centerPileRight.push(c);
-        renderCenterPile('right', c);
-    }
-    if (payload.left) {
-        const c = unpackCard(payload.left);
         gameState.centerPileLeft.push(c);
         renderCenterPile('left', c);
+    }
+
+    // 2. Host's "Left" card goes to Guest's "Right" pile
+    if (payload.left) {
+        const c = unpackCard(payload.left);
+        gameState.centerPileRight.push(c);
+        renderCenterPile('right', c);
     }
 
     updateScoreboard();
@@ -1327,7 +1328,6 @@ function applyRevealFromHost(payload) {
 
     checkSlapCondition();
 }
-
 /* ================================
    RENDER CENTER PILE (kept)
    ================================ */
