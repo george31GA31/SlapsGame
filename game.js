@@ -448,103 +448,276 @@ function renderCenterPile(side, card) {
 }
 
 function startAILoop() { gameState.aiLoopRunning = true; setInterval(() => { if (!gameState.gameActive || gameState.aiProcessing) return; attemptAIMove(); }, 250); }
+// --- ADVANCED AI BEHAVIOUR ---
 
 function attemptAIMove() {
     const diff = gameState.difficulty;
-    const minTime = 5000 + (diff - 1) * -500; const maxTime = 7000 + (diff - 1) * -600; 
+    const minTime = 5000 + (diff - 1) * -500; 
+    const maxTime = 7000 + (diff - 1) * -600; 
     let reactionDelay = Math.random() * (maxTime - minTime) + minTime;
+    
+    // AI acts faster if it's in the middle of a combo
     if (gameState.aiInChain) reactionDelay *= 0.5;
+
     const activeCards = gameState.aiHand.filter(c => c.isFaceUp);
-    let bestMove = null;
+    
+    // 1. EVALUATE ALL POSSIBLE MOVES
+    let possibleMoves = [];
+
+    // Check every face-up card against both piles
     for (let card of activeCards) {
-        if (checkPileLogic(card, gameState.centerPileLeft)) { bestMove = { c: card, t: 'left' }; break; }
-        if (checkPileLogic(card, gameState.centerPileRight)) { bestMove = { c: card, t: 'right' }; break; }
-    }
-    if (bestMove) {
-        gameState.aiProcessing = true; 
-        setTimeout(() => {
-            if (!gameState.gameActive) { 
-                gameState.aiProcessing = false; 
-                return; 
-            }
-            let targetPile = (bestMove.t === 'left') ? gameState.centerPileLeft : gameState.centerPileRight;
-            if (!checkPileLogic(bestMove.c, targetPile)) { gameState.aiProcessing = false; return; }
-            
-            animateAIMove(bestMove.c, bestMove.t, () => {
-                const laneIdx = bestMove.c.laneIndex; 
-                let success = playCardToCenter(bestMove.c, bestMove.c.element, bestMove.t);
-                if (success) {
-                    gameState.aiInChain = true; 
-                    const laneCards = gameState.aiHand.filter(c => c.laneIndex === laneIdx);
-                    if (laneCards.length > 0) { const newTop = laneCards[laneCards.length - 1]; if (!newTop.isFaceUp) setCardFaceUp(newTop.element, newTop, 'ai'); }
-                } else { animateSnapBack(bestMove.c); gameState.aiInChain = false; }
-                gameState.aiProcessing = false; 
-            });
-        }, reactionDelay);
-        return; 
-    }
-    if (!bestMove) {
-        const hiddenCardsLeft = gameState.aiHand.filter(c => !c.isFaceUp).length;
-        if (activeCards.length === 4 || hiddenCardsLeft === 0) {
-            if (!gameState.aiReady) {
-                gameState.aiProcessing = true;
-                setTimeout(() => {
-                    const freshActive = gameState.aiHand.filter(c => c.isFaceUp);
-                    const canMoveNow = freshActive.some(c => checkPileLogic(c, gameState.centerPileLeft) || checkPileLogic(c, gameState.centerPileRight));
-                    if (!canMoveNow && !gameState.gameActive) { gameState.aiProcessing = false; return; }
-                    if (canMoveNow) { gameState.aiProcessing = false; return; }
-                    gameState.aiReady = true; 
-                    document.getElementById('ai-draw-deck').classList.add('deck-ready');
-                    gameState.aiProcessing = false; 
-                    checkDrawCondition();
-                }, 1000 + reactionDelay);
-            }
+        if (checkPileLogic(card, gameState.centerPileLeft)) {
+            possibleMoves.push(scoreMove(card, 'left'));
+        }
+        if (checkPileLogic(card, gameState.centerPileRight)) {
+            possibleMoves.push(scoreMove(card, 'right'));
         }
     }
-    gameState.aiInChain = false; 
+
+    // 2. SORT BY SCORE (Descending)
+    possibleMoves.sort((a, b) => b.score - a.score);
+
+    // 3. EXECUTE BEST MOVE
+    if (possibleMoves.length > 0) {
+        const bestMove = possibleMoves[0];
+
+        // If the best move has a negative score (Defensive Hold), 
+        // we might choose to do NOTHING to force a stalemate.
+        if (bestMove.score < -500) {
+            // However, we still check if we have hidden cards to reveal (Blocker logic below)
+            // If no hidden cards, we truly stall.
+        } else {
+            gameState.aiProcessing = true;
+            setTimeout(() => {
+                if (!gameState.gameActive) { gameState.aiProcessing = false; return; }
+                
+                // Re-verify legality (game state might have changed during delay)
+                let targetPile = (bestMove.target === 'left') ? gameState.centerPileLeft : gameState.centerPileRight;
+                if (!checkPileLogic(bestMove.card, targetPile)) { gameState.aiProcessing = false; return; }
+
+                animateAIMove(bestMove.card, bestMove.target, () => {
+                    const laneIdx = bestMove.card.laneIndex;
+                    let success = playCardToCenter(bestMove.card, bestMove.card.element, bestMove.target);
+                    
+                    if (success) {
+                        gameState.aiInChain = true;
+                        // Flip next card in lane
+                        const laneCards = gameState.aiHand.filter(c => c.laneIndex === laneIdx);
+                        if (laneCards.length > 0) {
+                            const newTop = laneCards[laneCards.length - 1];
+                            if (!newTop.isFaceUp) setCardFaceUp(newTop.element, newTop, 'ai');
+                        }
+                    } else {
+                        animateSnapBack(bestMove.card);
+                        gameState.aiInChain = false;
+                    }
+                    gameState.aiProcessing = false;
+                });
+            }, reactionDelay);
+            return; // Exit, we found a move
+        }
+    }
+
+    // 4. FALLBACK: HANDLE HIDDEN CARDS / BLOCKERS (If no face-up moves)
+    // (This logic remains effectively the same as your original, just reorganized)
+    gameState.aiInChain = false;
+    
     if (activeCards.length < 4) {
-        let lanes = [[], [], [], []]; gameState.aiHand.forEach(c => lanes[c.laneIndex].push(c));
-        let blockerInfo = null; let emptyLaneIndex = -1;
+        let lanes = [[], [], [], []]; 
+        gameState.aiHand.forEach(c => lanes[c.laneIndex].push(c));
+        
+        let blockerInfo = null; 
+        let emptyLaneIndex = -1;
+        
         for (let i = 0; i < 4; i++) { if (lanes[i].length === 0) emptyLaneIndex = i; }
+        
         if (emptyLaneIndex !== -1) {
             for (let i = 0; i < 4; i++) {
                 let pile = lanes[i];
                 if (pile.length > 1) {
-                    let top = pile[pile.length - 1]; let below = pile[pile.length - 2];
+                    let top = pile[pile.length - 1]; 
+                    let below = pile[pile.length - 2];
                     if (top.isFaceUp && !below.isFaceUp) { blockerInfo = { card: top, oldLane: i }; break; }
                 }
             }
         }
+        
         if (blockerInfo) {
             gameState.aiProcessing = true;
             setTimeout(() => {
                 animateAIMoveToLane(blockerInfo.card, emptyLaneIndex, () => {
                     blockerInfo.card.laneIndex = emptyLaneIndex;
-                    let pile = lanes[blockerInfo.oldLane]; let revealedCard = pile[pile.length - 2]; 
-                    setCardFaceUp(revealedCard.element, revealedCard, 'ai'); gameState.aiProcessing = false;
+                    let pile = lanes[blockerInfo.oldLane]; 
+                    let revealedCard = pile[pile.length - 2]; 
+                    setCardFaceUp(revealedCard.element, revealedCard, 'ai'); 
+                    gameState.aiProcessing = false;
                 });
             }, reactionDelay * 0.8);
             return;
         }
+        
         const simpleHidden = gameState.aiHand.find(c => !c.isFaceUp && isTopOffPile(c));
         if (simpleHidden) {
-            gameState.aiProcessing = true; setTimeout(() => { setCardFaceUp(simpleHidden.element, simpleHidden, 'ai'); gameState.aiProcessing = false; }, reactionDelay * 0.5); return;
+            gameState.aiProcessing = true; 
+            setTimeout(() => { 
+                setCardFaceUp(simpleHidden.element, simpleHidden, 'ai'); 
+                gameState.aiProcessing = false; 
+            }, reactionDelay * 0.5); 
+            return;
         }
     }
-    const hiddenCardsLeft = gameState.aiHand.filter(c => !c.isFaceUp).length;
-    if (!bestMove) {
+
+    // 5. DRAW DECK LOGIC (If totally stuck)
+    if (possibleMoves.length === 0) {
+        const hiddenCardsLeft = gameState.aiHand.filter(c => !c.isFaceUp).length;
         if (activeCards.length === 4 || hiddenCardsLeft === 0) {
             if (!gameState.aiReady) {
                 gameState.aiProcessing = true;
                 setTimeout(() => {
-                    gameState.aiReady = true; document.getElementById('ai-draw-deck').classList.add('deck-ready');
-                    gameState.aiProcessing = false; checkDrawCondition();
+                    // Check one last time before committing ready
+                    const freshActive = gameState.aiHand.filter(c => c.isFaceUp);
+                    const canMoveNow = freshActive.some(c => checkPileLogic(c, gameState.centerPileLeft) || checkPileLogic(c, gameState.centerPileRight));
+                    
+                    if (canMoveNow) { gameState.aiProcessing = false; return; }
+                    
+                    gameState.aiReady = true;
+                    document.getElementById('ai-draw-deck').classList.add('deck-ready');
+                    gameState.aiProcessing = false;
+                    checkDrawCondition();
                 }, 1000 + reactionDelay);
             }
         }
     }
 }
-function isTopOffPile(card) { let cardsInLane = gameState.aiHand.filter(c => c.laneIndex === card.laneIndex); return cardsInLane[cardsInLane.length - 1] === card; }
+
+// --- INTELLIGENT SCORING SYSTEM ---
+function scoreMove(card, targetSide) {
+    let score = 0;
+    
+    // Simulate the Chain: How many cards can AI play in a row starting with this one?
+    // And what is the FINAL card of that chain?
+    const chainResult = calculateChain(card, targetSide);
+    const cardsInChain = chainResult.count;
+    const finalCardValue = chainResult.finalValue;
+    const finalCardRank = chainResult.finalRank;
+
+    // --- 1. COMBO PRIORITY ---
+    // Base score is getting rid of cards. More cards = better.
+    score += (cardsInChain * 100);
+
+    // --- 2. SLAP SETUP PRIORITY ---
+    // Does the move (or the chain) result in the two piles matching?
+    const otherPile = (targetSide === 'left') ? gameState.centerPileRight : gameState.centerPileLeft;
+    if (otherPile.length > 0) {
+        const otherTop = otherPile[otherPile.length - 1];
+        if (otherTop.rank === finalCardRank) {
+            score += 2000; // MASSIVE bonus for setting up a slap
+        }
+    }
+
+    // --- 3. WIN CONDITION OVERRIDE ---
+    // If playing this chain empties hand, ignore all defense.
+    if (gameState.aiHand.length - cardsInChain <= 0) {
+        score += 10000; 
+        return { card, target: targetSide, score }; 
+    }
+
+    // --- 4. DEFENSIVE / STALEMATE LOGIC ---
+    // "Do not play cards which will allow me to win a round"
+    
+    // Only care if AI has > 3 cards. If AI is desperate (<3), it plays aggressively.
+    if (gameState.aiHand.length > 3) {
+        
+        // Check Player's visible cards
+        const playerVisible = gameState.playerHand.filter(c => c.isFaceUp);
+        
+        // Condition A: Player has 2 or fewer cards left (High Danger)
+        if (gameState.playerHand.length <= 2) {
+            // Does my move allow ANY player card to be played?
+            // My move puts 'finalCardValue' on top. 
+            // Player needs 'finalCardValue +/- 1'.
+            const helpsPlayer = playerVisible.some(pc => {
+                const diff = Math.abs(pc.value - finalCardValue);
+                return (diff === 1 || diff === 12);
+            });
+
+            if (helpsPlayer) {
+                score -= 5000; // Do not do this.
+            }
+        }
+        
+        // Condition B: Player has 4 or fewer cards (Chain Danger)
+        // "If I have 2 cards that link eg a 6 and a 7"
+        else if (gameState.playerHand.length <= 4) {
+            // Check if player has a "Link" (two cards separated by 1)
+            // e.g. Player has 6 and 7. They want a 5 or 8.
+            // If I play a 5, they play 6 then 7. That is bad.
+            
+            // 1. Find links in player hand
+            // Sort visible values
+            let pValues = playerVisible.map(c => c.value).sort((a,b) => a-b);
+            
+            for(let val of pValues) {
+                // If I play 'finalCardValue', does it bridge to 'val'?
+                const diff = Math.abs(val - finalCardValue);
+                if (diff === 1 || diff === 12) {
+                    // This allows player to play 'val'.
+                    // Does 'val' have a subsequent link in player's hand?
+                    // e.g. I play 5. Player plays 6. Does Player have 7?
+                    const nextValHigh = (val === 13) ? 1 : val + 1;
+                    const nextValLow  = (val === 1) ? 13 : val - 1;
+                    
+                    const hasChain = pValues.includes(nextValHigh) || pValues.includes(nextValLow);
+                    
+                    if (hasChain) {
+                        score -= 2000; // Strong penalty for enabling a player chain
+                    }
+                }
+            }
+        }
+    }
+
+    return { card, target: targetSide, score };
+}
+
+// Helper to look ahead in AI's own hand
+function calculateChain(startCard, targetSide) {
+    let count = 1;
+    let currentVal = startCard.value;
+    let currentRank = startCard.rank;
+    
+    // Get other face-up AI cards (excluding the one we are playing)
+    // We sort them so we can find potential chains
+    let available = gameState.aiHand.filter(c => c.isFaceUp && c !== startCard);
+    
+    let keepChaining = true;
+    while(keepChaining) {
+        // Look for card +/- 1 from currentVal
+        let nextCardIndex = available.findIndex(c => {
+            const diff = Math.abs(c.value - currentVal);
+            return (diff === 1 || diff === 12);
+        });
+        
+        if (nextCardIndex !== -1) {
+            // Found a card to continue chain
+            count++;
+            let nextCard = available[nextCardIndex];
+            currentVal = nextCard.value;
+            currentRank = nextCard.rank;
+            // Remove from available so we don't count it twice
+            available.splice(nextCardIndex, 1); 
+        } else {
+            keepChaining = false;
+        }
+    }
+    
+    return { count, finalValue: currentVal, finalRank: currentRank };
+}
+
+function isTopOffPile(card) { 
+    let cardsInLane = gameState.aiHand.filter(c => c.laneIndex === card.laneIndex); 
+    return cardsInLane[cardsInLane.length - 1] === card; 
+}
 function animateAIMove(card, targetSide, callback) {
     const el = card.element; const targetId = targetSide === 'left' ? 'center-pile-left' : 'center-pile-right'; const targetEl = document.getElementById(targetId);
     const startRect = el.getBoundingClientRect(); const targetRect = targetEl.getBoundingClientRect();
