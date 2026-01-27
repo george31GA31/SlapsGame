@@ -177,23 +177,27 @@ function sendNet(obj) {
 function handleNet(msg) {
     if (!msg) return;
 
-    // --- Name exchange (matches matchmaking.html) ---
+    if (msg.type === 'OPPONENT_LEFT') {
+        alert("Opponent has left the match.");
+        window.location.href = 'index.html';
+        return;
+    }
+
     if (msg.type === 'HANDSHAKE') {
         gameState.opponentName = msg.name || 'OPPONENT';
         updateScoreboardWidget();
 
-        // Reply once if needed
         if (!gameState.handshakeDone) {
             gameState.handshakeDone = true;
             sendNet({ type: 'HANDSHAKE', name: gameState.myName });
         }
 
-        // Host starts game after handshake so both names are set
         if (gameState.isHost && !gameState.roundStarted) {
             gameState.roundStarted = true;
             startRoundHostAuthoritative();
         }
         return;
+    }
     if (msg.type === 'OPPONENT_LEFT') {
         alert("Opponent has left the match.");
         window.location.href = 'index.html';
@@ -975,15 +979,14 @@ function applyMoveAuthoritative(mover, cardObj, side, reqId) {
         gameState.aiTotal--;
     }
 
-    // Update UI on host (remove element + render)
-    if (cardObj.element) cardObj.element.remove();
     renderCenterPile(side, cardObj);
 
     updateScoreboard();
     checkSlapCondition();
 
     // Reveal new top card for mover lane (host knows the real stack)
-    revealNewTopAfterPlay(mover);
+    revealNewTopAfterPlay(mover, cardObj.laneIndex);
+
 
     // End checks
     if (gameState.playerTotal <= 0) showEndGame("YOU WIN THE MATCH!", true);
@@ -1000,23 +1003,28 @@ function applyMoveAuthoritative(mover, cardObj, side, reqId) {
     };
 }
 
-function revealNewTopAfterPlay(owner) {
-    const hand = owner === 'player' ? gameState.playerHand : gameState.aiHand;
-    if (!hand || hand.length === 0) return;
+function revealNewTopAfterPlay(owner, laneIdx) {
+    const hand = (owner === 'player') ? gameState.playerHand : gameState.aiHand;
+    if (!hand) return;
 
-    // Find cards that still exist in DOM
-    const liveCards = hand.filter(c => c.element && c.element.isConnected);
+    // Cards still in that lane
+    const laneCards = hand.filter(c => c.laneIndex === laneIdx && c.element && c.element.isConnected);
+    if (laneCards.length === 0) return;
 
-    if (liveCards.length === 0) return;
+    // Highest zIndex in that lane is the top card (you set zIndex = index + 10 in dealSmartHand)
+    laneCards.sort((a, b) => {
+        const za = parseInt(a.element.style.zIndex || '0', 10);
+        const zb = parseInt(b.element.style.zIndex || '0', 10);
+        return za - zb;
+    });
 
-    // The last rendered card in this owner's foundation is the top card
-    const topCard = liveCards[liveCards.length - 1];
+    const top = laneCards[laneCards.length - 1];
 
-    if (!topCard.isFaceUp && topCard.element) {
-        setCardFaceUp(topCard.element, topCard, owner);
+    // If it is face-down, flip it (this also restores click/drag rules correctly)
+    if (!top.isFaceUp && top.element) {
+        setCardFaceUp(top.element, top, owner);
     }
 }
-
 
 function applyMoveFromHost(a) {
 for (const [k, el] of gameState.opponentDragGhosts.entries()) {
@@ -1030,35 +1038,39 @@ gameState.opponentDragGhosts.clear();
 
     // Locate card in the correct local hand list
     const mover = a.mover;
-    const hand = (mover === 'player') ? gameState.playerHand : gameState.aiHand;
+const hand = (mover === 'player') ? gameState.playerHand : gameState.aiHand;
 
-   const idx = hand.findIndex(c => c.id === a.card.id);
+const idx = hand.findIndex(c => c.id === a.card.id);
 
+let cardObj = null;
 
-    let cardObj = null;
+if (idx !== -1) {
+    cardObj = hand[idx];
+    hand.splice(idx, 1);
+} else {
+    cardObj = unpackCard(a.card);
+}
 
-    if (idx !== -1) {
-        cardObj = hand[idx];
-        hand.splice(idx, 1);
-    } else {
-        // Fallback: reconstruct if not found
-        cardObj = unpackCard(a.card);
-    }
+// Optional: if this was my pending card, restore it before moving to centre
+if (cardObj.element) {
+    cardObj.element.style.opacity = '1';
+    cardObj.element.style.pointerEvents = 'none';
+}
 
-    // Remove element if present
-    if (cardObj.element) cardObj.element.remove();
+// DO NOT remove element here if you want smooth visuals
+// if (cardObj.element) cardObj.element.remove();
 
-    // Push to correct pile and render
-    const pile = (a.side === 'left') ? gameState.centerPileLeft : gameState.centerPileRight;
-    pile.push(cardObj);
+const pile = (a.side === 'left') ? gameState.centerPileLeft : gameState.centerPileRight;
+pile.push(cardObj);
 
-    renderCenterPile(a.side, cardObj);
+renderCenterPile(a.side, cardObj);
 
-    updateScoreboard();
-    checkSlapCondition();
+updateScoreboard();
+checkSlapCondition();
 // If *I* was the mover on this client, reveal my new top card
 if (a.mover === 'player') {
-    revealNewTopAfterPlay('player');
+    revealNewTopAfterPlay('player', a.card.laneIndex);
+}
 } else {
     // optional: if you want opponent top reveal locally too
     // revealNewTopAfterPlay('ai');
@@ -1265,23 +1277,49 @@ function renderCenterPile(side, card) {
     const container = document.getElementById(id);
     if (!container) return;
 
-    const img = document.createElement('img');
-    img.src = card.imgSrc;
-    img.className = 'game-card';
-    img.style.position = 'absolute';           // important
-    img.style.left = '50%';
-    img.style.top = '50%';
+    let img = card.element;
 
-    const rot = Math.random() * 20 - 10;
-    img.style.transform = `translate(-50%, -50%) rotate(${rot}deg)`;
+    // If we do not have a live element, fall back to creating one
+    if (!img || !img.isConnected) {
+        img = document.createElement('img');
+        img.className = 'game-card';
+        img.src = card.imgSrc;
+    } else {
+        // Ensure it is showing the face
+        img.src = card.imgSrc;
+        img.classList.remove('card-face-down');
+    }
 
-    // FIX 4: deterministic stacking and no random opacity
+    // Make it non-interactive in centre
+    // Make it non-interactive in centre
+img.onclick = null;
+img.onmousedown = null;
+img.style.pointerEvents = 'none';
+img.style.opacity = '1';
+
+// IMPORTANT: stop the drag transition causing a visible snap
+img.style.transition = 'none';
+
+// Put it in the centre pile container
+img.style.position = 'absolute';
+img.style.left = '50%';
+img.style.top = '50%';
+
+const rot = Math.random() * 20 - 10;
+img.style.transform = `translate(-50%, -50%) rotate(${rot}deg)`;
+
+// Re-enable transition afterwards (optional)
+requestAnimationFrame(() => {
+    img.style.transition = 'all 0.1s ease-out';
+});
+
     gameState.globalZ++;
     img.style.zIndex = String(gameState.globalZ);
-    img.style.opacity = '1';
-    img.style.pointerEvents = 'none';
 
     container.appendChild(img);
+
+    // Keep reference
+    card.element = img;
 }
 
 
