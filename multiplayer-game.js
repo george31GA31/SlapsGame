@@ -1,5 +1,5 @@
 /* =========================================
-   MULTIPLAYER-GAME.JS
+   MULTIPLAYER-GAME.JS (PeerJS Version)
    Real-time Player vs Player SLAPS
    ========================================= */
 
@@ -24,15 +24,13 @@ const gameState = {
     p1Rounds: 0, opponentRounds: 0,
     p1Slaps: 0, opponentSlaps: 0,
     
-    // Multiplayer specific
-    socket: null,
-    roomId: null,
-    playerId: null,
-    opponentId: null,
+    // PeerJS specific
+    peer: null,
+    conn: null,
+    myName: "You",
+    opponentName: "Opponent",
     isHost: false,
     connected: false,
-    opponentName: "Opponent",
-    playerName: "You",
     
     // Card loading optimization
     imageCache: new Map(),
@@ -64,19 +62,23 @@ class Card {
 // ========================================
 
 window.onload = function() {
-    // Get room/player info from URL params or sessionStorage
-    const urlParams = new URLSearchParams(window.location.search);
-    gameState.roomId = urlParams.get('room') || sessionStorage.getItem('roomId');
-    gameState.playerId = sessionStorage.getItem('playerId');
-    gameState.playerName = sessionStorage.getItem('playerName') || "You";
+    // Get info from localStorage (set by matchmaking)
+    const role = localStorage.getItem('isf_role');
+    const code = localStorage.getItem('isf_code');
+    const myName = localStorage.getItem('isf_my_name') || 'You';
     
-    if (!gameState.roomId || !gameState.playerId) {
-        showError("No room found. Returning to setup...");
-        setTimeout(() => window.location.href = 'multiplayer-setup.html', 2000);
+    if (!role || !code) {
+        showError("No game session found. Returning to setup...");
+        setTimeout(() => window.location.href = 'matchmaking.html', 2000);
         return;
     }
     
-    // Preload card images for faster rendering
+    gameState.isHost = (role === 'host');
+    gameState.myName = myName;
+    
+    console.log(`Initializing as ${role} with code ${code}`);
+    
+    // Preload card images
     preloadCardImages();
     
     document.addEventListener('keydown', handleInput);
@@ -86,24 +88,25 @@ window.onload = function() {
 
     updateScoreboardWidget();
     
-    // Connect to server
-    connectToServer();
+    // Establish PeerJS connection
+    connectToPeer(role, code);
 };
 
 function preloadCardImages() {
     let loadedCount = 0;
-    const totalImages = SUITS.length * RANKS.length + 1; // +1 for card back
+    const totalImages = SUITS.length * RANKS.length + 1;
     
-    // Preload card back
     const backImg = new Image();
     backImg.onload = () => {
         gameState.imageCache.set(CARD_BACK_SRC, backImg);
         loadedCount++;
-        checkAllImagesLoaded();
+        if (loadedCount >= totalImages) {
+            gameState.cardsLoaded = true;
+            console.log("All card images preloaded");
+        }
     };
     backImg.src = CARD_BACK_SRC;
     
-    // Preload all card faces
     SUITS.forEach(suit => {
         RANKS.forEach(rank => {
             const src = `assets/cards/${rank}_of_${suit}.png`;
@@ -111,102 +114,121 @@ function preloadCardImages() {
             img.onload = () => {
                 gameState.imageCache.set(src, img);
                 loadedCount++;
-                checkAllImagesLoaded();
+                if (loadedCount >= totalImages) {
+                    gameState.cardsLoaded = true;
+                    console.log("All card images preloaded");
+                }
             };
             img.onerror = () => {
+                console.warn(`Failed to load: ${src}`);
                 loadedCount++;
-                checkAllImagesLoaded();
             };
             img.src = src;
         });
     });
-    
-    function checkAllImagesLoaded() {
-        if (loadedCount >= totalImages) {
-            gameState.cardsLoaded = true;
-            console.log("All card images preloaded");
-        }
-    }
 }
 
-function connectToServer() {
-    // Use WebSocket for real-time communication
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.hostname}:3000`; // Adjust port as needed
-    
-    try {
-        gameState.socket = new WebSocket(wsUrl);
+function connectToPeer(role, code) {
+    if (role === 'host') {
+        // Re-create peer with same ID
+        gameState.peer = new Peer(code);
         
-        gameState.socket.onopen = () => {
-            console.log("Connected to server");
-            // Join room
-            sendToServer({
-                type: 'join_room',
-                roomId: gameState.roomId,
-                playerId: gameState.playerId,
-                playerName: gameState.playerName
-            });
-        };
+        gameState.peer.on('open', (id) => {
+            console.log('Host peer opened:', id);
+            showMessage("Waiting for opponent to reconnect...");
+        });
         
-        gameState.socket.onmessage = (event) => {
-            const data = JSON.parse(event.data);
-            handleServerMessage(data);
-        };
-        
-        gameState.socket.onerror = (error) => {
-            console.error("WebSocket error:", error);
-            showError("Connection error. Please check your network.");
-        };
-        
-        gameState.socket.onclose = () => {
-            console.log("Disconnected from server");
-            if (gameState.connected) {
-                showError("Connection lost. Opponent may have disconnected.");
-            }
-        };
-        
-    } catch (error) {
-        console.error("Failed to connect:", error);
-        showError("Cannot connect to server. Returning to setup...");
-        setTimeout(() => window.location.href = 'multiplayer-setup.html', 2000);
-    }
-}
-
-function sendToServer(data) {
-    if (gameState.socket && gameState.socket.readyState === WebSocket.OPEN) {
-        gameState.socket.send(JSON.stringify(data));
-    }
-}
-
-function handleServerMessage(data) {
-    switch(data.type) {
-        case 'room_joined':
-            gameState.connected = true;
-            gameState.isHost = data.isHost;
-            if (data.opponentId) {
-                gameState.opponentId = data.opponentId;
-                gameState.opponentName = data.opponentName || "Opponent";
-            }
-            showMessage("Connected! Waiting for opponent...");
-            break;
-            
-        case 'opponent_joined':
-            gameState.opponentId = data.opponentId;
-            gameState.opponentName = data.opponentName || "Opponent";
+        gameState.peer.on('connection', (connection) => {
+            gameState.conn = connection;
+            setupConnection();
             showMessage("Opponent connected! Starting game...");
-            setTimeout(() => startRound(), 1500);
-            break;
             
-        case 'start_game':
-            // Host sends initial deck setup
-            if (gameState.isHost && data.deck) {
-                distributeCards(data.deck);
+            // Wait for cards to load, then start
+            waitForCardsAndStart();
+        });
+        
+        gameState.peer.on('error', (err) => {
+            console.error('Peer error:', err);
+            showError("Connection error: " + err.type);
+        });
+        
+    } else {
+        // Joiner
+        gameState.peer = new Peer();
+        
+        gameState.peer.on('open', (id) => {
+            console.log('Joiner peer opened:', id);
+            showMessage("Connecting to host...");
+            
+            // Connect to host
+            gameState.conn = gameState.peer.connect(code);
+            
+            gameState.conn.on('open', () => {
+                console.log('Connected to host');
+                setupConnection();
+                showMessage("Connected! Waiting for game start...");
+                
+                // Send ready signal
+                sendToPeer({ type: 'joiner_ready' });
+            });
+            
+            gameState.conn.on('error', (err) => {
+                console.error('Connection error:', err);
+                showError("Could not connect to host");
+            });
+        });
+    }
+}
+
+function waitForCardsAndStart() {
+    const checkInterval = setInterval(() => {
+        if (gameState.cardsLoaded) {
+            clearInterval(checkInterval);
+            setTimeout(() => startRound(), 1000);
+        }
+    }, 100);
+    
+    // Timeout after 10 seconds
+    setTimeout(() => {
+        clearInterval(checkInterval);
+        if (!gameState.cardsLoaded) {
+            console.warn("Card loading timeout, starting anyway");
+            startRound();
+        }
+    }, 10000);
+}
+
+function setupConnection() {
+    gameState.connected = true;
+    
+    gameState.conn.on('data', (data) => {
+        handlePeerMessage(data);
+    });
+    
+    gameState.conn.on('close', () => {
+        console.log('Connection closed');
+        handleOpponentDisconnect();
+    });
+}
+
+function sendToPeer(data) {
+    if (gameState.conn && gameState.conn.open) {
+        gameState.conn.send(data);
+    }
+}
+
+function handlePeerMessage(data) {
+    console.log('Received:', data.type);
+    
+    switch(data.type) {
+        case 'joiner_ready':
+            if (gameState.isHost) {
+                waitForCardsAndStart();
             }
             break;
             
-        case 'initial_hands':
-            // Receive starting hands
-            receiveInitialHands(data);
+        case 'initial_deal':
+            receiveInitialDeal(data);
             break;
             
         case 'opponent_ready':
@@ -215,7 +237,7 @@ function handleServerMessage(data) {
             checkDrawCondition();
             break;
             
-        case 'reveal_cards':
+        case 'reveal_card':
             handleOpponentReveal(data);
             break;
             
@@ -233,10 +255,6 @@ function handleServerMessage(data) {
             
         case 'penalty':
             handleOpponentPenalty(data);
-            break;
-            
-        case 'opponent_disconnected':
-            handleOpponentDisconnect();
             break;
             
         case 'quit':
@@ -263,12 +281,13 @@ function handleInput(e) {
             return;
         }
         
-        // Send slap to server with timestamp
-        sendToServer({
+        sendToPeer({
             type: 'slap',
-            timestamp: now,
-            roomId: gameState.roomId
+            timestamp: now
         });
+        
+        // Resolve immediately (first to press wins in P2P)
+        resolveSlap('player');
     }
 }
 
@@ -299,9 +318,8 @@ function issuePenalty(target, reason) {
     
     updatePenaltyUI();
     
-    // Notify opponent
     if (target === 'player') {
-        sendToServer({
+        sendToPeer({
             type: 'penalty',
             yellows: gameState.playerYellows,
             reds: gameState.playerReds
@@ -387,10 +405,7 @@ function checkSlapCondition() {
 
 function handleOpponentSlap(data) {
     if (!gameState.slapActive) return;
-    
-    // Server should determine winner based on timestamps
-    // For now, assume server sends who won
-    resolveSlap(data.winner);
+    resolveSlap('opponent');
 }
 
 function resolveSlap(winner) {
@@ -404,7 +419,7 @@ function resolveSlap(winner) {
     
     const pilesTotal = gameState.centerPileLeft.length + gameState.centerPileRight.length;
 
-    if (winner === 'player' || winner === gameState.playerId) {
+    if (winner === 'player') {
         txt.innerText = "YOU WON THE SLAP!";
         overlay.style.backgroundColor = "rgba(0, 200, 0, 0.9)";
         gameState.opponentTotal += pilesTotal;
@@ -442,9 +457,11 @@ function resolveSlap(winner) {
 
 function startRound() {
     if (!gameState.connected) {
-        showError("Waiting for opponent to connect...");
+        showError("Waiting for opponent connection...");
         return;
     }
+    
+    console.log("Starting round...");
     
     if (gameState.playerTotal <= 0) {
         showEndGame("YOU WIN THE MATCH!", true);
@@ -455,68 +472,72 @@ function startRound() {
         return;
     }
 
-    // Host creates and distributes deck
+    // Only host creates and deals
     if (gameState.isHost) {
         let fullDeck = createDeck();
         shuffle(fullDeck);
         
-        // Send deck to opponent
-        sendToServer({
-            type: 'start_game',
-            deck: fullDeck.map(c => ({ suit: c.suit, rank: c.rank, value: c.value }))
+        const pTotal = gameState.playerTotal;
+        const pAllCards = fullDeck.slice(0, pTotal);
+        const oAllCards = fullDeck.slice(pTotal, 52);
+
+        const pHandSize = Math.min(10, pTotal);
+        const oHandSize = Math.min(10, 52 - pTotal);
+
+        const pHandCards = pAllCards.splice(0, pHandSize);
+        gameState.playerDeck = pAllCards;
+        
+        const oHandCards = oAllCards.splice(0, oHandSize);
+        gameState.opponentDeck = oAllCards;
+
+        // Check shortage
+        const borrowedPlayer = document.getElementById('borrowed-player');
+        const borrowedAi = document.getElementById('borrowed-ai');
+        if (borrowedPlayer) borrowedPlayer.classList.add('hidden');
+        if (borrowedAi) borrowedAi.classList.add('hidden');
+
+        if (gameState.playerDeck.length === 0 && gameState.opponentDeck.length > 1) {
+            const steal = Math.floor(gameState.opponentDeck.length / 2);
+            gameState.playerDeck = gameState.opponentDeck.splice(0, steal);
+            if (borrowedPlayer) borrowedPlayer.classList.remove('hidden');
+        }
+
+        if (gameState.opponentDeck.length === 0 && gameState.playerDeck.length > 1) {
+            const steal = Math.floor(gameState.playerDeck.length / 2);
+            gameState.opponentDeck = gameState.playerDeck.splice(0, steal);
+            if (borrowedAi) borrowedAi.classList.remove('hidden');
+        }
+
+        // Deal my hand
+        dealSmartHand(pHandCards, 'player');
+        
+        // Send opponent their hand (mirrored)
+        sendToPeer({
+            type: 'initial_deal',
+            hand: oHandCards.map(c => ({
+                suit: c.suit,
+                rank: c.rank,
+                value: c.value,
+                laneIndex: 3 - (pHandCards.indexOf(c) % 4) // Simple lane assignment
+            })),
+            deckCount: gameState.opponentDeck.length
         });
         
-        distributeCards(fullDeck);
+    } else {
+        // Joiner waits for deal
+        showMessage("Waiting for host to deal cards...");
     }
-    // Non-host waits for deck from server
-}
-
-function distributeCards(fullDeck) {
-    const pTotal = gameState.playerTotal;
-    const pAllCards = fullDeck.slice(0, pTotal);
-    const oAllCards = fullDeck.slice(pTotal, 52);
-
-    const pHandSize = Math.min(10, pTotal);
-    const oHandSize = Math.min(10, 52 - pTotal);
-
-    const pHandCards = pAllCards.splice(0, pHandSize);
-    gameState.playerDeck = pAllCards;
-    
-    const oHandCards = oAllCards.splice(0, oHandSize);
-    gameState.opponentDeck = oAllCards;
-
-    // Reset borrow tags
-    document.getElementById('borrowed-player').classList.add('hidden');
-    document.getElementById('borrowed-ai').classList.add('hidden');
-
-    // Check shortage at start
-    if (gameState.playerDeck.length === 0 && gameState.opponentDeck.length > 1) {
-        const steal = Math.floor(gameState.opponentDeck.length / 2);
-        gameState.playerDeck = gameState.opponentDeck.splice(0, steal);
-        document.getElementById('borrowed-player').classList.remove('hidden');
-    }
-
-    if (gameState.opponentDeck.length === 0 && gameState.playerDeck.length > 1) {
-        const steal = Math.floor(gameState.playerDeck.length / 2);
-        gameState.opponentDeck = gameState.playerDeck.splice(0, steal);
-        document.getElementById('borrowed-ai').classList.remove('hidden');
-    }
-
-    dealSmartHand(pHandCards, 'player');
-    
-    // Send opponent their hand (mirrored indices)
-    const mirroredOppHand = mirrorHandForOpponent(oHandCards);
-    sendToServer({
-        type: 'initial_hands',
-        hand: mirroredOppHand,
-        deckCount: gameState.opponentDeck.length
-    });
     
     gameState.centerPileLeft = [];
     gameState.centerPileRight = [];
-    document.getElementById('center-pile-left').innerHTML = '';
-    document.getElementById('center-pile-right').innerHTML = '';
-    document.getElementById('game-message').classList.add('hidden');
+    const leftPile = document.getElementById('center-pile-left');
+    const rightPile = document.getElementById('center-pile-right');
+    if (leftPile) leftPile.innerHTML = '';
+    if (rightPile) rightPile.innerHTML = '';
+    
+    const gameMsg = document.getElementById('game-message');
+    if (gameMsg) gameMsg.classList.add('hidden');
+    
     gameState.slapActive = false;
 
     checkDeckVisibility();
@@ -524,31 +545,52 @@ function distributeCards(fullDeck) {
     updateScoreboard();
 }
 
-function mirrorHandForOpponent(cards) {
-    // Mirror the lane assignments (0->3, 1->2, 2->1, 3->0)
-    return cards.map(c => ({
-        suit: c.suit,
-        rank: c.rank,
-        value: c.value,
-        laneIndex: 3 - c.laneIndex
-    }));
-}
-
-function receiveInitialHands(data) {
-    // Reconstruct opponent's hand from server data
+function receiveInitialDeal(data) {
+    console.log("Received initial deal");
+    
     const oppHand = data.hand.map(c => {
         const card = new Card(c.suit, c.rank, c.value);
         card.laneIndex = c.laneIndex;
         return card;
     });
     
-    dealSmartHand(oppHand, 'opponent');
-    gameState.opponentDeck = new Array(data.deckCount).fill(null);
+    dealSmartHand(oppHand, 'player');
+    gameState.playerDeck = new Array(data.deckCount).fill(null);
+    
+    // Create placeholder opponent hand (face down)
+    createPlaceholderOpponentHand();
+    
+    checkDeckVisibility();
+    updateScoreboard();
+}
+
+function createPlaceholderOpponentHand() {
+    const oppArea = document.getElementById('ai-foundation-area');
+    if (!oppArea) return;
+    oppArea.innerHTML = '';
+    
+    // Create 4 stacks of face-down cards
+    for (let lane = 0; lane < 4; lane++) {
+        const stackSize = [4, 3, 2, 1][lane];
+        for (let i = 0; i < stackSize; i++) {
+            const img = document.createElement('img');
+            img.src = CARD_BACK_SRC;
+            img.className = 'game-card card-face-down opponent-card';
+            img.style.left = `${5 + lane * 24}%`;
+            img.style.top = `${10 + i * 5}px`;
+            img.style.zIndex = i + 10;
+            oppArea.appendChild(img);
+        }
+    }
 }
 
 function dealSmartHand(cards, owner) {
-    const container = document.getElementById(`${owner === 'player' ? 'player' : 'ai'}-foundation-area`);
-    if (!container) return;
+    const containerName = owner === 'player' ? 'player-foundation-area' : 'ai-foundation-area';
+    const container = document.getElementById(containerName);
+    if (!container) {
+        console.error(`Container not found: ${containerName}`);
+        return;
+    }
     container.innerHTML = '';
     
     if (owner === 'player') gameState.playerHand = [];
@@ -590,11 +632,6 @@ function dealSmartHand(cards, owner) {
             if (isTopCard) setCardFaceUp(img, card, owner);
             else setCardFaceDown(img, card, owner);
             
-            // Use cached image if available
-            if (gameState.cardsLoaded && gameState.imageCache.has(img.src)) {
-                // Image already loaded
-            }
-            
             img.style.left = `${currentLeftPercent}%`;
             let stackOffset = index * 5;
             if (owner === 'opponent') img.style.top = `${10 + stackOffset}px`;
@@ -609,6 +646,8 @@ function dealSmartHand(cards, owner) {
         });
         currentLeftPercent += 24;
     });
+    
+    console.log(`Dealt ${owner} hand:`, cards.length, 'cards');
 }
 
 function createDeck() {
@@ -701,11 +740,7 @@ function handlePlayerDeckClick() {
         gameState.playerReady = true;
         document.getElementById('player-draw-deck').classList.add('deck-ready');
         
-        // Notify opponent
-        sendToServer({
-            type: 'player_ready'
-        });
-        
+        sendToPeer({ type: 'opponent_ready' });
         return;
     }
     
@@ -713,10 +748,7 @@ function handlePlayerDeckClick() {
         gameState.playerReady = true;
         document.getElementById('player-draw-deck').classList.add('deck-ready');
         
-        sendToServer({
-            type: 'player_ready'
-        });
-        
+        sendToPeer({ type: 'opponent_ready' });
         checkDrawCondition();
     }
 }
@@ -767,9 +799,10 @@ function performReveal() {
     document.getElementById('player-draw-deck').classList.remove('deck-ready');
     document.getElementById('ai-draw-deck').classList.remove('deck-ready');
     
-    // Check for shortage & borrow
-    const playerBorrowing = !document.getElementById('borrowed-player').classList.contains('hidden');
-    const oppBorrowing = !document.getElementById('borrowed-ai').classList.contains('hidden');
+    const playerBorrowing = document.getElementById('borrowed-player') && 
+                           !document.getElementById('borrowed-player').classList.contains('hidden');
+    const oppBorrowing = document.getElementById('borrowed-ai') && 
+                        !document.getElementById('borrowed-ai').classList.contains('hidden');
 
     if (playerBorrowing) {
         gameState.opponentTotal--;
@@ -783,18 +816,16 @@ function performReveal() {
         gameState.opponentTotal--;
     }
 
-    // Draw and send to server
     let pCard = null;
     if (gameState.playerDeck.length > 0) {
         pCard = gameState.playerDeck.pop();
         gameState.centerPileRight.push(pCard);
         renderCenterPile('right', pCard);
         
-        // Send to opponent (they see it on left)
-        sendToServer({
+        sendToPeer({
             type: 'reveal_card',
             card: { suit: pCard.suit, rank: pCard.rank, value: pCard.value },
-            side: 'left' // Opponent sees our right as their left
+            side: 'left'
         });
     }
     
@@ -811,11 +842,8 @@ function performReveal() {
 
 function handleOpponentReveal(data) {
     const card = new Card(data.card.suit, data.card.rank, data.card.value);
-    
-    // Opponent's cards appear on our left
     gameState.centerPileLeft.push(card);
     renderCenterPile('left', card);
-    
     checkSlapCondition();
 }
 
@@ -835,7 +863,7 @@ function renderCenterPile(side, card) {
 }
 
 // ========================================
-// DRAG & DROP WITH MIRRORING
+// DRAG & DROP
 // ========================================
 
 function makeDraggable(img, cardData) {
@@ -866,8 +894,13 @@ function makeDraggable(img, cardData) {
             img.style.left = newLeft + 'px';
             img.style.top = newTop + 'px';
             
-            // Send drag position to opponent (mirrored)
-            sendOpponentDragPosition(newLeft, newTop, cardData.laneIndex);
+            sendToPeer({
+                type: 'card_dragging',
+                laneIndex: 3 - cardData.laneIndex,
+                left: newLeft,
+                top: -newTop,
+                dragging: true
+            });
         }
         
         moveAt(e.pageX, e.pageY);
@@ -882,8 +915,11 @@ function makeDraggable(img, cardData) {
             
             img.style.transition = 'all 0.1s ease-out';
             
-            // Clear opponent drag indicator
-            clearOpponentDrag(cardData.laneIndex);
+            sendToPeer({
+                type: 'card_dragging',
+                laneIndex: 3 - cardData.laneIndex,
+                dragging: false
+            });
             
             if (gameState.gameActive && parseInt(img.style.top) < -10) {
                 const dropSide = getDropSide(img, event);
@@ -900,29 +936,8 @@ function makeDraggable(img, cardData) {
     };
 }
 
-function sendOpponentDragPosition(left, top, laneIndex) {
-    // Mirror the position for opponent
-    // Their screen is flipped, so we need to transform coordinates
-    sendToServer({
-        type: 'card_dragging',
-        laneIndex: 3 - laneIndex, // Mirror lane
-        left: left,
-        top: -top, // Invert Y
-        dragging: true
-    });
-}
-
-function clearOpponentDrag(laneIndex) {
-    sendToServer({
-        type: 'card_dragging',
-        laneIndex: 3 - laneIndex,
-        dragging: false
-    });
-}
-
 function handleOpponentDragging(data) {
     if (!data.dragging) {
-        // Clear drag indicator
         if (gameState.opponentDragging) {
             gameState.opponentDragging.remove();
             gameState.opponentDragging = null;
@@ -930,7 +945,6 @@ function handleOpponentDragging(data) {
         return;
     }
     
-    // Show opponent's drag position (mirrored on our screen)
     const oppArea = document.getElementById('ai-foundation-area');
     if (!oppArea) return;
     
@@ -947,7 +961,6 @@ function handleOpponentDragging(data) {
         oppArea.appendChild(gameState.opponentDragging);
     }
     
-    // Mirror the position (their left becomes our screen coordinates)
     const lanePercent = 5 + (data.laneIndex * 24);
     gameState.opponentDragging.style.left = `${lanePercent}%`;
     gameState.opponentDragging.style.top = `${10 + Math.abs(data.top)}px`;
@@ -1012,59 +1025,34 @@ function playCardToCenter(card, imgElement, dropSide) {
 
     if (!target) return false;
 
-    // Send play to server with timestamp
-    const timestamp = Date.now();
-    sendToServer({
-        type: 'play_card',
+    sendToPeer({
+        type: 'card_played',
         card: { suit: card.suit, rank: card.rank, value: card.value },
         side: side,
         laneIndex: card.laneIndex,
-        timestamp: timestamp
+        timestamp: Date.now()
     });
 
-    // Optimistic update (server will confirm or reject)
     executeCardPlay(card, imgElement, target, side);
     return true;
 }
 
 function handleOpponentCardPlay(data) {
-    // Check if this conflicts with our recent play
-    // Server should handle conflict resolution
-    
-    if (data.rejected) {
-        // Our card was rejected, snap it back
-        // This would need additional state tracking
-        return;
-    }
-    
     const card = new Card(data.card.suit, data.card.rank, data.card.value);
-    const oppSide = data.side === 'left' ? 'right' : 'left'; // Mirror
+    const oppSide = data.side === 'left' ? 'right' : 'left';
     
     const targetPile = oppSide === 'left' ? gameState.centerPileLeft : gameState.centerPileRight;
     targetPile.push(card);
     
-    // Remove from opponent's hand
-    const laneIdx = 3 - data.laneIndex; // Mirror lane
-    gameState.opponentHand = gameState.opponentHand.filter(c => 
-        !(c.laneIndex === laneIdx && c.rank === card.rank && c.suit === card.suit)
-    );
+    renderCenterPile(oppSide, card);
     
-    // Find and remove visual element
+    // Remove visual card from opponent area
     const oppArea = document.getElementById('ai-foundation-area');
-    if (oppArea) {
-        const cards = Array.from(oppArea.querySelectorAll('.game-card'));
-        // Find the card that matches
-        cards.forEach(el => {
-            const rect = el.getBoundingClientRect();
-            const lanePercent = 5 + (laneIdx * 24);
-            // Remove top card from that lane
-            if (Math.abs(parseFloat(el.style.left) - lanePercent) < 5) {
-                el.remove();
-            }
-        });
+    if (oppArea && oppArea.children.length > 0) {
+        const lastCard = oppArea.children[oppArea.children.length - 1];
+        if (lastCard) lastCard.remove();
     }
     
-    renderCenterPile(oppSide, card);
     checkSlapCondition();
 }
 
@@ -1100,21 +1088,13 @@ function executeCardPlay(card, imgElement, target, side) {
 // ========================================
 
 function showMessage(text) {
-    const msgEl = document.getElementById('connection-status');
-    if (msgEl) {
-        msgEl.innerText = text;
-        msgEl.classList.remove('hidden');
-        setTimeout(() => msgEl.classList.add('hidden'), 3000);
-    }
+    console.log(text);
+    // Optional: Add visual message display
 }
 
 function showError(text) {
-    const msgEl = document.getElementById('connection-status');
-    if (msgEl) {
-        msgEl.innerText = text;
-        msgEl.style.color = '#ff4444';
-        msgEl.classList.remove('hidden');
-    }
+    console.error(text);
+    alert(text);
 }
 
 function showRoundMessage(title, sub) {
@@ -1126,6 +1106,7 @@ function showRoundMessage(title, sub) {
     if (btn) {
         btn.innerText = "CONTINUE";
         btn.onclick = function() {
+            modal.classList.add('hidden');
             startRound();
         };
     }
@@ -1157,7 +1138,7 @@ function showEndGame(title, isWin) {
 function updateScoreboardWidget() {
     const p1Name = document.getElementById('sb-p1-name');
     const p2Name = document.getElementById('sb-p2-name');
-    if (p1Name) p1Name.innerText = gameState.playerName;
+    if (p1Name) p1Name.innerText = gameState.myName;
     if (p2Name) p2Name.innerText = gameState.opponentName;
 
     const p1R = document.getElementById('sb-p1-rounds');
@@ -1178,45 +1159,34 @@ function updateScoreboardWidget() {
 function handleOpponentDisconnect() {
     gameState.connected = false;
     gameState.gameActive = false;
-    showError("Opponent disconnected. You win by default!");
+    showError("Opponent disconnected!");
     
     setTimeout(() => {
         showEndGame("OPPONENT DISCONNECTED - YOU WIN!", true);
-    }, 2000);
+    }, 1000);
 }
 
 function handleOpponentQuit() {
     gameState.connected = false;
     gameState.gameActive = false;
-    showError("Opponent quit the game. You win!");
+    showError("Opponent quit the game!");
     
     setTimeout(() => {
         showEndGame("OPPONENT QUIT - YOU WIN!", true);
-    }, 2000);
+    }, 1000);
 }
 
 function quitGame() {
-    // Notify opponent we're quitting
-    sendToServer({
-        type: 'quit',
-        roomId: gameState.roomId
-    });
+    sendToPeer({ type: 'quit' });
     
-    // Close connection
-    if (gameState.socket) {
-        gameState.socket.close();
-    }
+    if (gameState.conn) gameState.conn.close();
+    if (gameState.peer) gameState.peer.destroy();
     
-    // Return to menu
-    window.location.href = 'multiplayer-setup.html';
+    window.location.href = 'matchmaking.html';
 }
 
-// Handle page close/refresh
 window.addEventListener('beforeunload', (e) => {
     if (gameState.connected && gameState.gameActive) {
-        sendToServer({
-            type: 'quit',
-            roomId: gameState.roomId
-        });
+        sendToPeer({ type: 'quit' });
     }
 });
