@@ -456,7 +456,6 @@ function attemptAIMove() {
     const maxTime = 7000 + (diff - 1) * -600; 
     let reactionDelay = Math.random() * (maxTime - minTime) + minTime;
     
-    // AI acts faster if it's in the middle of a combo
     if (gameState.aiInChain) reactionDelay *= 0.5;
 
     const activeCards = gameState.aiHand.filter(c => c.isFaceUp);
@@ -464,7 +463,6 @@ function attemptAIMove() {
     // 1. EVALUATE ALL POSSIBLE MOVES
     let possibleMoves = [];
 
-    // Check every face-up card against both piles
     for (let card of activeCards) {
         if (checkPileLogic(card, gameState.centerPileLeft)) {
             possibleMoves.push(scoreMove(card, 'left'));
@@ -481,17 +479,14 @@ function attemptAIMove() {
     if (possibleMoves.length > 0) {
         const bestMove = possibleMoves[0];
 
-        // If the best move has a negative score (Defensive Hold), 
-        // we might choose to do NOTHING to force a stalemate.
+        // If the best move is dangerous (Defensive Hold), we skip playing it.
         if (bestMove.score < -500) {
-            // However, we still check if we have hidden cards to reveal (Blocker logic below)
-            // If no hidden cards, we truly stall.
+            // Do nothing. Fall through to hidden cards or drawing.
         } else {
             gameState.aiProcessing = true;
             setTimeout(() => {
                 if (!gameState.gameActive) { gameState.aiProcessing = false; return; }
                 
-                // Re-verify legality (game state might have changed during delay)
                 let targetPile = (bestMove.target === 'left') ? gameState.centerPileLeft : gameState.centerPileRight;
                 if (!checkPileLogic(bestMove.card, targetPile)) { gameState.aiProcessing = false; return; }
 
@@ -501,7 +496,6 @@ function attemptAIMove() {
                     
                     if (success) {
                         gameState.aiInChain = true;
-                        // Flip next card in lane
                         const laneCards = gameState.aiHand.filter(c => c.laneIndex === laneIdx);
                         if (laneCards.length > 0) {
                             const newTop = laneCards[laneCards.length - 1];
@@ -514,12 +508,11 @@ function attemptAIMove() {
                     gameState.aiProcessing = false;
                 });
             }, reactionDelay);
-            return; // Exit, we found a move
+            return; // EXIT: We decided to play.
         }
     }
 
-    // 4. FALLBACK: HANDLE HIDDEN CARDS / BLOCKERS (If no face-up moves)
-    // (This logic remains effectively the same as your original, just reorganized)
+    // 4. FALLBACK: HANDLE HIDDEN CARDS / BLOCKERS
     gameState.aiInChain = false;
     
     if (activeCards.length < 4) {
@@ -553,7 +546,7 @@ function attemptAIMove() {
                     gameState.aiProcessing = false;
                 });
             }, reactionDelay * 0.8);
-            return;
+            return; // EXIT: We revealed a blocker.
         }
         
         const simpleHidden = gameState.aiHand.find(c => !c.isFaceUp && isTopOffPile(c));
@@ -563,33 +556,44 @@ function attemptAIMove() {
                 setCardFaceUp(simpleHidden.element, simpleHidden, 'ai'); 
                 gameState.aiProcessing = false; 
             }, reactionDelay * 0.5); 
-            return;
+            return; // EXIT: We revealed a hidden card.
         }
     }
 
-    // 5. DRAW DECK LOGIC (If totally stuck)
-    if (possibleMoves.length === 0) {
-        const hiddenCardsLeft = gameState.aiHand.filter(c => !c.isFaceUp).length;
-        if (activeCards.length === 4 || hiddenCardsLeft === 0) {
-            if (!gameState.aiReady) {
-                gameState.aiProcessing = true;
-                setTimeout(() => {
-                    // Check one last time before committing ready
-                    const freshActive = gameState.aiHand.filter(c => c.isFaceUp);
-                    const canMoveNow = freshActive.some(c => checkPileLogic(c, gameState.centerPileLeft) || checkPileLogic(c, gameState.centerPileRight));
-                    
-                    if (canMoveNow) { gameState.aiProcessing = false; return; }
-                    
-                    gameState.aiReady = true;
-                    document.getElementById('ai-draw-deck').classList.add('deck-ready');
-                    gameState.aiProcessing = false;
-                    checkDrawCondition();
-                }, 1000 + reactionDelay);
-            }
+    // 5. DRAW DECK LOGIC (The Fix)
+    // If we reach this point, it means:
+    // A) We had no moves, OR
+    // B) We had moves but decided they were too dangerous to play (Stalemate strategy).
+    // In either case, we must try to Draw.
+    
+    const hiddenCardsLeft = gameState.aiHand.filter(c => !c.isFaceUp).length;
+    
+    // Only draw if we physically can't flip any more cards (hand full or no hidden left)
+    if (activeCards.length === 4 || hiddenCardsLeft === 0) {
+        if (!gameState.aiReady) {
+            gameState.aiProcessing = true;
+            setTimeout(() => {
+                // One last check: did the board change while we were waiting?
+                const freshActive = gameState.aiHand.filter(c => c.isFaceUp);
+                const canMoveNow = freshActive.some(c => checkPileLogic(c, gameState.centerPileLeft) || checkPileLogic(c, gameState.centerPileRight));
+                
+                // Note: We don't check score here. If a move appeared, we might as well take it next loop 
+                // or just click ready if we still hate it. Simpler to just click ready.
+                
+                if (canMoveNow) { 
+                    // Optional: If a move appeared, we could cancel ready. 
+                    // But if it's the SAME dangerous move, we want to proceed.
+                    // For safety, let's just proceed to ready so the game doesn't hang.
+                }
+                
+                gameState.aiReady = true;
+                document.getElementById('ai-draw-deck').classList.add('deck-ready');
+                gameState.aiProcessing = false;
+                checkDrawCondition();
+            }, 1000 + reactionDelay);
         }
     }
 }
-
 // --- INTELLIGENT SCORING SYSTEM ---
 function scoreMove(card, targetSide) {
     let score = 0;
