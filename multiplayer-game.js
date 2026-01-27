@@ -303,12 +303,27 @@ function attachConnection(conn) {
     gameState.conn = conn;
 
     conn.on("open", () => {
-    sendNet({ type: "HANDSHAKE", name: gameState.myName });
+    sendNet({ t: "HANDSHAKE", name: gameState.myName });
     sendNet({ t: "HELLO", name: gameState.myName, isHost: gameState.isHost });
 
     if (!gameState.isHost) {
         sendNet({ t: "REQUEST_STATE" });
     }
+       if (gameState.isHost) {
+    // Start once as soon as we have a live connection
+    setTimeout(() => hostStartMatch(), 100);
+} else {
+    // Ask host for state (and retry if needed)
+    sendNet({ t: "REQUEST_STATE" });
+
+    setTimeout(() => {
+        // If we still did not receive STATE_INIT, ask again
+        if (!gameState.playerHand.length && !gameState.aiHand.length) {
+            sendNet({ t: "REQUEST_STATE" });
+        }
+    }, 1500);
+}
+
 });
 
 
@@ -345,8 +360,7 @@ function sendNet(obj) {
 function handleNet(msg) {
     if (!msg || typeof msg !== "object") return;
 
-    // NORMALISE: allow both message styles
-    // matchmaking sends { type: "HANDSHAKE" }
+    // Allow both formats
     if (!msg.t && msg.type) msg.t = msg.type;
 
     switch (msg.t) {
@@ -356,6 +370,11 @@ function handleNet(msg) {
                 localStorage.setItem("isf_opponent_name", msg.name);
                 updateScoreboardWidget();
             }
+            break;
+
+        case "HELLO":
+            if (msg.name) gameState.opponentName = msg.name;
+            updateScoreboardWidget();
             break;
 
         case "REQUEST_STATE":
