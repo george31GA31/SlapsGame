@@ -228,7 +228,7 @@ function handleNet(msg) {
     }
 
     if (msg.type === 'MOVE_REQ') {
-        if (gameState.isHost) adjudicateMove(msg.move);
+        if (gameState.isHost) adjudicateMove(msg.move, 'ai'); // Network requests always come from Opponent
         return;
     }
 
@@ -887,9 +887,8 @@ function checkPileLogic(card, targetPile) {
    ================================ */
 
 function requestMoveToHost(cardData, dropSide) {
-    // If not dropped on a pile, do not even ask host
+    // If not dropped on a pile, snap back locally
     if (dropSide !== 'left' && dropSide !== 'right') {
-        // Snap back locally
         if (cardData && cardData.originalLeft != null) {
             const el = cardData.element;
             if (el) { el.style.left = cardData.originalLeft; el.style.top = cardData.originalTop; }
@@ -903,26 +902,28 @@ function requestMoveToHost(cardData, dropSide) {
         card: packCardWithMeta(cardData)
     };
 
-    sendNet({ type: 'MOVE_REQ', move: req });
+    if (gameState.isHost) {
+        // CRITICAL FIX: Host processes their own move locally as 'player'
+        adjudicateMove(req, 'player');
+    } else {
+        // Guest sends request to Host (who will receive it as 'ai')
+        sendNet({ type: 'MOVE_REQ', move: req });
+    }
 }
 
-function adjudicateMove(m) {
-    // Host receives MOVE_REQ from the remote player.
-    // In the host's gameState, the remote player is "ai" (opponent).
-    const mover = 'ai';
+function adjudicateMove(m, moverOverride) {
+    // If no override provided, assume it came from network (AI/Opponent)
+    const mover = moverOverride || 'ai';
 
     const moverHand = (mover === 'player') ? gameState.playerHand : gameState.aiHand;
 
-    // Find the actual card object in moverHand
-    const idx = moverHand.findIndex(c =>
-        c.suit === m.card.suit &&
-        c.rank === m.card.rank &&
-        c.value === m.card.value &&
-        c.isFaceUp === true
-    );
+    // Find the actual card object in the correct hand
+    // We match by ID first to be safe
+    const idx = moverHand.findIndex(c => c.id === m.card.id);
 
     if (idx === -1) {
-        sendNet({ type: 'MOVE_REJECT', reject: { reqId: m.reqId } });
+        // Only reject if it came from network. If it's local host move, just return.
+        if (mover === 'ai') sendNet({ type: 'MOVE_REJECT', reject: { reqId: m.reqId } });
         return;
     }
 
@@ -935,16 +936,23 @@ function adjudicateMove(m) {
     if (m.dropSide === 'left' && isLeftLegal) side = 'left';
     if (m.dropSide === 'right' && isRightLegal) side = 'right';
 
-    // If invalid NOW, reject (this enforces "first sticks, second bounces")
+    // If invalid, reject
     if (!side) {
-        sendNet({ type: 'MOVE_REJECT', reject: { reqId: m.reqId } });
+        if (mover === 'ai') sendNet({ type: 'MOVE_REJECT', reject: { reqId: m.reqId } });
+        else {
+            // Host made illegal move? Snap back locally
+            if (cardObj.element) {
+                cardObj.element.style.left = cardObj.originalLeft;
+                cardObj.element.style.top = cardObj.originalTop;
+            }
+        }
         return;
     }
 
-    // Apply on host state + host UI
+    // Apply move and broadcast
     const applyPayload = applyMoveAuthoritative(mover, cardObj, side, m.reqId);
-
-    // Broadcast to joiner
+    
+    // Broadcast result to the other player (if Host played, Guest needs to know. If Guest played, confirm it).
     sendNet({ type: 'MOVE_APPLY', apply: applyPayload });
 }
 
