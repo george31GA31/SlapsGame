@@ -366,9 +366,44 @@ function checkMyMatch() {
 function goToNextMatch() {
     if (!iAmReadyToPlay) return;
     
-    // Destroy lobby connection so we don't conflict with the match connection
-    if (state.peer) state.peer.destroy();
+    // IMPORTANT: Do NOT destroy the peer connection.
+    // The lobby must stay alive in the background.
     
-    // Redirect to the Match Setup screen
-    window.location.href = 'friend-match.html';
+    // Show the overlay
+    const overlay = document.getElementById('game-overlay');
+    const frame = document.getElementById('game-frame');
+    
+    overlay.classList.remove('hidden');
+    
+    // Load the match setup into the iframe
+    frame.src = 'friend-match.html';
 }
+// --- LISTEN FOR GAME RESULTS ---
+window.addEventListener('message', (event) => {
+    // Security check (optional, but good practice)
+    // if (event.origin !== "http://yourwebsite.com") return;
+
+    if (event.data.type === 'GAME_OVER') {
+        // 1. Hide the game
+        document.getElementById('game-overlay').classList.add('hidden');
+        document.getElementById('game-frame').src = ''; // Stop the game
+
+        // 2. Handle Result
+        const result = event.data.result; // 'win' or 'loss'
+        
+        if (result === 'win') {
+            alert("VICTORY! Updating Bracket...");
+            // TODO: Here you would update your 'state.players' or send a "I_WON" message to the lobby
+            // For now, let's visual update:
+            const myBox = document.querySelector('.match-box.occupied[style*="00ff00"]'); 
+            if(myBox) {
+                myBox.style.background = "gold"; // Mark as winner visually
+                // In a real version, you'd calculate the Next Round Slot and move your name there.
+            }
+        } else {
+            alert("ELIMINATED! Better luck next time.");
+            // Disable controls
+            document.getElementById('game-controls').classList.add('hidden');
+        }
+    }
+});
