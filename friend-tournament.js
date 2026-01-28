@@ -7,10 +7,10 @@ const state = {
     myId: null,
     hostId: null,
     isHost: false,
-    players: [], // { name, id }
+    players: [], 
     peer: null,
-    conns: [], // Host keeps connections here
-    hostConn: null, // Guest keeps host connection here
+    conns: [], 
+    hostConn: null, 
     tournamentStarted: false
 };
 
@@ -27,30 +27,49 @@ const screens = {
 // --- SETUP FUNCTIONS ---
 
 function getNickname() {
-    const input = document.getElementById('my-nickname').value.trim();
-    if (!input) { alert("Please enter a nickname!"); return null; }
-    state.myName = input;
-    localStorage.setItem('isf_my_name', input);
-    return input;
+    // Try to load from localStorage first if not in input
+    let val = document.getElementById('my-nickname')?.value.trim();
+    if(!val) val = localStorage.getItem('isf_my_name');
+    
+    if (!val) { alert("Please enter a nickname!"); return null; }
+    
+    state.myName = val;
+    localStorage.setItem('isf_my_name', val);
+    return val;
+}
+
+// CHECK AUTO-ACTIONS FROM SETUP PAGE
+window.onload = function() {
+    state.myName = localStorage.getItem('isf_my_name') || "Player";
+    
+    const action = localStorage.getItem('isf_friend_action');
+    if(action === 'host') {
+        localStorage.removeItem('isf_friend_action'); // Clear flag
+        setupHost();
+    } else if (action === 'join') {
+        const code = localStorage.getItem('isf_friend_code');
+        localStorage.removeItem('isf_friend_action');
+        if(code) {
+            document.getElementById('join-code').value = code;
+            joinLobby();
+        }
+    }
 }
 
 function setupHost() {
     if (!getNickname()) return;
     
-    // Generate Random 4-Digit Code
     const code = Math.floor(1000 + Math.random() * 9000);
     const fullId = `ISF-${code}`;
     
     state.isHost = true;
     state.myId = fullId;
-    state.hostId = fullId; // Host is their own host
+    state.hostId = fullId; 
 
-    // Init Peer
     state.peer = new Peer(fullId);
     
     state.peer.on('open', (id) => {
         console.log("Hosting on ID:", id);
-        // Add self to list
         state.players.push({ name: state.myName, id: id, isHost: true });
         updateLobbyUI();
         showScreen('waiting');
@@ -62,7 +81,7 @@ function setupHost() {
     });
 
     state.peer.on('error', (err) => {
-        alert("Error creating room. Code might be taken. Try again.");
+        alert("Error creating room. Try again.");
         console.error(err);
     });
 }
@@ -74,24 +93,18 @@ function showJoinUI() {
 
 function joinLobby() {
     const codeInput = document.getElementById('join-code').value.trim().toUpperCase();
-    if (!codeInput.startsWith('ISF-') && codeInput.length !== 8) {
-        alert("Invalid format. Use ISF-XXXX");
-        return;
-    }
+    if (!codeInput) return;
 
     state.isHost = false;
     state.hostId = codeInput;
-    state.peer = new Peer(); // Random ID for guest
+    state.peer = new Peer(); 
 
     state.peer.on('open', (id) => {
         state.myId = id;
-        console.log("My ID:", id);
         const conn = state.peer.connect(state.hostId);
         state.hostConn = conn;
 
         conn.on('open', () => {
-            console.log("Connected to Host");
-            // Send Join Request
             conn.send({ type: 'JOIN', name: state.myName, id: state.myId });
         });
 
@@ -104,8 +117,7 @@ function joinLobby() {
     });
 
     state.peer.on('error', (err) => {
-        alert("Could not find lobby. Check the code.");
-        console.error(err);
+        alert("Could not find lobby. Check code.");
     });
 }
 
@@ -117,12 +129,9 @@ function resetLobbyUI() {
 
 function handleDataHost(data, conn) {
     if (data.type === 'JOIN') {
-        // Add new player
         const newPlayer = { name: data.name, id: data.id, conn: conn };
         state.players.push(newPlayer);
         state.conns.push(conn);
-        
-        console.log(`${data.name} joined.`);
         broadcastLobbyUpdate();
     }
 }
@@ -133,7 +142,7 @@ function handleDataGuest(data) {
         updateLobbyUI();
         showScreen('waiting');
         document.getElementById('host-code-display').innerText = state.hostId;
-        document.getElementById('btn-start-tourney').style.display = 'none'; // Guests can't start
+        document.getElementById('btn-start-tourney').style.display = 'none'; 
         document.getElementById('lobby-status').innerText = "WAITING FOR HOST TO START...";
     }
     if (data.type === 'START_TOURNAMENT') {
@@ -142,13 +151,8 @@ function handleDataGuest(data) {
 }
 
 function broadcastLobbyUpdate() {
-    // Send safe list (no connection objects) to everyone
     const safeList = state.players.map(p => ({ name: p.name, id: p.id, isHost: p.isHost }));
-    
-    // Update Host UI
     updateLobbyUI();
-
-    // Send to Guests
     state.conns.forEach(conn => {
         conn.send({ type: 'LOBBY_UPDATE', players: safeList });
     });
@@ -166,18 +170,18 @@ function updateLobbyUI() {
         list.appendChild(div);
     });
 
-    // Update Start Button Logic (Host Only)
     if (state.isHost) {
         const btn = document.getElementById('btn-start-tourney');
         const count = state.players.length;
-        if (count >= 4) {
+        // CHANGE: Allowed starting with 2 for testing, but ideally 4+
+        if (count >= 2) {
             btn.disabled = false;
             btn.innerText = `START TOURNAMENT (${count} PLAYERS)`;
             document.getElementById('lobby-status').innerText = "READY TO START";
             document.getElementById('lobby-status').style.color = "#00ff00";
         } else {
             btn.disabled = true;
-            btn.innerText = `WAITING FOR PLAYERS (${count}/4 MIN)`;
+            btn.innerText = `WAITING FOR PLAYERS (${count})`;
             document.getElementById('lobby-status').innerText = "WAITING FOR PLAYERS...";
             document.getElementById('lobby-status').style.color = "#888";
         }
@@ -192,17 +196,11 @@ function showScreen(name) {
     if (screens[name]) screens[name].classList.remove('hidden');
 }
 
-// --- BRACKET START LOGIC ---
-
-// --- BRACKET START LOGIC ---
+// --- BRACKET START LOGIC (FIXED SORTING) ---
 
 function startTournament() {
     if (!state.isHost) return;
-    
-    // Shuffle players for randomness
     const shuffled = [...state.players].sort(() => 0.5 - Math.random());
-    
-    // Broadcast the ordered list
     const bracketData = shuffled.map(p => ({ name: p.name, id: p.id }));
 
     state.conns.forEach(conn => {
@@ -212,83 +210,46 @@ function startTournament() {
     startVisualTournament(bracketData);
 }
 
-// --- BRACKET STATE TRACKING ---
-let myCurrentMatchId = null; // If I am playing, this stores the match ID (e.g., 'L16-1')
+// TRACKING
+let myCurrentMatchId = null;
 let iAmReadyToPlay = false;
+let slotsToFill = []; // Global so goToNextMatch can read it
 
 function startVisualTournament(playerList) {
-    // 1. Setup UI
     screens.overlay.classList.add('hidden');
     screens.bracket.classList.add('active'); 
     screens.controls.classList.remove('hidden');
 
-    // 2. Clear Bracket
     document.querySelectorAll('.player-name').forEach(el => el.innerText = "");
     document.querySelectorAll('.match-box').forEach(el => el.classList.remove('occupied'));
 
-    // 3. Logic to Distribute Players (Same as before)
-    // ... (Keep your existing distribution logic here) ...
-    // ... (Keep your slotsToFill logic here) ...
+    const n = playerList.length;
+    
+    // Split players
+    const leftCount = Math.ceil(n / 2);
+    const leftPlayers = playerList.slice(0, leftCount);
+    const rightPlayers = playerList.slice(leftCount);
 
-    // 4. Render to DOM & CHECK FOR MY MATCH
-    myCurrentMatchId = null;
-    iAmReadyToPlay = false;
-    
-    // We need to group players by Match ID (e.g., L16-1 vs L16-2 is WRONG logic).
-    // Correct Logic: L16-1 and L16-2 fight to go to LQF-1? No.
-    // In a visual bracket, typically adjacent vertical slots fight each other.
-    // L16-1 vs L16-2 -> Winner goes to LQF-1.
-    
-    // SIMPLIFIED MATCH DETECTION:
-    // If "I" am in L16-1, my opponent is in L16-2.
-    // We scan the 'slotsToFill' to find where 'I' am.
-    
-    const mySlot = slotsToFill.find(s => s.name === state.myName);
-    
-    if (mySlot) {
-        // Find my opponent
-        // Logic: If index is even (0, 2, 4), opponent is index+1. If odd, opponent is index-1.
-        const myIndex = slotsToFill.indexOf(mySlot);
-        const isEven = (myIndex % 2 === 0);
-        const opponentIndex = isEven ? myIndex + 1 : myIndex - 1;
-        const opponentSlot = slotsToFill[opponentIndex];
+    slotsToFill = [];
 
-        if (opponentSlot) {
-            // MATCH FOUND!
-            iAmReadyToPlay = true;
-            myCurrentMatchId = `MATCH-${Math.min(myIndex, opponentIndex)}`; // Unique ID based on lower index
-            
-            // Highlight My Box
-            document.getElementById(mySlot.id).style.border = "2px solid #00ff00"; 
-            
-            // Enable Button
-            const btn = document.querySelector('#game-controls button');
-            btn.disabled = false;
-            btn.style.opacity = "1";
-            btn.style.background = "linear-gradient(90deg, #00ff00, #008800)";
-            btn.innerText = `PLAY MATCH VS ${opponentSlot.name.toUpperCase()}`;
-            
-            // Store Match Data for Handover
-            localStorage.setItem('isf_tourney_opponent', opponentSlot.name);
-            localStorage.setItem('isf_tourney_match_id', myCurrentMatchId);
-            
-            // IMPORTANT: We need to know who "Hosts" the sub-match. 
-            // Convention: The player with the alphabetically first ID (or name) hosts.
-            // Let's use name for simplicity in this friend mode.
-            const amISubHost = (state.myName < opponentSlot.name);
-            localStorage.setItem('isf_role', amISubHost ? 'host' : 'guest');
-            localStorage.setItem('isf_code', myCurrentMatchId); // Sub-room ID
-        } else {
-            // I have a Bye (No opponent yet)
-            const btn = document.querySelector('#game-controls button');
-            btn.disabled = true;
-            btn.style.opacity = "0.5";
-            btn.style.background = "#333";
-            btn.innerText = "WAITING FOR OPPONENT...";
-        }
+    // --- SORTING LOGIC ---
+    if (n <= 4) {
+        // SMALL (Semi Finals Base)
+        leftPlayers.forEach((p, i) => slotsToFill.push({ id: `LSF-${i+1}`, name: p.name }));
+        rightPlayers.forEach((p, i) => slotsToFill.push({ id: `RSF-${i+1}`, name: p.name }));
+    } 
+    else if (n <= 8) {
+        // MEDIUM (Quarter Finals Base) - 5, 6, 7, 8 Players
+        slotsToFill = slotsToFill.concat(distributeSide(leftPlayers, 'L', 4));
+        slotsToFill = slotsToFill.concat(distributeSide(rightPlayers, 'R', 4));
+    } 
+    else {
+        // LARGE (Round of 16 Base) - 9+ Players
+        slotsToFill = slotsToFill.concat(distributeSide(leftPlayers, 'L', 8));
+        slotsToFill = slotsToFill.concat(distributeSide(rightPlayers, 'R', 8));
     }
-    
-    // Draw names
+
+    // Render
     slotsToFill.forEach(item => {
         const box = document.getElementById(item.id);
         if (box) {
@@ -296,51 +257,36 @@ function startVisualTournament(playerList) {
             box.querySelector('.player-name').innerText = item.name;
         }
     });
+
+    checkMyMatch();
 }
 
-function goToNextMatch() {
-    if (!iAmReadyToPlay) return;
-    
-    // Save State so we can return later (Optional: Store tournament ID)
-    // Disconnect from Main Lobby (PeerJS limit)
-    if (state.peer) state.peer.destroy();
-    
-    // Redirect to Game
-    window.location.href = 'multiplayer-game.html';
-}
-// --- HELPER: DISTRIBUTE PLAYERS WITH BYES ---
 function distributeSide(players, side, capacity) {
     const k = players.length;
-    const byes = capacity - k; // How many "free passes" available
+    const byes = capacity - k; 
     let mapped = [];
     let pIndex = 0;
-
-    // We iterate through the "Matches" of the base round.
-    // If Capacity is 8 (R16), there are 4 Matches (QF1..QF4).
-    // If Capacity is 4 (QF), there are 2 Matches (SF1..SF2).
     const matchesCount = capacity / 2;
 
     for (let i = 1; i <= matchesCount; i++) {
-        // Logic: Fill from Top to Bottom.
-        // If we still have Byes left, this match slot becomes a Bye.
-        // A Bye means 1 player skips the outer round and goes to the inner round.
-        
         if (pIndex < byes) {
-            // --- GIVE BYE (Place in Inner Round) ---
+            // --- BYE LOGIC ---
+            // Player skips outer round, goes to inner round.
+            // Example: Skip QF-1/2, Go to SF-1.
             let nextRoundId;
-            if (capacity === 8) nextRoundId = `${side}QF-${i}`; // Skip R16 -> Go QF
-            else nextRoundId = `${side}SF-${i}`;               // Skip QF -> Go SF
+            if (capacity === 8) nextRoundId = `${side}QF-${i}`; 
+            else nextRoundId = `${side}SF-${i}`;
 
-            // Take 1 player
             if (players[pIndex]) mapped.push({ id: nextRoundId, name: players[pIndex].name });
             pIndex++;
         } else {
-            // --- REAL MATCH (Place in Current Round) ---
+            // --- MATCH LOGIC ---
+            // Players fill the current bracket spots.
+            // Example: QF-3 and QF-4.
             let prefix = (capacity === 8) ? `${side}16` : `${side}QF`;
-            let s1 = `${prefix}-${(i*2)-1}`; // e.g., L16-1
-            let s2 = `${prefix}-${(i*2)}`;   // e.g., L16-2
+            let s1 = `${prefix}-${(i*2)-1}`; 
+            let s2 = `${prefix}-${(i*2)}`;   
 
-            // Take 2 players
             if (players[pIndex]) mapped.push({ id: s1, name: players[pIndex].name });
             pIndex++;
             if (players[pIndex]) mapped.push({ id: s2, name: players[pIndex].name });
@@ -349,36 +295,76 @@ function distributeSide(players, side, capacity) {
     }
     return mapped;
 }
-function startVisualTournament(playerList) {
-    // 1. Hide Overlay
-    screens.overlay.classList.add('hidden');
-    screens.bracket.classList.add('active'); // Remove blur
-    screens.controls.classList.remove('hidden');
 
-    // 2. Populate Names
-    // Logic: If <= 8 players, fill QF. If > 8, fill R16.
-    // For this MVP, let's just fill R16 Left side first, then Right side.
+function checkMyMatch() {
+    myCurrentMatchId = null;
+    iAmReadyToPlay = false;
     
-    // Clear all boxes first
-    document.querySelectorAll('.player-name').forEach(el => el.innerText = "");
-    document.querySelectorAll('.match-box').forEach(el => el.classList.remove('occupied'));
+    // Find where I am
+    const mySlot = slotsToFill.find(s => s.name === state.myName);
+    
+    if (mySlot) {
+        // Find my opponent
+        // Logic: Opponent is the other half of the pair.
+        // Pairs are: (Index 0,1), (Index 2,3), etc. within the slotsToFill array? 
+        // NO. slotsToFill is unstructured. We need to look at IDs.
+        
+        // ID Logic: LQF-1 vs LQF-2. LQF-3 vs LQF-4.
+        // Parse ID: Ends in number.
+        const parts = mySlot.id.split('-'); // ["LQF", "3"]
+        const prefix = parts[0];
+        const num = parseInt(parts[1]);
+        
+        // If Num is Odd (1,3), opponent is Num+1.
+        // If Num is Even (2,4), opponent is Num-1.
+        const isOdd = (num % 2 !== 0);
+        const oppNum = isOdd ? num + 1 : num - 1;
+        const oppId = `${prefix}-${oppNum}`;
+        
+        const opponentSlot = slotsToFill.find(s => s.id === oppId);
 
-    const slots = [
-        'L16-1', 'L16-2', 'L16-3', 'L16-4', 'L16-5', 'L16-6', 'L16-7', 'L16-8',
-        'R16-1', 'R16-2', 'R16-3', 'R16-4', 'R16-5', 'R16-6', 'R16-7', 'R16-8'
-    ];
+        const btn = document.querySelector('#game-controls button');
 
-    playerList.forEach((p, index) => {
-        if (index < slots.length) {
-            const box = document.getElementById(slots[index]);
-            if (box) {
-                box.classList.add('occupied');
-                box.querySelector('.player-name').innerText = p.name;
-            }
+        if (opponentSlot) {
+            // --- MATCH READY ---
+            iAmReadyToPlay = true;
+            myCurrentMatchId = `MATCH-${prefix}-${Math.min(num, oppNum)}`; // Unique Match ID
+            
+            // Visuals
+            document.getElementById(mySlot.id).style.border = "2px solid #00ff00"; 
+            document.getElementById(oppId).style.border = "2px solid #ff0000"; 
+
+            btn.disabled = false;
+            btn.style.opacity = "1";
+            btn.style.background = "linear-gradient(90deg, #00ff00, #008800)";
+            btn.innerText = `PLAY VS ${opponentSlot.name.toUpperCase()}`;
+            
+            // Handover Data
+            localStorage.setItem('isf_tourney_opponent', opponentSlot.name);
+            localStorage.setItem('isf_tourney_match_id', myCurrentMatchId);
+            
+            const amISubHost = (state.myName < opponentSlot.name);
+            localStorage.setItem('isf_role', amISubHost ? 'host' : 'guest');
+            localStorage.setItem('isf_code', myCurrentMatchId);
+
+        } else {
+            // --- I HAVE A BYE ---
+            // If I am in SF or QF but my pair is empty, I wait.
+            // But if I was placed via "Bye Logic" (e.g. into SF-1), do I have an opponent?
+            // If I am in SF-1, my opponent is SF-2? NO. SF-1 plays SF-2 in the FINAL.
+            // But for THIS round, I am waiting for the winner of the previous round.
+            
+            btn.disabled = true;
+            btn.style.opacity = "0.5";
+            btn.style.background = "#333";
+            btn.innerText = "WAITING FOR OPPONENT...";
+            document.getElementById(mySlot.id).style.border = "2px solid #ffff00"; // Yellow for waiting
         }
-    });
+    }
 }
 
 function goToNextMatch() {
-    alert("Matchmaking logic coming next!");
+    if (!iAmReadyToPlay) return;
+    if (state.peer) state.peer.destroy();
+    window.location.href = 'multiplayer-game.html';
 }
