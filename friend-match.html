@@ -2,104 +2,34 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tournament Match - ISF</title>
+    <title>Match Setup</title>
     <link rel="stylesheet" href="style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
-    
     <style>
-        body {
-            background-color: #1a1a1a;
-            background-image: radial-gradient(circle at center, #2a2a2a 0%, #000000 100%);
-            color: white;
-            font-family: 'Roboto', sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-            overflow: hidden;
-            text-align: center;
-        }
-
-        h1 {
-            font-size: 3rem; font-weight: 900; margin: 0;
-            text-transform: uppercase; font-style: italic; letter-spacing: 2px;
-            opacity: 0; transform: translateY(-50px);
-        }
-
-        h2 {
-            font-size: 1.5rem; color: #ccc; margin-top: 10px; margin-bottom: 60px;
-            text-transform: uppercase; font-weight: 700;
-            opacity: 0; transform: translateY(-30px);
-        }
-
-        .btn-play {
-            background: #333; color: #888; border: none; padding: 20px 80px;
-            font-size: 1.5rem; font-weight: 900; border-radius: 50px;
-            cursor: not-allowed; text-transform: uppercase; box-shadow: none;
-            transition: all 0.5s ease; opacity: 0; pointer-events: none;
-        }
-
-        .btn-play.active {
-            background: linear-gradient(135deg, #00c6ff, #0072ff);
-            color: white; cursor: pointer; box-shadow: 0 0 20px rgba(0, 114, 255, 0.5);
-            pointer-events: all; opacity: 1;
-        }
-        .btn-play.active:hover { transform: scale(1.05); box-shadow: 0 0 40px rgba(0, 114, 255, 0.8); }
-
-        /* Animations */
-        @keyframes flyIn { to { opacity: 1; transform: translateY(0); } }
-        .anim-text-1 { animation: flyIn 0.8s ease-out forwards 0.2s; }
-        .anim-text-2 { animation: flyIn 0.8s ease-out forwards 0.6s; }
-        .anim-btn    { animation: flyIn 1s ease-out forwards 1.2s; }
-
-        .status-text {
-            margin-top: 20px; font-size: 0.9rem; color: #666; font-style: italic;
-            animation: pulse 2s infinite; opacity: 0; animation-fill-mode: forwards; animation-delay: 1.5s;
-        }
-        @keyframes pulse { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
+        body { background: #000; color: white; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; font-family: sans-serif; }
+        h1 { font-size: 3rem; font-style: italic; margin-bottom: 10px; }
+        h2 { color: #888; margin-bottom: 40px; }
+        .btn-play { padding: 20px 60px; font-size: 1.5rem; background: #333; color: #777; border: none; border-radius: 50px; cursor: not-allowed; transition: 0.3s; }
+        .btn-play.active { background: #00ccff; color: white; cursor: pointer; box-shadow: 0 0 20px #00ccff; }
     </style>
 </head>
 <body>
 
-    <div id="match-ui">
-        <h1 id="round-name" class="anim-text-1">TOURNAMENT MATCH</h1>
-        
-        <h2 id="opponent-name" class="anim-text-2">VS OPPONENT</h2>
-        
-        <button id="play-btn" class="btn-play anim-btn" onclick="enterGame()">
-            WAITING FOR CONNECTION...
-        </button>
-
-        <div id="status" class="status-text">INITIALIZING NETWORK...</div>
-    </div>
+    <h1 id="round-name">TOURNAMENT MATCH</h1>
+    <h2 id="opponent-name">VS OPPONENT</h2>
+    
+    <button id="play-btn" class="btn-play" onclick="enterGame()">CONNECTING...</button>
+    <div id="status" style="margin-top:20px; color:#666;">Initializing...</div>
 
     <script>
-        // --- MATCH SETUP LOGIC ---
-        const role = localStorage.getItem('isf_role'); // 'host' or 'guest'
-        const matchId = localStorage.getItem('isf_code'); // e.g. 'MATCH-LQF-1'
-        const opponent = localStorage.getItem('isf_tourney_opponent') || "Opponent";
+        const role = localStorage.getItem('isf_role'); 
+        const matchId = localStorage.getItem('isf_code');
+        const opponent = localStorage.getItem('isf_tourney_opponent');
         
-        // PeerJS Variables
         let peer = null;
-        let conn = null;
 
         window.onload = function() {
-            // 1. Setup UI Text
-            document.getElementById('opponent-name').innerText = `VS ${opponent}`;
-            
-            // Determine Round Name roughly based on ID
-            let roundTitle = "TOURNAMENT MATCH";
-            if(matchId.includes('16')) roundTitle = "ROUND OF 16";
-            if(matchId.includes('QF')) roundTitle = "QUARTER FINAL";
-            if(matchId.includes('SF')) roundTitle = "SEMI FINAL";
-            if(matchId.includes('FINAL')) roundTitle = "GRAND FINAL";
-            document.getElementById('round-name').innerText = roundTitle;
-
-            // 2. Start Networking
+            document.getElementById('opponent-name').innerText = `VS ${opponent || 'OPPONENT'}`;
             startNetworking();
         };
 
@@ -108,80 +38,34 @@
             const btn = document.getElementById('play-btn');
 
             if (role === 'host') {
-                // --- I AM HOST ---
-                status.innerText = "CREATING ROOM... WAITING FOR OPPONENT";
-                
-                peer = new Peer(matchId); // Create room with specific Match ID
-                
-                peer.on('open', (id) => {
-                    console.log("Match Room Open:", id);
-                });
-
+                status.innerText = "Creating Room... Waiting for Opponent";
+                peer = new Peer(matchId);
                 peer.on('connection', (c) => {
-                    // Opponent Connected!
-                    conn = c;
-                    setupConnection();
+                    status.innerText = "OPPONENT FOUND!";
+                    status.style.color = "#00ff00";
+                    btn.innerText = "START MATCH";
+                    btn.classList.add('active');
                 });
-                
-                peer.on('error', (err) => {
-                    // Match ID might be taken if reloaded. That's okay, try reconnecting?
-                    console.error("Peer Error:", err);
-                    status.innerText = "CONNECTION ERROR - PLEASE RELOAD";
-                    status.style.color = "red";
-                });
-
             } else {
-                // --- I AM GUEST ---
-                status.innerText = "SEARCHING FOR HOST...";
-                
-                peer = new Peer(); // Random ID for me
-                
-                peer.on('open', (id) => {
-                    // Try to connect to the Match ID
-                    connectToHost();
+                status.innerText = "Searching for Host...";
+                peer = new Peer();
+                peer.on('open', () => {
+                    const conn = peer.connect(matchId);
+                    conn.on('open', () => {
+                        status.innerText = "CONNECTED TO HOST!";
+                        status.style.color = "#00ff00";
+                        btn.innerText = "START MATCH";
+                        btn.classList.add('active');
+                    });
                 });
             }
         }
 
-        function connectToHost() {
-            const status = document.getElementById('status');
-            
-            // Attempt connection
-            conn = peer.connect(matchId);
-
-            conn.on('open', () => {
-                setupConnection();
-            });
-
-            conn.on('error', (err) => {
-                console.log("Host not ready yet, retrying...");
-                setTimeout(connectToHost, 1000); // Retry every second until Host appears
-            });
-        }
-
-        function setupConnection() {
-            const btn = document.getElementById('play-btn');
-            const status = document.getElementById('status');
-
-            status.innerText = "OPPONENT CONNECTED!";
-            status.style.color = "#00ff00";
-
-            // Activate Button
-            btn.innerText = "START MATCH";
-            btn.classList.add('active');
-            
-            // If I am Guest, I wait for Host to click, or we both click? 
-            // Better if both click to ensure they are ready.
-        }
-
         function enterGame() {
-    // 1. Destroy the temporary handshake connection used for the "Ready" check
-    if(peer) peer.destroy();
-    
-    // 2. Redirect to the DEDICATED Friend Tournament Game Page
-    window.location.href = 'friend-tournament-game.html'; 
-}
-
+            if(peer) peer.destroy();
+            // Redirect to the Game Engine
+            window.location.href = 'friend-tournament-game.html';
+        }
     </script>
 </body>
 </html>
