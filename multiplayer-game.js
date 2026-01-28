@@ -148,16 +148,18 @@ function bindConnection(conn) {
         sendNet({ type: 'HANDSHAKE', name: gameState.myName });
     });
 
-    // FIX: Actually send the message to the handler!
-    conn.on('data', (msg) => handleNet(msg)); 
+    conn.on('data', (msg) => handleNet(msg));
 
+    // --- FIX: USE CONCEDED MESSAGE ON DISCONNECT TOO ---
     conn.on('close', () => {
-        showRoundMessage("DISCONNECTED", "The other player left the match.");
+        // We reuse the logic: if connection dies, you win by concession.
+        handleNet({ type: 'OPPONENT_LEFT' }); 
     });
 
     conn.on('error', (err) => {
         console.error(err);
-        showRoundMessage("CONNECTION ERROR", "Return to matchmaking and try again.");
+        // Optional: Treat error as disconnect/concession too
+        handleNet({ type: 'OPPONENT_LEFT' });
     });
 }
 function sendNet(obj) {
@@ -273,18 +275,18 @@ function handleNet(msg) {
         return;
     }
     if (msg.type === 'OPPONENT_LEFT') {
-        const name = gameState.opponentName || "Opponent";
+        const name = (gameState.opponentName || "OPPONENT").toUpperCase();
         
-        // Show the Game Message Modal
         const modal = document.getElementById('game-message');
         if (modal) {
+            // 1. Set Title
             modal.querySelector('h1').innerText = "VICTORY";
-            modal.querySelector('h1').style.color = '#66ff66'; // Green for win
-            
-            // Inject specific text + Main Menu button directly
-            const p = modal.querySelector('p');
-            p.innerHTML = `
-                You won because <strong>${name}</strong> conceded the match.
+            modal.querySelector('h1').style.color = '#66ff66';
+
+            // 2. Set Specific Text & Button
+            const contentArea = modal.querySelector('p');
+            contentArea.innerHTML = `
+                YOU WON. ${name} HAS CONCEDED THE MATCH.
                 <div style="display:flex; gap:10px; justify-content:center; margin-top:20px;">
                     <button class="btn-action-small" onclick="window.location.href='index.html'" style="background:#ff4444; width:auto;">
                         MAIN MENU
@@ -292,7 +294,7 @@ function handleNet(msg) {
                 </div>
             `;
 
-            // Hide the standard "Continue" button
+            // 3. Hide the old "Continue" button so they can't click it
             const oldBtn = document.getElementById('msg-btn');
             if (oldBtn) oldBtn.classList.add('hidden');
 
@@ -300,11 +302,7 @@ function handleNet(msg) {
         }
         return;
     }
-}
-
-/* ================================
-   INPUT / SLAP LOGIC
-   ================================ */
+} 
 
 function handleInput(e) {
     if (e.code === 'Space') {
