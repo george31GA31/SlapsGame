@@ -281,8 +281,9 @@ function handleNet(msg) {
     }
     
     // --- DISCONNECT HANDLER ---
+// --- DISCONNECT HANDLER ---
     if (msg.type === 'OPPONENT_LEFT') {
-        // Only show if the match hasn't naturally ended yet
+        // FIX 2: If the match is already over (someone won), ignore the disconnect.
         if (gameState.matchEnded) return;
 
         const name = (gameState.opponentName || "OPPONENT").toUpperCase();
@@ -314,17 +315,29 @@ function handleNet(msg) {
     }
 
     if (msg.type === 'REMATCH_YES') {
-        // Opponent accepted -> Restart
+        // FIX 1: FULL RESET
+        // Opponent accepted -> We must reset everything to start fresh
+        
         const modal = document.getElementById('game-message');
         if(modal) modal.classList.add('hidden');
         
         // Reset Logic
         gameState.p1Rounds = 0; gameState.aiRounds = 0;
         gameState.p1Slaps = 0; gameState.aiSlaps = 0;
-        gameState.playerTotal = 26; gameState.aiTotal = 26;
-        gameState.matchEnded = false;
         
-        if (gameState.isHost) startRoundHostAuthoritative();
+        // CRITICAL: Reset totals to 26 so startRound doesn't think the game is over
+        gameState.playerTotal = 26; 
+        gameState.aiTotal = 26;
+        
+        gameState.matchEnded = false; // Allow disconnects to count again
+        
+        // Reset Visuals
+        updateScoreboardWidget();
+        
+        // Host triggers the deal
+        if (gameState.isHost) {
+            startRoundHostAuthoritative();
+        }
         return;
     }
 
@@ -1694,6 +1707,7 @@ function applyRoundOver(data) {
 
 function applyMatchOver(data) {
     gameState.gameActive = false;
+    gameState.matchEnded = true; // FIX: Mark match as done so disconnects are ignored
     
     const iAmHost = gameState.isHost;
     const hostWon = (data.winner === 'player');
@@ -1734,18 +1748,28 @@ function acceptRematch() {
     document.getElementById('rematch-modal').classList.add('hidden');
     sendNet({ type: 'REMATCH_YES' });
     
-    // Reset Local Stats
+    // Reset Local Stats immediately
     gameState.p1Rounds = 0; gameState.aiRounds = 0;
     gameState.p1Slaps = 0; gameState.aiSlaps = 0;
-    gameState.playerTotal = 26; gameState.aiTotal = 26;
+    
+    // CRITICAL: Reset totals locally too
+    gameState.playerTotal = 26; 
+    gameState.aiTotal = 26;
+    
     gameState.matchEnded = false;
     
+    // Hide the "Game Over" modal if it's open
     const modal = document.getElementById('game-message');
     if(modal) modal.classList.add('hidden');
     
-    // Host will trigger the actual restart
-}
+    updateScoreboardWidget();
 
+    // If I am the Host, I need to start the game now that I've accepted
+    // If I am the Guest, I wait for the Host to send ROUND_START
+    if (gameState.isHost) {
+        startRoundHostAuthoritative();
+    }
+}
 function declineRematch() {
     sendNet({ type: 'REMATCH_NO' });
     window.location.href = 'index.html';
