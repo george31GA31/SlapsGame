@@ -344,13 +344,13 @@ function adjudicateSlap(who) {
 
         const pilesTotal = gameState.centerPileLeft.length + gameState.centerPileRight.length;
 
-        // Update Host State
+        // Update Host Card Totals
         if (who === 'player') { // Host Won
             gameState.playerTotal += pilesTotal;
-            gameState.p1Slaps++;
+            // REMOVED: gameState.p1Slaps++; (This caused the double count)
         } else { // Guest ('ai') Won
             gameState.aiTotal += pilesTotal;
-            gameState.aiSlaps++;
+            // REMOVED: gameState.aiSlaps++; (This caused the double count)
         }
 
         // Clear Host Piles logic
@@ -367,14 +367,13 @@ function adjudicateSlap(who) {
         };
         
         sendNet(update);
-        applySlapUpdate(update); // Apply locally
+        applySlapUpdate(update); // This function will handle the +1 increment now
 
     } else {
         // --- INVALID SLAP (PENALTY) ---
         issuePenaltyHostAuth(who);
     }
 }
-
 function issuePenaltyHostAuth(who) {
     let currentY, currentR;
 
@@ -437,25 +436,21 @@ function applySlapUpdate(data) {
     gameState.slapActive = false;
 
     // 1. Determine Perspective for "Winner" Text
-    // Data says 'winner'. If I am Guest, 'player' means Opponent.
     let winnerText = "";
     let color = "";
     
-    // We compare data.winner to OUR role
-    // If data.winner == 'player' (Host) and I am Host -> "PLAYER SLAPS WON"
-    // If data.winner == 'player' (Host) and I am Guest -> "OPPONENT SLAPS WON"
-    
+    // Check if I am the one who won
     const iAmHost = gameState.isHost;
     const hostWon = (data.winner === 'player');
-    
-    // If (I am Host AND Host Won) OR (I am Guest AND Guest Won) -> I WON
     const iWon = (iAmHost && hostWon) || (!iAmHost && !hostWon);
 
     if (iWon) {
-        winnerText = "YOU WON THE SLAP!";
+        winnerText = "YOU WON THE SLAPS!";
         color = "rgba(0, 200, 0, 0.9)";
     } else {
-        winnerText = "OPPONENT WON THE SLAP!";
+        // FIX: Use the stored Opponent Name
+        const name = gameState.opponentName || "OPPONENT";
+        winnerText = `${name.toUpperCase()} WON THE SLAPS!`;
         color = "rgba(200, 0, 0, 0.9)";
     }
 
@@ -499,7 +494,6 @@ function applySlapUpdate(data) {
         if (gameState.aiTotal <= 0) showEndGame("OPPONENT WINS THE MATCH!", false);
     }, 2000);
 }
-
 function applyPenaltyUpdate(data) {
     // Sync Scores (in case of red card penalty)
     gameState.playerTotal = data.pTotal;
