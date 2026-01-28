@@ -451,38 +451,88 @@ function startAILoop() { gameState.aiLoopRunning = true; setInterval(() => { if 
 
 function attemptAIMove() {
     const diff = gameState.difficulty;
-    const minTime = 5000 + (diff - 1) * -500; const maxTime = 7000 + (diff - 1) * -600; 
+    const minTime = 5000 + (diff - 1) * -500;
+    const maxTime = 7000 + (diff - 1) * -600;
     let reactionDelay = Math.random() * (maxTime - minTime) + minTime;
+    
     if (gameState.aiInChain) reactionDelay *= 0.5;
+    
     const activeCards = gameState.aiHand.filter(c => c.isFaceUp);
     let bestMove = null;
+
+    // --- NEW LOGIC: DEFENSIVE PLAY CHECK ---
+    const playerHasOne = (gameState.playerHand.length === 1);
+    const aiHasMoreThanOne = (gameState.aiHand.length > 1);
+
+    // We loop through available cards to find a move
     for (let card of activeCards) {
-        if (checkPileLogic(card, gameState.centerPileLeft)) { bestMove = { c: card, t: 'left' }; break; }
-        if (checkPileLogic(card, gameState.centerPileRight)) { bestMove = { c: card, t: 'right' }; break; }
+        
+        // 1. Check Left Pile Validity
+        if (checkPileLogic(card, gameState.centerPileLeft)) {
+            let isSafe = true;
+
+            // If Player is about to win and AI isn't, check if this move helps the player
+            if (playerHasOne && aiHasMoreThanOne) {
+                const pLastCard = gameState.playerHand[0]; // Player's last card
+                // Check if Player's card fits on top of the card AI wants to play
+                const valDiff = Math.abs(pLastCard.value - card.value);
+                // If diff is 1 or 12 (Ace/King wrap), playing this helps player win
+                if (valDiff === 1 || valDiff === 12) {
+                    isSafe = false; 
+                }
+            }
+
+            if (isSafe) {
+                bestMove = { c: card, t: 'left' };
+                break; // Found a valid, safe move
+            }
+        }
+
+        // 2. Check Right Pile Validity (Same logic)
+        if (checkPileLogic(card, gameState.centerPileRight)) {
+            let isSafe = true;
+
+            if (playerHasOne && aiHasMoreThanOne) {
+                const pLastCard = gameState.playerHand[0];
+                const valDiff = Math.abs(pLastCard.value - card.value);
+                if (valDiff === 1 || valDiff === 12) {
+                    isSafe = false;
+                }
+            }
+
+            if (isSafe) {
+                bestMove = { c: card, t: 'right' };
+                break; // Found a valid, safe move
+            }
+        }
     }
+    // ----------------------------------------
+
     if (bestMove) {
-        gameState.aiProcessing = true; 
+        gameState.aiProcessing = true;
         setTimeout(() => {
-            if (!gameState.gameActive) { 
-                gameState.aiProcessing = false; 
-                return; 
+            if (!gameState.gameActive) {
+                gameState.aiProcessing = false;
+                return;
             }
             let targetPile = (bestMove.t === 'left') ? gameState.centerPileLeft : gameState.centerPileRight;
             if (!checkPileLogic(bestMove.c, targetPile)) { gameState.aiProcessing = false; return; }
-            
+
             animateAIMove(bestMove.c, bestMove.t, () => {
-                const laneIdx = bestMove.c.laneIndex; 
+                const laneIdx = bestMove.c.laneIndex;
                 let success = playCardToCenter(bestMove.c, bestMove.c.element, bestMove.t);
                 if (success) {
-                    gameState.aiInChain = true; 
+                    gameState.aiInChain = true;
                     const laneCards = gameState.aiHand.filter(c => c.laneIndex === laneIdx);
                     if (laneCards.length > 0) { const newTop = laneCards[laneCards.length - 1]; if (!newTop.isFaceUp) setCardFaceUp(newTop.element, newTop, 'ai'); }
                 } else { animateSnapBack(bestMove.c); gameState.aiInChain = false; }
-                gameState.aiProcessing = false; 
+                gameState.aiProcessing = false;
             });
         }, reactionDelay);
-        return; 
+        return;
     }
+
+    // (The rest of the AI logic for unblocking/flipping remains unchanged below)
     if (!bestMove) {
         const hiddenCardsLeft = gameState.aiHand.filter(c => !c.isFaceUp).length;
         if (activeCards.length === 4 || hiddenCardsLeft === 0) {
@@ -493,15 +543,15 @@ function attemptAIMove() {
                     const canMoveNow = freshActive.some(c => checkPileLogic(c, gameState.centerPileLeft) || checkPileLogic(c, gameState.centerPileRight));
                     if (!canMoveNow && !gameState.gameActive) { gameState.aiProcessing = false; return; }
                     if (canMoveNow) { gameState.aiProcessing = false; return; }
-                    gameState.aiReady = true; 
+                    gameState.aiReady = true;
                     document.getElementById('ai-draw-deck').classList.add('deck-ready');
-                    gameState.aiProcessing = false; 
+                    gameState.aiProcessing = false;
                     checkDrawCondition();
                 }, 1000 + reactionDelay);
             }
         }
     }
-    gameState.aiInChain = false; 
+    gameState.aiInChain = false;
     if (activeCards.length < 4) {
         let lanes = [[], [], [], []]; gameState.aiHand.forEach(c => lanes[c.laneIndex].push(c));
         let blockerInfo = null; let emptyLaneIndex = -1;
@@ -520,7 +570,7 @@ function attemptAIMove() {
             setTimeout(() => {
                 animateAIMoveToLane(blockerInfo.card, emptyLaneIndex, () => {
                     blockerInfo.card.laneIndex = emptyLaneIndex;
-                    let pile = lanes[blockerInfo.oldLane]; let revealedCard = pile[pile.length - 2]; 
+                    let pile = lanes[blockerInfo.oldLane]; let revealedCard = pile[pile.length - 2];
                     setCardFaceUp(revealedCard.element, revealedCard, 'ai'); gameState.aiProcessing = false;
                 });
             }, reactionDelay * 0.8);
@@ -531,9 +581,9 @@ function attemptAIMove() {
             gameState.aiProcessing = true; setTimeout(() => { setCardFaceUp(simpleHidden.element, simpleHidden, 'ai'); gameState.aiProcessing = false; }, reactionDelay * 0.5); return;
         }
     }
-    const hiddenCardsLeft = gameState.aiHand.filter(c => !c.isFaceUp).length;
+    const hiddenCardsLeft2 = gameState.aiHand.filter(c => !c.isFaceUp).length;
     if (!bestMove) {
-        if (activeCards.length === 4 || hiddenCardsLeft === 0) {
+        if (activeCards.length === 4 || hiddenCardsLeft2 === 0) {
             if (!gameState.aiReady) {
                 gameState.aiProcessing = true;
                 setTimeout(() => {
