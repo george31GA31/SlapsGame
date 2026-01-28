@@ -1324,14 +1324,24 @@ function performRevealHostOnly() {
 function applyRevealFromHost(payload) {
     const bpEl = document.getElementById('borrowed-player');
     const baEl = document.getElementById('borrowed-ai');
-    if (bpEl) payload.borrowedPlayer ? bpEl.classList.remove('hidden') : bpEl.classList.add('hidden');
-    if (baEl) payload.borrowedAi ? baEl.classList.remove('hidden') : baEl.classList.add('hidden');
+
+    // --- FIX: SWAP BORROWED TAGS ---
+    // payload.borrowedPlayer means "Host is borrowing". 
+    // As Guest, Host is my Opponent ('ai'), so we update baEl (Opponent).
+    if (baEl) {
+        payload.borrowedPlayer ? baEl.classList.remove('hidden') : baEl.classList.add('hidden');
+    }
+
+    // payload.borrowedAi means "Guest is borrowing". 
+    // As Guest, that is Me ('player'), so we update bpEl (Player).
+    if (bpEl) {
+        payload.borrowedAi ? bpEl.classList.remove('hidden') : bpEl.classList.add('hidden');
+    }
+    // -------------------------------
 
     // --- FIX: SWAP SCORES FOR GUEST ---
-    // The Host sent their values. We must swap them to match our perspective.
     gameState.playerTotal = payload.aiTotal;
     gameState.aiTotal = payload.playerTotal;
-    // ----------------------------------
 
     document.getElementById('player-draw-deck')?.classList.remove('deck-ready');
     document.getElementById('ai-draw-deck')?.classList.remove('deck-ready');
