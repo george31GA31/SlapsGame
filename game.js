@@ -460,64 +460,41 @@ function attemptAIMove() {
     const activeCards = gameState.aiHand.filter(c => c.isFaceUp);
     let bestMove = null;
 
-    // --- NEW LOGIC: DEFENSIVE PLAY CHECK ---
+    // --- SAFETY CHECK VARIABLES ---
     const playerHasOne = (gameState.playerHand.length === 1);
     const aiHasMoreThanOne = (gameState.aiHand.length > 1);
 
-    // We loop through available cards to find a move
     for (let card of activeCards) {
-        
-        // 1. Check Left Pile Validity
+        // 1. Check Left
         if (checkPileLogic(card, gameState.centerPileLeft)) {
             let isSafe = true;
-
-            // If Player is about to win and AI isn't, check if this move helps the player
             if (playerHasOne && aiHasMoreThanOne) {
-                const pLastCard = gameState.playerHand[0]; // Player's last card
-                // Check if Player's card fits on top of the card AI wants to play
-                const valDiff = Math.abs(pLastCard.value - card.value);
-                // If diff is 1 or 12 (Ace/King wrap), playing this helps player win
-                if (valDiff === 1 || valDiff === 12) {
-                    isSafe = false; 
-                }
+                const pLast = gameState.playerHand[0];
+                const valDiff = Math.abs(pLast.value - card.value);
+                if (valDiff === 1 || valDiff === 12) isSafe = false; 
             }
-
-            if (isSafe) {
-                bestMove = { c: card, t: 'left' };
-                break; // Found a valid, safe move
-            }
+            if (isSafe) { bestMove = { c: card, t: 'left' }; break; }
         }
 
-        // 2. Check Right Pile Validity (Same logic)
+        // 2. Check Right
         if (checkPileLogic(card, gameState.centerPileRight)) {
             let isSafe = true;
-
             if (playerHasOne && aiHasMoreThanOne) {
-                const pLastCard = gameState.playerHand[0];
-                const valDiff = Math.abs(pLastCard.value - card.value);
-                if (valDiff === 1 || valDiff === 12) {
-                    isSafe = false;
-                }
+                const pLast = gameState.playerHand[0];
+                const valDiff = Math.abs(pLast.value - card.value);
+                if (valDiff === 1 || valDiff === 12) isSafe = false;
             }
-
-            if (isSafe) {
-                bestMove = { c: card, t: 'right' };
-                break; // Found a valid, safe move
-            }
+            if (isSafe) { bestMove = { c: card, t: 'right' }; break; }
         }
     }
-    // ----------------------------------------
 
     if (bestMove) {
         gameState.aiProcessing = true;
         setTimeout(() => {
-            if (!gameState.gameActive) {
-                gameState.aiProcessing = false;
-                return;
-            }
+            if (!gameState.gameActive) { gameState.aiProcessing = false; return; }
             let targetPile = (bestMove.t === 'left') ? gameState.centerPileLeft : gameState.centerPileRight;
             if (!checkPileLogic(bestMove.c, targetPile)) { gameState.aiProcessing = false; return; }
-
+            
             animateAIMove(bestMove.c, bestMove.t, () => {
                 const laneIdx = bestMove.c.laneIndex;
                 let success = playCardToCenter(bestMove.c, bestMove.c.element, bestMove.t);
@@ -532,7 +509,7 @@ function attemptAIMove() {
         return;
     }
 
-    // (The rest of the AI logic for unblocking/flipping remains unchanged below)
+    // --- FALLBACK: IF NO MOVE FOUND (OR ALL WERE UNSAFE) ---
     if (!bestMove) {
         const hiddenCardsLeft = gameState.aiHand.filter(c => !c.isFaceUp).length;
         if (activeCards.length === 4 || hiddenCardsLeft === 0) {
@@ -540,18 +517,42 @@ function attemptAIMove() {
                 gameState.aiProcessing = true;
                 setTimeout(() => {
                     const freshActive = gameState.aiHand.filter(c => c.isFaceUp);
-                    const canMoveNow = freshActive.some(c => checkPileLogic(c, gameState.centerPileLeft) || checkPileLogic(c, gameState.centerPileRight));
+                    
+                    // --- FIX: "Can I move?" MUST ALSO CHECK SAFETY ---
+                    // If the only moves available are "unsafe", canMoveNow must be FALSE.
+                    const canMoveNow = freshActive.some(c => {
+                        const validL = checkPileLogic(c, gameState.centerPileLeft);
+                        const validR = checkPileLogic(c, gameState.centerPileRight);
+                        if (!validL && !validR) return false; // Invalid math
+
+                        // Safety Check (Repeated logic)
+                        if (gameState.playerHand.length === 1 && gameState.aiHand.length > 1) {
+                            const pLast = gameState.playerHand[0];
+                            const diff = Math.abs(pLast.value - c.value);
+                            if (diff === 1 || diff === 12) return false; // Unsafe! Don't count this as a move.
+                        }
+                        return true; // Valid AND Safe
+                    });
+                    // -------------------------------------------------
+
                     if (!canMoveNow && !gameState.gameActive) { gameState.aiProcessing = false; return; }
+                    
+                    // If we found a safe move (maybe situation changed), return and let the main loop play it next tick
                     if (canMoveNow) { gameState.aiProcessing = false; return; }
-                    gameState.aiReady = true;
+
+                    // If NO safe moves exist, click the deck
+                    gameState.aiReady = true; 
                     document.getElementById('ai-draw-deck').classList.add('deck-ready');
-                    gameState.aiProcessing = false;
+                    gameState.aiProcessing = false; 
                     checkDrawCondition();
                 }, 1000 + reactionDelay);
             }
         }
     }
+
     gameState.aiInChain = false;
+    
+    // (Unblocker logic remains unchanged)
     if (activeCards.length < 4) {
         let lanes = [[], [], [], []]; gameState.aiHand.forEach(c => lanes[c.laneIndex].push(c));
         let blockerInfo = null; let emptyLaneIndex = -1;
@@ -570,7 +571,7 @@ function attemptAIMove() {
             setTimeout(() => {
                 animateAIMoveToLane(blockerInfo.card, emptyLaneIndex, () => {
                     blockerInfo.card.laneIndex = emptyLaneIndex;
-                    let pile = lanes[blockerInfo.oldLane]; let revealedCard = pile[pile.length - 2];
+                    let pile = lanes[blockerInfo.oldLane]; let revealedCard = pile[pile.length - 2]; 
                     setCardFaceUp(revealedCard.element, revealedCard, 'ai'); gameState.aiProcessing = false;
                 });
             }, reactionDelay * 0.8);
@@ -581,6 +582,8 @@ function attemptAIMove() {
             gameState.aiProcessing = true; setTimeout(() => { setCardFaceUp(simpleHidden.element, simpleHidden, 'ai'); gameState.aiProcessing = false; }, reactionDelay * 0.5); return;
         }
     }
+
+    // (Second check for deck ready - mostly redundant but keeps your structure)
     const hiddenCardsLeft2 = gameState.aiHand.filter(c => !c.isFaceUp).length;
     if (!bestMove) {
         if (activeCards.length === 4 || hiddenCardsLeft2 === 0) {
