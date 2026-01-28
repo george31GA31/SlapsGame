@@ -175,12 +175,11 @@
         }
 
         function enterGame() {
-    // 1. Destroy the temporary handshake connection
+    // 1. Destroy the temporary handshake connection used for the "Ready" check
     if(peer) peer.destroy();
     
-    // 2. Redirect to the DEDICATED Tournament Game Page
-    // This page loads 'tournament-online.js' which will auto-connect using the ID.
-    window.location.href = 'tournament-game.html';
+    // 2. Redirect to the DEDICATED Friend Tournament Game Page
+    window.location.href = 'friend-tournament-game.html'; 
 }
 
     </script>
