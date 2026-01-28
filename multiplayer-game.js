@@ -1189,10 +1189,11 @@ function applyMoveFromHost(a) {
     const localMover = (a.mover === 'player') ? 'ai' : 'player';
     const localSide = (a.side === 'left') ? 'right' : 'left';
 
-    // Ghost cleanup
+    // 1. Ghost cleanup (Type-Safe)
     gameState.opponentDragGhosts.forEach((ghostEl, key) => {
         const parts = key.split(':'); 
-        if (parts[0] === a.card.suit && parts[1] === a.card.rank && parseInt(parts[2]) === a.card.value) {
+        // Use loose equality (==) for value to handle string/number mismatch
+        if (parts[0] === a.card.suit && parts[1] === a.card.rank && parts[2] == a.card.value) {
             ghostEl.remove();
             gameState.opponentDragGhosts.delete(key);
         }
@@ -1204,14 +1205,13 @@ function applyMoveFromHost(a) {
 
     const hand = (localMover === 'player') ? gameState.playerHand : gameState.aiHand;
     
-    // --- FIX: ROBUST CARD FINDING ---
+    // --- FIX: AGGRESSIVE CARD FINDING ---
     // 1. Try finding by Exact ID
     let idx = hand.findIndex(c => c.id === a.card.id);
     
-    // 2. If ID not found, find by Content (Suit/Rank/Value)
-    // This catches the glitch where the ID didn't sync but the card is visibly there.
+    // 2. If ID not found, find by Suit/Rank (Ignore value type issues)
     if (idx === -1) {
-        idx = hand.findIndex(c => c.suit === a.card.suit && c.rank === a.card.rank && c.value === a.card.value);
+        idx = hand.findIndex(c => c.suit === a.card.suit && c.rank === a.card.rank);
     }
 
     let cardObj = null;
@@ -1220,14 +1220,25 @@ function applyMoveFromHost(a) {
         cardObj = hand[idx];
         hand.splice(idx, 1); // Remove from memory array
     } else {
-        // Only create a fresh one if it truly doesn't exist in our hand
         cardObj = unpackCard(a.card);
     }
 
-    // 3. Remove the DOM Element (The visual card in the hand)
+    // 3. FORCE REMOVE DOM ELEMENT
     if (cardObj.element) {
         cardObj.element.remove();
         cardObj.element = null; 
+    }
+    
+    // 4. SAFETY SWEEP: Check for visual duplicates in the hand and kill them
+    // This handles cases where a "Ghost" or stale DOM element was left behind
+    if (localMover === 'ai') {
+        const container = document.getElementById('ai-foundation-area');
+        if (container) {
+            // Find any img inside this container with matching suit/rank source
+            const querySrc = `assets/cards/${a.card.rank}_of_${a.card.suit}.png`;
+            const duplicates = Array.from(container.querySelectorAll('img')).filter(img => img.src.includes(querySrc));
+            duplicates.forEach(d => d.remove());
+        }
     }
     // --------------------------------
 
@@ -1238,16 +1249,12 @@ function applyMoveFromHost(a) {
     updateScoreboard();
     checkSlapCondition();
 
-    // 4. Handle Flip
+    // 5. Handle Flip
     if (a.newTopCard && localMover === 'ai') {
-        // Try exact match first
         let newCardObj = gameState.aiHand.find(c => c.id === a.newTopCard.id);
-        
-        // Fallback: Fuzzy match if ID fails
         if (!newCardObj) {
             newCardObj = gameState.aiHand.find(c => c.suit === a.newTopCard.suit && c.rank === a.newTopCard.rank);
         }
-
         if (newCardObj && newCardObj.element) {
             setCardFaceUp(newCardObj.element, newCardObj, 'ai');
         }
@@ -1812,10 +1819,11 @@ function rejectMoveFromHost(j) {
 }
 
 function cleanupGhost(cardData) {
-    // 1. Remove the Ghost (The moving card)
+    // 1. Remove the Ghost
     gameState.opponentDragGhosts.forEach((ghostEl, key) => {
         const parts = key.split(':'); 
-        if (parts[0] === cardData.suit && parts[1] === cardData.rank && parseInt(parts[2]) === cardData.value) {
+        // FIX: Use loose equality (==) for value
+        if (parts[0] === cardData.suit && parts[1] === cardData.rank && parts[2] == cardData.value) {
             ghostEl.style.transition = 'opacity 0.2s';
             ghostEl.style.opacity = '0';
             setTimeout(() => {
@@ -1825,12 +1833,10 @@ function cleanupGhost(cardData) {
         }
     });
 
-    // 2. RESTORE THE REAL CARD (Make it visible again in the foundation)
-    // From my perspective, the opponent's cards are always in 'aiHand'
+    // 2. RESTORE THE REAL CARD
     const realCard = gameState.aiHand.find(c => 
         c.suit === cardData.suit && 
-        c.rank === cardData.rank && 
-        c.value === parseInt(cardData.value)
+        c.rank === cardData.rank
     );
 
     if (realCard && realCard.element) {
