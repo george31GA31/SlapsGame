@@ -886,10 +886,22 @@ function adjudicateMove(m, moverOverride) {
 }
 
 function applyMoveAuthoritative(mover, cardObj, side, reqId) {
+    // --- FIX: KILL THE ZOMBIE GHOST ---
+    // If the Guest played this card, there is a "Ghost" on the Host's screen.
+    // We must find it and destroy it immediately, or it will sit on top of the pile.
+    const ghostKey = cardKey(cardObj);
+    const ghost = gameState.opponentDragGhosts.get(ghostKey);
+    if (ghost) {
+        ghost.remove();
+        gameState.opponentDragGhosts.delete(ghostKey);
+    }
+    // ----------------------------------
+
+    // 1. Update piles
     const targetPile = (side === 'left') ? gameState.centerPileLeft : gameState.centerPileRight;
     targetPile.push(cardObj);
 
-    // Filter updated hand
+    // 2. Remove from mover hand
     let hand = null;
     if (mover === 'player') {
         hand = gameState.playerHand;
@@ -901,27 +913,38 @@ function applyMoveAuthoritative(mover, cardObj, side, reqId) {
         gameState.aiTotal--;
     }
 
+    // 3. Update UI on host (Remove the card from the lane)
     if (cardObj.element) cardObj.element.remove();
+    
+    // Render the real card in the center
     renderCenterPile(side, cardObj);
+
     updateScoreboard();
     checkSlapCondition();
 
-    // Check for New Top Card Reveal
+    // 4. Handle Reveal (Host Side)
     let newTopCardPayload = null;
     const laneCards = hand.filter(c => c.laneIndex === cardObj.laneIndex);
+    
     if (laneCards.length > 0) {
         const newTop = laneCards[laneCards.length - 1];
+        
+        // If I am the Host ('player'), I must send my new card to the Guest
         if (mover === 'player') {
             newTopCardPayload = packCardWithMeta(newTop);
         }
+        
+        // If AI/Opponent moved, auto-flip for Host to see.
         if (mover === 'ai' && !newTop.isFaceUp && newTop.element) {
             setCardFaceUp(newTop.element, newTop, 'ai');
         }
     }
 
+    // End checks
     if (gameState.playerTotal <= 0) showEndGame("YOU WIN THE MATCH!", true);
     if (gameState.aiTotal <= 0) showEndGame("OPPONENT WINS THE MATCH!", false);
 
+    // 5. Send Payload
     return {
         reqId,
         mover,
@@ -932,7 +955,6 @@ function applyMoveAuthoritative(mover, cardObj, side, reqId) {
         newTopCard: newTopCardPayload
     };
 }
-
 function applyMoveFromHost(a) {
     const localMover = (a.mover === 'player') ? 'ai' : 'player';
     const localSide = (a.side === 'left') ? 'right' : 'left';
