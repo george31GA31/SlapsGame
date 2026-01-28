@@ -1605,22 +1605,13 @@ function showEndGame(title, isWin) {
 
 // Add this new function to handle the return logic
 function returnToTournament(didWin) {
-    // Clear the 'match' flags so we don't get stuck in a loop
-    localStorage.removeItem('isf_role');
-    localStorage.removeItem('isf_code');
-    localStorage.removeItem('isf_tourney_opponent');
-
-    if (didWin) {
-        // Mark myself as a winner for the bracket to see
-        localStorage.setItem('isf_tourney_result', 'win');
-    } else {
-        localStorage.setItem('isf_tourney_result', 'loss');
-    }
-
-    // Redirect back to the Friend Bracket
-    window.location.href = 'friend-tournament.html';
+    // Send message to the Parent Window (Tournament Bracket)
+    const result = didWin ? 'win' : 'loss';
+    
+    // Post message to parent
+    window.parent.postMessage({ type: 'GAME_OVER', result: result }, '*');
 }
-async function preloadCardImages(cards) {
+   async function preloadCardImages(cards) {
     const urls = new Set();
     urls.add(CARD_BACK_SRC);
     (cards || []).forEach(c => { if (c && c.imgSrc) urls.add(c.imgSrc); });
