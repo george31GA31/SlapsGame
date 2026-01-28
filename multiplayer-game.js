@@ -1086,7 +1086,7 @@ function revealNewTopAfterPlay(owner, laneIdx) {
         }
     }
 }
-ffunction applyMoveFromHost(a) {
+function applyMoveFromHost(a) {
     // 1. Perspective Swap (Mover)
     const localMover = (a.mover === 'player') ? 'ai' : 'player';
 
