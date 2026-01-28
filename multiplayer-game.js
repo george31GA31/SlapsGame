@@ -247,7 +247,22 @@ function handleNet(msg) {
         }
         return;
     }
+    // --- SLAP & PENALTY HANDLERS ---
     
+    if (msg.type === 'SLAP_REQ') {
+        if (gameState.isHost) adjudicateSlap('ai'); // 'ai' means the Guest/Opponent
+        return;
+    }
+
+    if (msg.type === 'SLAP_UPDATE') {
+        applySlapUpdate(msg);
+        return;
+    }
+
+    if (msg.type === 'PENALTY_UPDATE') {
+        applyPenaltyUpdate(msg);
+        return;
+    }
     if (msg.type === 'OPPONENT_LEFT') {
         alert("Opponent has left the match.");
         window.location.href = 'index.html';
@@ -264,58 +279,19 @@ function handleInput(e) {
         e.preventDefault();
         if (!gameState.gameActive) return;
 
+        // Debounce to prevent double-spam
         const now = Date.now();
         if (now - gameState.lastSpacebarTime < 400) { return; }
         gameState.lastSpacebarTime = now;
 
-        if (!gameState.slapActive) {
-            issuePenalty('player', 'BAD SLAP');
-            return;
-        }
-        resolveSlap('player');
-    }
-}
-
-function issuePenalty(target, reason) {
-    let yellows;
-    if (target === 'player') { gameState.playerYellows++; yellows = gameState.playerYellows; }
-    else { gameState.aiYellows++; yellows = gameState.aiYellows; }
-
-    if (yellows >= 2) {
-        if (target === 'player') { gameState.playerYellows = 0; gameState.playerReds++; }
-        else { gameState.aiYellows = 0; gameState.aiReds++; }
-        executeRedCardPenalty(target);
-    }
-    updatePenaltyUI();
-}
-
-function executeRedCardPenalty(offender) {
-    const victim = (offender === 'player') ? 'ai' : 'player';
-    let penaltyAmount = 3;
-
-    let victimHand = (victim === 'player') ? gameState.playerHand : gameState.aiHand;
-    let victimDeck = (victim === 'player') ? gameState.playerDeck : gameState.aiDeck;
-
-    for (let i = 0; i < penaltyAmount; i++) {
-        if (victimDeck.length > 0) { victimDeck.pop(); }
-        else if (victimHand.length > 0) {
-            let cardToRemove = victimHand.pop();
-            if (cardToRemove && cardToRemove.element) cardToRemove.element.remove();
+        if (gameState.isHost) {
+            // Host decides immediately (as 'player')
+            adjudicateSlap('player'); 
+        } else {
+            // Guest asks Host to decide
+            sendNet({ type: 'SLAP_REQ' }); 
         }
     }
-
-    if (offender === 'player') {
-        gameState.playerTotal += 3;
-        gameState.aiTotal = Math.max(0, gameState.aiTotal - 3);
-    } else {
-        gameState.aiTotal += 3;
-        gameState.playerTotal = Math.max(0, gameState.playerTotal - 3);
-    }
-
-    if (gameState.playerTotal <= 0) showEndGame("YOU WIN THE MATCH!", true);
-    if (gameState.aiTotal <= 0) showEndGame("OPPONENT WINS THE MATCH!", false);
-
-    updateScoreboard();
 }
 
 function updatePenaltyUI() {
@@ -354,53 +330,202 @@ function checkSlapCondition() {
     }
 }
 
-function resolveSlap(winner) {
-    gameState.slapActive = false;
-    gameState.gameActive = false;
+/* ================================
+   HOST AUTHORITATIVE SLAP & PENALTY LOGIC
+   ================================ */
 
-    const overlay = document.getElementById('slap-overlay');
-    const txt = document.getElementById('slap-text');
-    if (!overlay || !txt) return;
+function adjudicateSlap(who) {
+    // Only Host runs this
+    if (!gameState.gameActive) return;
 
-    overlay.classList.remove('hidden');
+    if (gameState.slapActive) {
+        // --- VALID SLAP ---
+        gameState.gameActive = false; // Stop game immediately
 
-    const pilesTotal = gameState.centerPileLeft.length + gameState.centerPileRight.length;
+        const pilesTotal = gameState.centerPileLeft.length + gameState.centerPileRight.length;
 
-    if (winner === 'player') {
-        txt.innerText = "PLAYER SLAPS WON!";
-        overlay.style.backgroundColor = "rgba(0, 200, 0, 0.9)";
-        gameState.aiTotal += pilesTotal;
-        gameState.p1Slaps++;
+        // Update Host State
+        if (who === 'player') { // Host Won
+            gameState.playerTotal += pilesTotal;
+            gameState.p1Slaps++;
+        } else { // Guest ('ai') Won
+            gameState.aiTotal += pilesTotal;
+            gameState.aiSlaps++;
+        }
+
+        // Clear Host Piles logic
+        gameState.centerPileLeft = [];
+        gameState.centerPileRight = [];
+        gameState.slapActive = false;
+
+        // Broadcast Valid Win
+        const update = {
+            type: 'SLAP_UPDATE',
+            winner: who, // 'player' (Host) or 'ai' (Guest)
+            pTotal: gameState.playerTotal,
+            aTotal: gameState.aiTotal
+        };
+        
+        sendNet(update);
+        applySlapUpdate(update); // Apply locally
+
     } else {
-        txt.innerText = "OPPONENT SLAPS WON!";
-        overlay.style.backgroundColor = "rgba(200, 0, 0, 0.9)";
-        gameState.playerTotal += pilesTotal;
-        gameState.aiSlaps++;
+        // --- INVALID SLAP (PENALTY) ---
+        issuePenaltyHostAuth(who);
+    }
+}
+
+function issuePenaltyHostAuth(who) {
+    let currentY, currentR;
+
+    // Update flags locally on Host
+    if (who === 'player') {
+        gameState.playerYellows++;
+        currentY = gameState.playerYellows;
+        currentR = gameState.playerReds;
+    } else {
+        gameState.aiYellows++;
+        currentY = gameState.aiYellows;
+        currentR = gameState.aiReds;
     }
 
+    // Check Red Card Logic
+    let isRed = false;
+    if (currentY >= 2) {
+        isRed = true;
+        // Reset Yellows, Increment Red
+        if (who === 'player') { 
+            gameState.playerYellows = 0; 
+            gameState.playerReds++; 
+            currentR = gameState.playerReds; 
+            currentY = 0; 
+            
+            // Penalty: Host loses 3 cards
+            gameState.playerTotal = Math.max(0, gameState.playerTotal - 3);
+            gameState.aiTotal += 3;
+        } else { 
+            gameState.aiYellows = 0; 
+            gameState.aiReds++; 
+            currentR = gameState.aiReds; 
+            currentY = 0; 
+            
+            // Penalty: Guest loses 3 cards
+            gameState.aiTotal = Math.max(0, gameState.aiTotal - 3);
+            gameState.playerTotal += 3;
+        }
+    }
+
+    // Broadcast Penalty to both
+    const payload = {
+        type: 'PENALTY_UPDATE',
+        target: who,
+        yellows: currentY,
+        reds: currentR,
+        isRed: isRed,
+        pTotal: gameState.playerTotal, // Sync scores
+        aTotal: gameState.aiTotal
+    };
+    
+    sendNet(payload);
+    applyPenaltyUpdate(payload);
+}
+
+// --- VISUAL APPLICATORS (Run on both Client & Host) ---
+
+function applySlapUpdate(data) {
+    gameState.gameActive = false;
+    gameState.slapActive = false;
+
+    // 1. Determine Perspective for "Winner" Text
+    // Data says 'winner'. If I am Guest, 'player' means Opponent.
+    let winnerText = "";
+    let color = "";
+    
+    // We compare data.winner to OUR role
+    // If data.winner == 'player' (Host) and I am Host -> "PLAYER SLAPS WON"
+    // If data.winner == 'player' (Host) and I am Guest -> "OPPONENT SLAPS WON"
+    
+    const iAmHost = gameState.isHost;
+    const hostWon = (data.winner === 'player');
+    
+    // If (I am Host AND Host Won) OR (I am Guest AND Guest Won) -> I WON
+    const iWon = (iAmHost && hostWon) || (!iAmHost && !hostWon);
+
+    if (iWon) {
+        winnerText = "YOU WON THE SLAP!";
+        color = "rgba(0, 200, 0, 0.9)";
+    } else {
+        winnerText = "OPPONENT WON THE SLAP!";
+        color = "rgba(200, 0, 0, 0.9)";
+    }
+
+    // 2. Show Overlay
+    const overlay = document.getElementById('slap-overlay');
+    const txt = document.getElementById('slap-text');
+    if (overlay && txt) {
+        txt.innerText = winnerText;
+        overlay.style.backgroundColor = color;
+        overlay.classList.remove('hidden');
+    }
+
+    // 3. Clear Center UI
     gameState.centerPileLeft = [];
     gameState.centerPileRight = [];
-    const l = document.getElementById('center-pile-left');
-    const r = document.getElementById('center-pile-right');
-    if (l) l.innerHTML = '';
-    if (r) r.innerHTML = '';
+    document.getElementById('center-pile-left').innerHTML = '';
+    document.getElementById('center-pile-right').innerHTML = '';
+    
+    // 4. Update Ghosts
+    if (gameState.opponentDragGhosts) gameState.opponentDragGhosts.clear();
 
+    // 5. Update Stats & Scores
+    gameState.playerTotal = data.pTotal;
+    gameState.aiTotal = data.aTotal;
     updateScoreboard();
+    
+    if (hostWon) gameState.p1Slaps++; 
+    else gameState.aiSlaps++;
     updateScoreboardWidget();
 
+    // 6. Reset Round after delay
     setTimeout(() => {
         overlay.classList.add('hidden');
         gameState.playerReady = false;
         gameState.aiReady = false;
 
-        const pDeck = document.getElementById('player-draw-deck');
-        const oDeck = document.getElementById('ai-draw-deck');
-        if (pDeck) pDeck.classList.remove('deck-ready');
-        if (oDeck) oDeck.classList.remove('deck-ready');
+        document.getElementById('player-draw-deck')?.classList.remove('deck-ready');
+        document.getElementById('ai-draw-deck')?.classList.remove('deck-ready');
 
         if (gameState.playerTotal <= 0) showEndGame("YOU WIN THE MATCH!", true);
         if (gameState.aiTotal <= 0) showEndGame("OPPONENT WINS THE MATCH!", false);
     }, 2000);
+}
+
+function applyPenaltyUpdate(data) {
+    // Sync Scores (in case of red card penalty)
+    gameState.playerTotal = data.pTotal;
+    gameState.aiTotal = data.aTotal;
+    updateScoreboard();
+
+    // Determine whose badges to update locally
+    // data.target is 'player' (Host) or 'ai' (Guest)
+    
+    // If I am Guest:
+    // data.target 'player' -> Opponent's badges
+    // data.target 'ai' -> My badges
+    
+    let localTarget = data.target; // Default for Host
+    
+    if (!gameState.isHost) {
+        // Perspective Swap for Guest
+        localTarget = (data.target === 'player') ? 'ai' : 'player';
+    }
+
+    renderBadges(localTarget, data.yellows, data.reds);
+
+    if (data.isRed) {
+        // Optional: Flash screen red or show message
+        console.log("RED CARD ISSUED TO " + localTarget);
+    }
 }
 
 /* ================================
