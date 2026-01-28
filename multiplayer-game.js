@@ -93,16 +93,37 @@ class Card {
    BOOTSTRAP
    ================================ */
 
-window.onload = function () {
-    document.addEventListener('keydown', handleInput);
-
+window.onload = function() {
+    // --- EXISTING SETUP ---
     const pDeck = document.getElementById('player-draw-deck');
-    if (pDeck) pDeck.onclick = handlePlayerDeckClick;
+    if(pDeck) pDeck.onclick = handlePlayerDeckClick;
+    document.addEventListener('keydown', handleInput);
+    
+    // --- NEW: TOURNAMENT AUTO-CONNECT ---
+    const tRole = localStorage.getItem('isf_role'); // 'host' or 'guest'
+    const tCode = localStorage.getItem('isf_code'); // e.g. 'MATCH-LQF-1'
 
-    updateScoreboardWidget();
-    initMultiplayer();
+    if (tRole && tCode) {
+        console.log(`Tournament Mode Active: ${tRole} in Room ${tCode}`);
+        
+        // Hide standard menus if they exist (optional)
+        // Auto-start networking
+        if (tRole === 'host') {
+            // Force Host Mode with specific ID
+            gameState.isHost = true;
+            initializeNetwork(tCode); 
+        } else {
+            // Force Guest Mode and connect to ID
+            gameState.isHost = false;
+            joinGame(tCode);
+        }
+    } else {
+        // Normal Mode (Wait for user input or random generation)
+        // ... your existing code ...
+        updateScoreboardWidget();
+        startRound(); 
+    }
 };
-
 /* ================================
    MULTIPLAYER INIT
    ================================ */
@@ -1568,21 +1589,36 @@ function showEndGame(title, isWin) {
     modal.querySelector('h1').innerText = title;
     modal.querySelector('h1').style.color = isWin ? '#66ff66' : '#ff7575';
     
+   function showEndGame(title, isWin) {
+    // ... existing UI code ...
+
     const contentArea = modal.querySelector('p');
     contentArea.innerHTML = `
         <div style="display:flex; gap:10px; justify-content:center; margin-top:20px;">
-            <button class="btn-action-small" onclick="sendRematchRequest()" style="background:#444; width:auto;">
-                <i class="fa-solid fa-rotate-right"></i> REMATCH
-            </button>
-            <button class="btn-action-small" onclick="quitMatch()" style="background:#ff4444; width:auto;">
-                MAIN MENU
+            <button class="btn-action-small" onclick="returnToTournament(${isWin})" style="background:#00ccff; width:auto;">
+                ${isWin ? "CONTINUE TO BRACKET" : "RETURN TO LOBBY"}
             </button>
         </div>
     `;
-    
-    const oldBtn = document.getElementById('msg-btn');
-    if (oldBtn) oldBtn.classList.add('hidden');
     modal.classList.remove('hidden');
+}
+
+// Add this new function to handle the return logic
+function returnToTournament(didWin) {
+    // Clear the 'match' flags so we don't get stuck in a loop
+    localStorage.removeItem('isf_role');
+    localStorage.removeItem('isf_code');
+    localStorage.removeItem('isf_tourney_opponent');
+
+    if (didWin) {
+        // Mark myself as a winner for the bracket to see
+        localStorage.setItem('isf_tourney_result', 'win');
+    } else {
+        localStorage.setItem('isf_tourney_result', 'loss');
+    }
+
+    // Redirect back to the Friend Bracket
+    window.location.href = 'friend-tournament.html';
 }
 async function preloadCardImages(cards) {
     const urls = new Set();
