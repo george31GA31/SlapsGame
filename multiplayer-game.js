@@ -961,7 +961,7 @@ function requestMoveToHost(cardData, dropSide) {
 
     // --- LOGIC MIRROR FIX ---
     // If I am the Guest (not Host), my "Left" pile is actually the Host's "Right" pile.
-    // We must send the side relative to the HOST'S view, because the Host decides if it's legal.
+    // We must send the side relative to the HOST'S view.
     let targetSideForHost = dropSide;
     
     if (!gameState.isHost) {
@@ -1091,8 +1091,8 @@ function applyMoveFromHost(a) {
     // 1. Perspective Swap (Mover)
     const localMover = (a.mover === 'player') ? 'ai' : 'player';
 
-    // 2. Perspective Swap (Center Piles) -- CRITICAL FIX
-    // Host's Left is Guest's Right, and vice versa.
+    // 2. Perspective Swap (Center Piles) -- VISUAL FIX
+    // Host's Left is Guest's Right. Host's Right is Guest's Left.
     const localSide = (a.side === 'left') ? 'right' : 'left';
 
     // 3. Remove Drag Ghost
@@ -1125,7 +1125,7 @@ function applyMoveFromHost(a) {
     const pile = (localSide === 'left') ? gameState.centerPileLeft : gameState.centerPileRight;
     pile.push(cardObj);
     
-    // Pass 'localSide' instead of 'a.side'
+    // Pass 'localSide' instead of 'a.side' so it appears on the correct mirror pile
     renderCenterPile(localSide, cardObj);
 
     updateScoreboard();
@@ -1140,7 +1140,6 @@ function applyMoveFromHost(a) {
         }
     }
 }
-
 function rejectMoveFromHost(j) {
     // Snap back the last dragged card on this client
     const c = gameState.lastDraggedCard;
@@ -1313,20 +1312,20 @@ function applyRevealFromHost(payload) {
     document.getElementById('player-draw-deck')?.classList.remove('deck-ready');
     document.getElementById('ai-draw-deck')?.classList.remove('deck-ready');
 
-    // --- SWAP LOGIC FOR CENTER CARDS ---
+    // --- SWAP LOGIC FOR CENTER CARDS (VISUAL FIX) ---
     
     // 1. Host's "Right" card goes to Guest's "Left" pile
     if (payload.right) {
         const c = unpackCard(payload.right);
         gameState.centerPileLeft.push(c);
-        renderCenterPile('left', c);
+        renderCenterPile('left', c); // Render Left
     }
 
     // 2. Host's "Left" card goes to Guest's "Right" pile
     if (payload.left) {
         const c = unpackCard(payload.left);
         gameState.centerPileRight.push(c);
-        renderCenterPile('right', c);
+        renderCenterPile('right', c); // Render Right
     }
 
     updateScoreboard();
@@ -1337,9 +1336,6 @@ function applyRevealFromHost(payload) {
 
     checkSlapCondition();
 }
-/* ================================
-   RENDER CENTER PILE (kept)
-   ================================ */
 
 function renderCenterPile(side, card) {
     const id = side === 'left' ? 'center-pile-left' : 'center-pile-right';
