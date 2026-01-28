@@ -62,7 +62,7 @@
 
         .t-card.large {
             height: 100%; /* Fill the left column */
-            justify-content: space-around; /* Spread content out */
+            justify-content: space-around;
         }
 
         /* --- TYPOGRAPHY --- */
@@ -140,13 +140,6 @@
             color: #00ccff;
         }
 
-        .divider {
-            margin: 15px 0;
-            font-size: 0.8rem;
-            color: #666;
-            font-weight: bold;
-        }
-
         /* --- BACK BUTTON --- */
         .bottom-nav {
             margin-top: 30px;
@@ -175,16 +168,13 @@
                 <h2>Play Friends</h2>
             </div>
             
-            <div style="width: 100%; display: flex; flex-direction: column; align-items: center;">
-                <input type="text" id="friend-nick" class="modern-input" placeholder="ENTER NICKNAME">
-                <button class="btn-blue" onclick="goFriendHost()">Host Tournament</button>
-            </div>
-
-            <div class="divider">OR</div>
-
-            <div style="width: 100%; display: flex; flex-direction: column; align-items: center;">
-                <input type="text" id="friend-code" class="modern-input" placeholder="ENTER ISF-CODE">
-                <button class="btn-outline" onclick="goFriendJoin()"><i class="fa-solid fa-plug"></i> Join Tournament</button>
+            <div style="width: 100%; display: flex; flex-direction: column; align-items: center; gap: 20px;">
+                <button class="btn-blue" onclick="window.location.href='friend-tournament.html'">
+                    HOST TOURNAMENT
+                </button>
+                <button class="btn-outline" onclick="window.location.href='friend-tournament.html'">
+                    <i class="fa-solid fa-plug"></i> JOIN TOURNAMENT
+                </button>
             </div>
         </div>
 
@@ -218,31 +208,6 @@
                 return true;
             }
             return false;
-        }
-
-        function goFriendHost() {
-            if(!saveNick('friend-nick')) {
-                alert("Please enter a nickname to host!");
-                return;
-            }
-            // Flag to tell the next page we want to HOST immediately
-            localStorage.setItem('isf_friend_action', 'host');
-            window.location.href = 'friend-tournament.html';
-        }
-
-        function goFriendJoin() {
-            // It's okay if nickname is empty here, the lobby page will ask, 
-            // but if they entered it, we save it.
-            saveNick('friend-nick');
-            
-            const code = document.getElementById('friend-code').value.trim();
-            if(code) {
-                localStorage.setItem('isf_friend_code', code);
-                localStorage.setItem('isf_friend_action', 'join');
-                window.location.href = 'friend-tournament.html';
-            } else {
-                alert("Please enter a code to join!");
-            }
         }
 
         function goOnline() {
