@@ -959,21 +959,30 @@ function requestMoveToHost(cardData, dropSide) {
         return;
     }
 
+    // --- LOGIC MIRROR FIX ---
+    // If I am the Guest (not Host), my "Left" pile is actually the Host's "Right" pile.
+    // We must send the side relative to the HOST'S view, because the Host decides if it's legal.
+    let targetSideForHost = dropSide;
+    
+    if (!gameState.isHost) {
+        if (dropSide === 'left') targetSideForHost = 'right';
+        else if (dropSide === 'right') targetSideForHost = 'left';
+    }
+
     const req = {
         reqId: `${gameState.myId}:${Date.now()}:${(++gameState.moveSeq)}`,
-        dropSide,
+        dropSide: targetSideForHost, // <--- Send the swapped side
         card: packCardWithMeta(cardData)
     };
 
     if (gameState.isHost) {
-        // CRITICAL FIX: Host processes their own move locally as 'player'
+        // Host processes their own move locally (No swap needed, Host View = True State)
         adjudicateMove(req, 'player');
     } else {
-        // Guest sends request to Host (who will receive it as 'ai')
+        // Guest sends request to Host
         sendNet({ type: 'MOVE_REQ', move: req });
     }
 }
-
 function adjudicateMove(m, moverOverride) {
     // If no override provided, assume it came from network (AI/Opponent)
     const mover = moverOverride || 'ai';
