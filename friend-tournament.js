@@ -212,50 +212,83 @@ function startTournament() {
     startVisualTournament(bracketData);
 }
 
+// --- BRACKET STATE TRACKING ---
+let myCurrentMatchId = null; // If I am playing, this stores the match ID (e.g., 'L16-1')
+let iAmReadyToPlay = false;
+
 function startVisualTournament(playerList) {
     // 1. Setup UI
     screens.overlay.classList.add('hidden');
-    screens.bracket.classList.add('active'); // Remove blur
+    screens.bracket.classList.add('active'); 
     screens.controls.classList.remove('hidden');
 
     // 2. Clear Bracket
     document.querySelectorAll('.player-name').forEach(el => el.innerText = "");
     document.querySelectorAll('.match-box').forEach(el => el.classList.remove('occupied'));
 
-    // 3. Calculate Slots
-    const n = playerList.length;
-    
-    // Split players into Left and Right bracket halves
-    const leftCount = Math.ceil(n / 2);
-    const rightCount = Math.floor(n / 2);
-    
-    const leftPlayers = playerList.slice(0, leftCount);
-    const rightPlayers = playerList.slice(leftCount);
+    // 3. Logic to Distribute Players (Same as before)
+    // ... (Keep your existing distribution logic here) ...
+    // ... (Keep your slotsToFill logic here) ...
 
-    let slotsToFill = [];
-
-    // --- LOGIC: DETERMINE STARTING ROUND BASED ON PLAYER COUNT ---
+    // 4. Render to DOM & CHECK FOR MY MATCH
+    myCurrentMatchId = null;
+    iAmReadyToPlay = false;
     
-    if (n <= 4) {
-        // SMALL TOURNAMENT: Start at Semi-Finals
-        // Everyone gets placed directly into SF slots
-        leftPlayers.forEach((p, i) => slotsToFill.push({ id: `LSF-${i+1}`, name: p.name }));
-        rightPlayers.forEach((p, i) => slotsToFill.push({ id: `RSF-${i+1}`, name: p.name }));
-    } 
-    else if (n <= 8) {
-        // MEDIUM TOURNAMENT: Start at Quarter-Finals
-        // Max capacity per side is 4. Calculate Byes.
-        slotsToFill = slotsToFill.concat(distributeSide(leftPlayers, 'L', 4));
-        slotsToFill = slotsToFill.concat(distributeSide(rightPlayers, 'R', 4));
-    } 
-    else {
-        // LARGE TOURNAMENT: Start at Round of 16
-        // Max capacity per side is 8. Calculate Byes.
-        slotsToFill = slotsToFill.concat(distributeSide(leftPlayers, 'L', 8));
-        slotsToFill = slotsToFill.concat(distributeSide(rightPlayers, 'R', 8));
+    // We need to group players by Match ID (e.g., L16-1 vs L16-2 is WRONG logic).
+    // Correct Logic: L16-1 and L16-2 fight to go to LQF-1? No.
+    // In a visual bracket, typically adjacent vertical slots fight each other.
+    // L16-1 vs L16-2 -> Winner goes to LQF-1.
+    
+    // SIMPLIFIED MATCH DETECTION:
+    // If "I" am in L16-1, my opponent is in L16-2.
+    // We scan the 'slotsToFill' to find where 'I' am.
+    
+    const mySlot = slotsToFill.find(s => s.name === state.myName);
+    
+    if (mySlot) {
+        // Find my opponent
+        // Logic: If index is even (0, 2, 4), opponent is index+1. If odd, opponent is index-1.
+        const myIndex = slotsToFill.indexOf(mySlot);
+        const isEven = (myIndex % 2 === 0);
+        const opponentIndex = isEven ? myIndex + 1 : myIndex - 1;
+        const opponentSlot = slotsToFill[opponentIndex];
+
+        if (opponentSlot) {
+            // MATCH FOUND!
+            iAmReadyToPlay = true;
+            myCurrentMatchId = `MATCH-${Math.min(myIndex, opponentIndex)}`; // Unique ID based on lower index
+            
+            // Highlight My Box
+            document.getElementById(mySlot.id).style.border = "2px solid #00ff00"; 
+            
+            // Enable Button
+            const btn = document.querySelector('#game-controls button');
+            btn.disabled = false;
+            btn.style.opacity = "1";
+            btn.style.background = "linear-gradient(90deg, #00ff00, #008800)";
+            btn.innerText = `PLAY MATCH VS ${opponentSlot.name.toUpperCase()}`;
+            
+            // Store Match Data for Handover
+            localStorage.setItem('isf_tourney_opponent', opponentSlot.name);
+            localStorage.setItem('isf_tourney_match_id', myCurrentMatchId);
+            
+            // IMPORTANT: We need to know who "Hosts" the sub-match. 
+            // Convention: The player with the alphabetically first ID (or name) hosts.
+            // Let's use name for simplicity in this friend mode.
+            const amISubHost = (state.myName < opponentSlot.name);
+            localStorage.setItem('isf_role', amISubHost ? 'host' : 'guest');
+            localStorage.setItem('isf_code', myCurrentMatchId); // Sub-room ID
+        } else {
+            // I have a Bye (No opponent yet)
+            const btn = document.querySelector('#game-controls button');
+            btn.disabled = true;
+            btn.style.opacity = "0.5";
+            btn.style.background = "#333";
+            btn.innerText = "WAITING FOR OPPONENT...";
+        }
     }
-
-    // 4. Render to DOM
+    
+    // Draw names
     slotsToFill.forEach(item => {
         const box = document.getElementById(item.id);
         if (box) {
@@ -265,6 +298,16 @@ function startVisualTournament(playerList) {
     });
 }
 
+function goToNextMatch() {
+    if (!iAmReadyToPlay) return;
+    
+    // Save State so we can return later (Optional: Store tournament ID)
+    // Disconnect from Main Lobby (PeerJS limit)
+    if (state.peer) state.peer.destroy();
+    
+    // Redirect to Game
+    window.location.href = 'multiplayer-game.html';
+}
 // --- HELPER: DISTRIBUTE PLAYERS WITH BYES ---
 function distributeSide(players, side, capacity) {
     const k = players.length;
