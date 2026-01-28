@@ -133,10 +133,14 @@ function handleDataHost(data, conn) {
         state.players.push(newPlayer);
         state.conns.push(conn);
         broadcastLobbyUpdate();
+       if (data.type === 'MATCH_RESULT') {
+        handleMatchResult(data);
+    }
     }
 }
 
 function handleDataGuest(data) {
+    // Updates the player list in the lobby
     if (data.type === 'LOBBY_UPDATE') {
         state.players = data.players;
         updateLobbyUI();
@@ -145,11 +149,17 @@ function handleDataGuest(data) {
         document.getElementById('btn-start-tourney').style.display = 'none'; 
         document.getElementById('lobby-status').innerText = "WAITING FOR HOST TO START...";
     }
+
+    // Triggers when the host starts the tournament
     if (data.type === 'START_TOURNAMENT') {
         startVisualTournament(data.bracketData);
     }
-}
 
+    // Triggers when the host tells everyone about a winner in another match
+    if (data.type === 'LOBBY_UPDATE_BRACKET') {
+        handleMatchResult(data);
+    }
+}
 function broadcastLobbyUpdate() {
     const safeList = state.players.map(p => ({ name: p.name, id: p.id, isHost: p.isHost }));
     updateLobbyUI();
@@ -378,32 +388,136 @@ function goToNextMatch() {
     // Load the match setup into the iframe
     frame.src = 'friend-match.html';
 }
-// --- LISTEN FOR GAME RESULTS ---
+// --- LISTEN FOR GAME RESULTS (FROM IFRAME) ---
 window.addEventListener('message', (event) => {
-    // Security check (optional, but good practice)
-    // if (event.origin !== "http://yourwebsite.com") return;
+    // Filter out messages that aren't ours
+    if (!event.data || event.data.type !== 'GAME_OVER') return;
 
-    if (event.data.type === 'GAME_OVER') {
-        // 1. Hide the game
-        document.getElementById('game-overlay').classList.add('hidden');
-        document.getElementById('game-frame').src = ''; // Stop the game
+    // 1. Close the Game Overlay
+    const overlay = document.getElementById('game-overlay');
+    const frame = document.getElementById('game-frame');
+    overlay.classList.add('hidden');
+    frame.src = ''; // Unload the game to save memory
 
-        // 2. Handle Result
-        const result = event.data.result; // 'win' or 'loss'
-        
-        if (result === 'win') {
-            alert("VICTORY! Updating Bracket...");
-            // TODO: Here you would update your 'state.players' or send a "I_WON" message to the lobby
-            // For now, let's visual update:
-            const myBox = document.querySelector('.match-box.occupied[style*="00ff00"]'); 
-            if(myBox) {
-                myBox.style.background = "gold"; // Mark as winner visually
-                // In a real version, you'd calculate the Next Round Slot and move your name there.
-            }
-        } else {
-            alert("ELIMINATED! Better luck next time.");
-            // Disable controls
-            document.getElementById('game-controls').classList.add('hidden');
-        }
+    // 2. Handle Result
+    const result = event.data.result; // 'win' or 'loss'
+
+    if (result === 'loss') {
+        // --- ELIMINATED ---
+        const btn = document.querySelector('#game-controls button');
+        btn.disabled = true;
+        btn.style.background = "#555";
+        btn.innerText = "ELIMINATED";
+        alert("You have been eliminated. Thanks for playing!");
+    } 
+    else if (result === 'win') {
+        // --- VICTORY: ADVANCE TO NEXT ROUND ---
+        advanceToNextRound();
     }
 });
+
+function advanceToNextRound() {
+    // 1. Identify Current Slot
+    // Find the box that has the green border (your current match)
+    const currentBox = document.querySelector('.match-box[style*="00ff00"]');
+    
+    if (!currentBox) {
+        alert("Error: Could not find your current match slot!");
+        return;
+    }
+
+    // 2. Calculate Next Slot ID
+    // ID Format: LQF-1 (Side | Round | Number) -> e.g. "L16-1" or "LQF-1"
+    const currentId = currentBox.id; 
+    const parts = currentId.match(/([LR])([A-Z0-9]+)-(\d+)/); 
+    // parts[1] = "L", parts[2] = "QF", parts[3] = "1"
+
+    if (!parts) return;
+
+    const side = parts[1];
+    const round = parts[2];
+    const num = parseInt(parts[3]);
+
+    let nextRound = "";
+    let nextNum = Math.ceil(num / 2); // 1&2 -> 1, 3&4 -> 2
+
+    // Determine Hierarchy
+    if (round === "16") nextRound = "QF";
+    else if (round === "QF") nextRound = "SF";
+    else if (round === "SF") nextRound = "FINAL"; 
+    
+    // Handle Final ID Logic
+    let nextId = "";
+    if (nextRound === "FINAL") {
+        nextId = `FINAL-${side}`; // FINAL-L or FINAL-R
+    } else {
+        nextId = `${side}${nextRound}-${nextNum}`;
+    }
+
+    // 3. Update Visuals
+    const nextBox = document.getElementById(nextId);
+    if (nextBox) {
+        // Move Name
+        nextBox.classList.add('occupied');
+        nextBox.querySelector('.player-name').innerText = state.myName;
+        
+        // Clear Old Highlight
+        currentBox.style.border = "1px solid #333";
+        
+        // Highlight New Box (Pending Opponent)
+        nextBox.style.border = "2px solid #ffff00"; // Yellow = Waiting
+        
+        // Update Status Button
+        const btn = document.querySelector('#game-controls button');
+        btn.disabled = true;
+        btn.style.background = "#333";
+        btn.innerText = "WAITING FOR NEXT OPPONENT...";
+        
+        alert("Victory! You have advanced. Waiting for opponent...");
+
+        // 4. Broadcast Win to Lobby (CRITICAL SYNC STEP)
+        if (state.conns.length > 0 || state.hostConn) {
+            const msg = {
+                type: 'MATCH_RESULT',
+                winnerName: state.myName,
+                prevRoundId: currentId,
+                nextRoundId: nextId
+            };
+
+            if (state.isHost) {
+                // I am Host: Update my state and broadcast to all
+                handleMatchResult(msg);
+            } else {
+                // I am Guest: Tell the Host
+                state.hostConn.send(msg);
+            }
+        }
+    }
+}
+
+function handleMatchResult(data) {
+    // 1. Update the visual bracket for the person receiving this news
+    const nextBox = document.getElementById(data.nextRoundId);
+    if (nextBox) {
+        nextBox.classList.add('occupied');
+        nextBox.querySelector('.player-name').innerText = data.winnerName;
+    }
+
+    // 2. If Host, tell everyone else!
+    if (state.isHost) {
+        state.conns.forEach(conn => {
+            conn.send({
+                type: 'LOBBY_UPDATE_BRACKET', // Relay to other guests
+                winnerName: data.winnerName,
+                nextRoundId: data.nextRoundId
+            });
+        });
+        
+        // Check if *I* am the one waiting for this winner
+        // (Re-run match check logic to see if my button should turn Green)
+        checkMyMatch(); 
+    } else {
+        // If I am a guest receiving this update, check if this is MY new opponent
+        checkMyMatch();
+    }
+}
