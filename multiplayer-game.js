@@ -960,8 +960,8 @@ function requestMoveToHost(cardData, dropSide) {
     }
 
     // --- LOGIC MIRROR FIX ---
-    // If I am the Guest (not Host), my "Left" pile is actually the Host's "Right" pile.
-    // We must send the side relative to the HOST'S view.
+    // Guest sees "Left" pile, but it corresponds to Host's "Right" pile.
+    // We send the Host the side relative to THEIR view.
     let targetSideForHost = dropSide;
     
     if (!gameState.isHost) {
@@ -971,19 +971,18 @@ function requestMoveToHost(cardData, dropSide) {
 
     const req = {
         reqId: `${gameState.myId}:${Date.now()}:${(++gameState.moveSeq)}`,
-        dropSide: targetSideForHost, // <--- Send the swapped side
+        dropSide: targetSideForHost, // Send swapped side
         card: packCardWithMeta(cardData)
     };
 
     if (gameState.isHost) {
-        // Host processes their own move locally (No swap needed, Host View = True State)
+        // Host processes local move directly (No swap needed)
         adjudicateMove(req, 'player');
     } else {
         // Guest sends request to Host
         sendNet({ type: 'MOVE_REQ', move: req });
     }
-}
-function adjudicateMove(m, moverOverride) {
+}function adjudicateMove(m, moverOverride) {
     // If no override provided, assume it came from network (AI/Opponent)
     const mover = moverOverride || 'ai';
 
@@ -1087,11 +1086,11 @@ function revealNewTopAfterPlay(owner, laneIdx) {
         }
     }
 }
-function applyMoveFromHost(a) {
+ffunction applyMoveFromHost(a) {
     // 1. Perspective Swap (Mover)
     const localMover = (a.mover === 'player') ? 'ai' : 'player';
 
-    // 2. Perspective Swap (Center Piles) -- VISUAL FIX
+    // 2. Perspective Swap (Center Piles)
     // Host's Left is Guest's Right. Host's Right is Guest's Left.
     const localSide = (a.side === 'left') ? 'right' : 'left';
 
@@ -1125,7 +1124,7 @@ function applyMoveFromHost(a) {
     const pile = (localSide === 'left') ? gameState.centerPileLeft : gameState.centerPileRight;
     pile.push(cardObj);
     
-    // Pass 'localSide' instead of 'a.side' so it appears on the correct mirror pile
+    // Pass 'localSide' (swapped) so it appears on the correct mirror pile
     renderCenterPile(localSide, cardObj);
 
     updateScoreboard();
@@ -1298,6 +1297,8 @@ function performRevealHostOnly() {
 }
 
 function applyRevealFromHost(payload) {
+    console.log("Applying Host Reveal (Mirrored)..."); // Debug to ensure new code runs
+
     // Apply borrow tags
     const bpEl = document.getElementById('borrowed-player');
     const baEl = document.getElementById('borrowed-ai');
@@ -1312,20 +1313,20 @@ function applyRevealFromHost(payload) {
     document.getElementById('player-draw-deck')?.classList.remove('deck-ready');
     document.getElementById('ai-draw-deck')?.classList.remove('deck-ready');
 
-    // --- SWAP LOGIC FOR CENTER CARDS (VISUAL FIX) ---
+    // --- SWAP LOGIC FOR CENTER CARDS ---
     
     // 1. Host's "Right" card goes to Guest's "Left" pile
     if (payload.right) {
         const c = unpackCard(payload.right);
         gameState.centerPileLeft.push(c);
-        renderCenterPile('left', c); // Render Left
+        renderCenterPile('left', c); 
     }
 
     // 2. Host's "Left" card goes to Guest's "Right" pile
     if (payload.left) {
         const c = unpackCard(payload.left);
         gameState.centerPileRight.push(c);
-        renderCenterPile('right', c); // Render Right
+        renderCenterPile('right', c);
     }
 
     updateScoreboard();
@@ -1335,23 +1336,6 @@ function applyRevealFromHost(payload) {
     gameState.aiReady = false;
 
     checkSlapCondition();
-}
-
-function renderCenterPile(side, card) {
-    const id = side === 'left' ? 'center-pile-left' : 'center-pile-right';
-    const container = document.getElementById(id);
-    if (!container) return;
-
-    const img = document.createElement('img');
-    img.src = card.imgSrc;
-    img.className = 'game-card';
-    img.style.left = '50%';
-    img.style.top = '50%';
-
-    const rot = Math.random() * 20 - 10;
-    img.style.transform = `translate(-50%, -50%) rotate(${rot}deg)`;
-
-    container.appendChild(img);
 }
 
 /* ================================
