@@ -523,27 +523,20 @@ function applySlapUpdate(data) {
         overlay.classList.remove('hidden');
     }
 
-    // 3. Clear Center UI
-    gameState.centerPileLeft = [];
-    gameState.centerPileRight = [];
-    document.getElementById('center-pile-left').innerHTML = '';
-    document.getElementById('center-pile-right').innerHTML = '';
+    // --- FIX: DO NOT CLEAR PILES YET ---
+    // We want the cards to "stay where they are" so players see the result.
+    // We only clean up the "Ghosts" (moving cards) immediately.
     
-    // --- FIX: PROPERLY REMOVE GHOSTS ---
-    // Previously we only cleared the Map, leaving the images on screen.
     if (gameState.opponentDragGhosts) {
-        gameState.opponentDragGhosts.forEach(el => el.remove()); // Delete from DOM
-        gameState.opponentDragGhosts.clear(); // Clear from Memory
+        gameState.opponentDragGhosts.forEach(el => el.remove()); 
+        gameState.opponentDragGhosts.clear(); 
     }
 
-    // --- FIX: RESET HAND VISIBILITY ---
-    // If a card was mid-drag (hidden) when slap happened, show it again.
-    gameState.aiHand.forEach(c => {
-        if (c.element) c.element.style.opacity = '1';
-    });
-    // ----------------------------------
+    // Restore opacity of any cards that were being dragged so they don't look invisible
+    gameState.aiHand.forEach(c => { if (c.element) c.element.style.opacity = '1'; });
+    gameState.playerHand.forEach(c => { if (c.element) c.element.style.opacity = '1'; });
 
-    // 5. Update Stats & Scores
+    // 3. Update Stats & Scores (Data only, visual piles stay)
     if (gameState.isHost) {
         gameState.playerTotal = data.pTotal;
         gameState.aiTotal = data.aTotal;
@@ -554,15 +547,19 @@ function applySlapUpdate(data) {
     
     updateScoreboard();
     
-    if (iWon) {
-        gameState.p1Slaps++; 
-    } else {
-        gameState.aiSlaps++;
-    }
+    if (iWon) gameState.p1Slaps++; 
+    else gameState.aiSlaps++;
+    
     updateScoreboardWidget();
 
-    // 6. Reset Round after delay
+    // 4. RESET EVERYTHING AFTER 2 SECONDS
     setTimeout(() => {
+        // NOW we clear the visual piles
+        gameState.centerPileLeft = [];
+        gameState.centerPileRight = [];
+        document.getElementById('center-pile-left').innerHTML = '';
+        document.getElementById('center-pile-right').innerHTML = '';
+
         overlay.classList.add('hidden');
         gameState.playerReady = false;
         gameState.aiReady = false;
