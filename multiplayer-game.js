@@ -237,6 +237,12 @@ function handleNet(msg) {
         rejectMoveFromHost(msg.reject);
         return;
     }
+   
+   if (msg.type === 'OPPONENT_REJECT') {
+        // The Host tried to play but failed. Delete their ghost.
+        cleanupGhost(msg.card);
+        return;
+    }
 
     if (msg.type === 'SYNC') {
         if (!gameState.isHost) startRoundJoinerFromState(msg.state);
@@ -1055,56 +1061,39 @@ function adjudicateMove(m, moverOverride) {
 
     // 1. Basic Validity Check
     if (idx === -1) {
-        if (mover === 'ai') sendNet({ type: 'MOVE_REJECT', reject: { reqId: m.reqId } });
+        if (mover === 'ai') sendNet({ type: 'MOVE_REJECT', reject: { reqId: m.reqId, cardId: m.card.id } });
         return;
     }
 
     const cardObj = moverHand[idx];
     
-    // --- FIX: STRICT RACE CONDITION CHECK ---
     // Determine which pile is being targeted
     let pile = null;
-    let isLeftLegal = false;
-    let isRightLegal = false;
+    if (m.dropSide === 'left') pile = gameState.centerPileLeft;
+    else if (m.dropSide === 'right') pile = gameState.centerPileRight;
 
-    // Check specific side requested
-    if (m.dropSide === 'left') {
-        pile = gameState.centerPileLeft;
-    } else if (m.dropSide === 'right') {
-        pile = gameState.centerPileRight;
-    }
-
-    // 2. Verify Target Has Not Changed
-    // We compare the ID the player SENT (m.targetId) vs the ACTUAL top card (currentTopId)
+    // 2. Strict Race Condition Check
     const currentTop = (pile && pile.length > 0) ? pile[pile.length - 1] : null;
     const currentTopId = currentTop ? currentTop.id : null;
 
-    if (m.targetId !== currentTopId) {
-        // RACE LOST! The pile changed before this move arrived.
-        // Reject immediately (Snap Back).
-        if (mover === 'ai') sendNet({ type: 'MOVE_REJECT', reject: { reqId: m.reqId } });
-        else {
-            // Host lost the race (rare, but possible if logic is async)
-            if (cardObj.element) {
-                cardObj.element.style.left = cardObj.originalLeft;
-                cardObj.element.style.top = cardObj.originalTop;
-            }
-        }
-        return;
-    }
-    // ----------------------------------------
+    let rejectionReason = null;
+    if (m.targetId !== currentTopId) rejectionReason = "race_lost";
+    else if (!checkPileLogic(cardObj, pile)) rejectionReason = "invalid_math";
 
-    // 3. Mathematical Logic Check (Standard)
-    // Now we know the target card is correct, does the Math work?
-    const isLegal = checkPileLogic(cardObj, pile);
-
-    if (!isLegal) {
-        if (mover === 'ai') sendNet({ type: 'MOVE_REJECT', reject: { reqId: m.reqId } });
-        else {
-            if (cardObj.element) {
-                cardObj.element.style.left = cardObj.originalLeft;
-                cardObj.element.style.top = cardObj.originalTop;
-            }
+    if (rejectionReason) {
+        // --- FIX: REJECTION HANDLING ---
+        if (mover === 'ai') {
+            // 1. Tell Guest to snap back
+            sendNet({ type: 'MOVE_REJECT', reject: { reqId: m.reqId, cardId: m.card.id } });
+            
+            // 2. Host cleans up the Guest's ghost immediately
+            cleanupGhost(m.card);
+        } else {
+            // 1. Host snaps back locally
+            rejectMoveFromHost({ cardId: cardObj.id });
+            
+            // 2. Tell Guest to delete Host's ghost
+            sendNet({ type: 'OPPONENT_REJECT', card: m.card });
         }
         return;
     }
@@ -1112,7 +1101,6 @@ function adjudicateMove(m, moverOverride) {
     const applyPayload = applyMoveAuthoritative(mover, cardObj, m.dropSide, m.reqId);
     sendNet({ type: 'MOVE_APPLY', apply: applyPayload });
 }
-
 function applyMoveAuthoritative(mover, cardObj, side, reqId) {
     // --- FIX: KILL THE ZOMBIE GHOST (FUZZY MATCH) ---
     // Iterate through all active ghosts.
@@ -1796,4 +1784,56 @@ function applyRevealShow() {
     
     // 3. Check Slaps (Now that cards are "Visible")
     checkSlapCondition();
+}
+/* ================================
+   VISUAL HELPERS FOR REJECTS
+   ================================ */
+
+function rejectMoveFromHost(j) {
+    // 1. Try to find the card specifically by ID
+    let card = null;
+    if (j.cardId) {
+        card = gameState.playerHand.find(c => c.id === j.cardId);
+    }
+    // Fallback to last dragged if ID missing
+    if (!card) card = gameState.lastDraggedCard;
+
+    if (card && card.element) {
+        // SNAP BACK ANIMATION
+        card.element.style.transition = 'all 0.3s ease-out';
+        card.element.style.left = card.originalLeft;
+        card.element.style.top = card.originalTop;
+        
+        // Ensure z-index resets after animation
+        setTimeout(() => {
+            card.element.style.zIndex = card.laneIndex + 10;
+        }, 300);
+    }
+}
+
+function cleanupGhost(cardData) {
+    // 1. Remove the Ghost (The moving card)
+    gameState.opponentDragGhosts.forEach((ghostEl, key) => {
+        const parts = key.split(':'); 
+        if (parts[0] === cardData.suit && parts[1] === cardData.rank && parseInt(parts[2]) === cardData.value) {
+            ghostEl.style.transition = 'opacity 0.2s';
+            ghostEl.style.opacity = '0';
+            setTimeout(() => {
+                ghostEl.remove();
+                gameState.opponentDragGhosts.delete(key);
+            }, 200);
+        }
+    });
+
+    // 2. RESTORE THE REAL CARD (Make it visible again in the foundation)
+    // From my perspective, the opponent's cards are always in 'aiHand'
+    const realCard = gameState.aiHand.find(c => 
+        c.suit === cardData.suit && 
+        c.rank === cardData.rank && 
+        c.value === parseInt(cardData.value)
+    );
+
+    if (realCard && realCard.element) {
+        realCard.element.style.opacity = '1'; 
+    }
 }
