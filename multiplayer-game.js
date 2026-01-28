@@ -886,16 +886,19 @@ function adjudicateMove(m, moverOverride) {
 }
 
 function applyMoveAuthoritative(mover, cardObj, side, reqId) {
-    // --- FIX: KILL THE ZOMBIE GHOST ---
-    // If the Guest played this card, there is a "Ghost" on the Host's screen.
-    // We must find it and destroy it immediately, or it will sit on top of the pile.
-    const ghostKey = cardKey(cardObj);
-    const ghost = gameState.opponentDragGhosts.get(ghostKey);
-    if (ghost) {
-        ghost.remove();
-        gameState.opponentDragGhosts.delete(ghostKey);
-    }
-    // ----------------------------------
+    // --- FIX: KILL THE ZOMBIE GHOST (FUZZY MATCH) ---
+    // Iterate through all active ghosts.
+    // If a ghost matches the card being played (by suit/rank/value), destroy it.
+    // This fixes the issue where Guest sends ID as 'player' but Host looks for 'ai'.
+    gameState.opponentDragGhosts.forEach((ghostEl, key) => {
+        const parts = key.split(':'); // "suit:rank:value:owner:lane"
+        // Check if suit, rank, and value match the card being played
+        if (parts[0] === cardObj.suit && parts[1] === cardObj.rank && parseInt(parts[2]) === cardObj.value) {
+            ghostEl.remove();
+            gameState.opponentDragGhosts.delete(key);
+        }
+    });
+    // ------------------------------------------------
 
     // 1. Update piles
     const targetPile = (side === 'left') ? gameState.centerPileLeft : gameState.centerPileRight;
@@ -959,11 +962,16 @@ function applyMoveFromHost(a) {
     const localMover = (a.mover === 'player') ? 'ai' : 'player';
     const localSide = (a.side === 'left') ? 'right' : 'left';
 
-    const ghost = gameState.opponentDragGhosts.get(cardKey(a.card));
-    if (ghost) {
-        ghost.remove();
-        gameState.opponentDragGhosts.delete(cardKey(a.card));
-    }
+    // --- FIX: KILL THE ZOMBIE GHOST (FUZZY MATCH) ---
+    // Same logic as Host: Find ghost by Suit/Rank/Value and destroy it
+    gameState.opponentDragGhosts.forEach((ghostEl, key) => {
+        const parts = key.split(':'); 
+        if (parts[0] === a.card.suit && parts[1] === a.card.rank && parseInt(parts[2]) === a.card.value) {
+            ghostEl.remove();
+            gameState.opponentDragGhosts.delete(key);
+        }
+    });
+    // ------------------------------------------------
 
     gameState.playerTotal = a.playerTotal;
     gameState.aiTotal = a.aiTotal;
