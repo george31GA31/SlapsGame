@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tournament Bracket - ISF</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700;900&family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+
+    <style>
+        /* --- TOURNAMENT BRACKET SPECIFIC STYLES --- */
+        body.tournament-body {
+            background-color: #050505;
+            background-image: radial-gradient(circle at 50% 50%, #1a1a1a 0%, #000000 100%);
+            color: white;
+            font-family: 'Montserrat', sans-serif;
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden; /* Prevent scrolling if possible */
+        }
+
+        /* --- NAVIGATION BAR --- */
+        .nav-bar {
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 30px;
+            background: rgba(255, 255, 255, 0.05);
+            border-bottom: 1px solid #333;
+            z-index: 100;
+        }
+        .nav-title {
+            font-weight: 900;
+            font-style: italic;
+            font-size: 1.2rem;
+            color: #fff;
+            letter-spacing: 1px;
+        }
+        .btn-home {
+            background: transparent;
+            border: 1px solid #444;
+            color: #888;
+            padding: 8px 20px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-weight: 700;
+            text-transform: uppercase;
+            font-size: 0.8rem;
+        }
+        .btn-home:hover {
+            border-color: #fff;
+            color: #fff;
+        }
+
+        /* --- BRACKET CONTAINER --- */
+        .bracket-container {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            overflow-x: auto; /* Allow scroll if screen is too small */
+        }
+
+        .bracket-wrapper {
+            display: flex;
+            justify-content: center;
+            align-items: stretch;
+            gap: 20px; /* Space between columns */
+            width: 100%;
+            max-width: 1400px;
+            height: 100%;
+        }
+
+        /* --- COLUMNS --- */
+        .column {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-around; /* Distribute matches evenly */
+            flex: 1;
+        }
+
+        .column-title {
+            text-align: center;
+            font-size: 0.8rem;
+            color: #00ccff;
+            text-transform: uppercase;
+            font-weight: 800;
+            margin-bottom: 10px;
+            text-shadow: 0 0 10px rgba(0, 204, 255, 0.5);
+        }
+
+        /* --- PLAYER BOX STYLES --- */
+        .match-box {
+            position: relative;
+            background: linear-gradient(135deg, #0f0f0f, #1a1a1a);
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 8px 10px;
+            text-align: center;
+            width: 100%;
+            transition: all 0.3s;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            margin: 5px 0;
+            min-height: 40px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* The Blue "Filled" State (Active Player) */
+        .match-box.occupied {
+            background: linear-gradient(90deg, #00c6ff, #0072ff);
+            border: 1px solid #00ccff;
+            box-shadow: 0 0 15px rgba(0, 114, 255, 0.4);
+        }
+
+        .player-name {
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: #555; /* Default empty color */
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            width: 100%;
+        }
+
+        .occupied .player-name {
+            color: white;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+        }
+
+        /* --- CONNECTORS (The Lines) --- */
+        /* We use pseudo-elements on the boxes to draw lines to the right/left */
+        
+        /* Connector Basics */
+        .connector-right::after, .connector-left::after {
+            content: '';
+            position: absolute;
+            background-color: #444; /* Line color */
+            transition: background-color 0.3s;
+        }
+        
+        /* Active Lines (Blue) */
+        .occupied.connector-right::after, .occupied.connector-left::after {
+            background-color: #00ccff;
+            box-shadow: 0 0 8px #00ccff;
+        }
+
+        /* --- LEFT SIDE CONNECTORS --- */
+        /* R16 -> QF */
+        .col-r16-l .match-box { position: relative; }
+        .col-r16-l .match-box:nth-child(odd)::after {
+            /* Top pair going down */
+            width: 15px; height: 100%; 
+            right: -15px; top: 50%;
+            border-right: 2px solid #444; 
+            border-top: 2px solid #444;
+            border-top-right-radius: 8px;
+            background: transparent !important; /* It's a border, not a block */
+        }
+        .col-r16-l .match-box:nth-child(even)::after {
+            /* Bottom pair going up */
+            width: 15px; height: 100%; 
+            right: -15px; bottom: 50%;
+            border-right: 2px solid #444; 
+            border-bottom: 2px solid #444;
+            border-bottom-right-radius: 8px;
+            background: transparent !important;
+        }
+
+        /* QF -> SF */
+        .col-qf-l .match-box:nth-child(odd)::after {
+            width: 15px; height: 100%; right: -15px; top: 50%;
+            border-right: 2px solid #444; border-top: 2px solid #444;
+            border-top-right-radius: 8px; background: transparent !important;
+        }
+        .col-qf-l .match-box:nth-child(even)::after {
+            width: 15px; height: 100%; right: -15px; bottom: 50%;
+            border-right: 2px solid #444; border-bottom: 2px solid #444;
+            border-bottom-right-radius: 8px; background: transparent !important;
+        }
+
+        /* SF -> Final */
+        .col-sf-l .match-box:nth-child(1)::after {
+            width: 20px; height: 2px; right: -20px; top: 50%; background: #444;
+        }
+
+        /* --- RIGHT SIDE CONNECTORS (Mirrored) --- */
+        /* R16 -> QF */
+        .col-r16-r .match-box:nth-child(odd)::after {
+            width: 15px; height: 100%; 
+            left: -15px; top: 50%;
+            border-left: 2px solid #444; 
+            border-top: 2px solid #444;
+            border-top-left-radius: 8px;
+            background: transparent !important;
+        }
+        .col-r16-r .match-box:nth-child(even)::after {
+            width: 15px; height: 100%; 
+            left: -15px; bottom: 50%;
+            border-left: 2px solid #444; 
+            border-bottom: 2px solid #444;
+            border-bottom-left-radius: 8px;
+            background: transparent !important;
+        }
+        
+        /* QF -> SF */
+        .col-qf-r .match-box:nth-child(odd)::after {
+            width: 15px; height: 100%; left: -15px; top: 50%;
+            border-left: 2px solid #444; border-top: 2px solid #444;
+            border-top-left-radius: 8px; background: transparent !important;
+        }
+        .col-qf-r .match-box:nth-child(even)::after {
+            width: 15px; height: 100%; left: -15px; bottom: 50%;
+            border-left: 2px solid #444; border-bottom: 2px solid #444;
+            border-bottom-left-radius: 8px; background: transparent !important;
+        }
+
+        /* SF -> Final */
+        .col-sf-r .match-box:nth-child(1)::after {
+            width: 20px; height: 2px; left: -20px; top: 50%; background: #444;
+        }
+
+
+        /* --- CENTER (FINAL) --- */
+        .col-final {
+            flex: 0.8; /* Slightly narrower */
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+        }
+        .vs-circle {
+            width: 50px; height: 50px;
+            background: #222;
+            border: 2px solid #444;
+            border-radius: 50%;
+            display: flex;
+            align-items: center; justify-content: center;
+            font-weight: 900; color: #fff;
+            font-style: italic;
+            z-index: 5;
+        }
+        .final-box {
+            height: 60px;
+            width: 100%;
+            font-size: 1.2rem;
+        }
+
+    </style>
+</head>
+<body class="tournament-body">
+
+    <div class="nav-bar">
+        <div class="nav-title">TOURNAMENT BRACKET</div>
+        <button class="btn-home" onclick="window.location.href='index.html'">Main Menu</button>
+    </div>
+
+    <div class="bracket-container">
+        <div class="bracket-wrapper">
+
+            <div class="column col-r16-l">
+                <div class="column-title">Round of 16</div>
+                <div class="match-box" id="L16-1"><div class="player-name">Waiting...</div></div>
+                <div class="match-box" id="L16-2"><div class="player-name">Waiting...</div></div>
+                <div class="match-box" id="L16-3"><div class="player-name">Waiting...</div></div>
+                <div class="match-box" id="L16-4"><div class="player-name">Waiting...</div></div>
+                <div class="match-box" id="L16-5"><div class="player-name">Waiting...</div></div>
+                <div class="match-box" id="L16-6"><div class="player-name">Waiting...</div></div>
+                <div class="match-box" id="L16-7"><div class="player-name">Waiting...</div></div>
+                <div class="match-box" id="L16-8"><div class="player-name">Waiting...</div></div>
+            </div>
+
+            <div class="column col-qf-l">
+                <div class="column-title">Quarter Final</div>
+                <div class="match-box" id="LQF-1"><div class="player-name"></div></div>
+                <div class="match-box" id="LQF-2"><div class="player-name"></div></div>
+                <div class="match-box" id="LQF-3"><div class="player-name"></div></div>
+                <div class="match-box" id="LQF-4"><div class="player-name"></div></div>
+            </div>
+
+            <div class="column col-sf-l">
+                <div class="column-title">Semi Final</div>
+                <div class="match-box" id="LSF-1"><div class="player-name"></div></div>
+                <div class="match-box" id="LSF-2"><div class="player-name"></div></div>
+            </div>
+
+            <div class="column col-final">
+                <div class="column-title" style="color:#fff; text-shadow:none; font-size:1.2rem;">FINAL</div>
+                
+                <div class="match-box final-box" id="FINAL-L"><div class="player-name"></div></div>
+                
+                <div class="vs-circle">VS</div>
+                
+                <div class="match-box final-box" id="FINAL-R"><div class="player-name"></div></div>
+            </div>
+
+            <div class="column col-sf-r">
+                <div class="column-title">Semi Final</div>
+                <div class="match-box" id="RSF-1"><div class="player-name"></div></div>
+                <div class="match-box" id="RSF-2"><div class="player-name"></div></div>
+            </div>
+
+            <div class="column col-qf-r">
+                <div class="column-title">Quarter Final</div>
+                <div class="match-box" id="RQF-1"><div class="player-name"></div></div>
+                <div class="match-box" id="RQF-2"><div class="player-name"></div></div>
+                <div class="match-box" id="RQF-3"><div class="player-name"></div></div>
+                <div class="match-box" id="RQF-4"><div class="player-name"></div></div>
+            </div>
+
+            <div class="column col-r16-r">
+                <div class="column-title">Round of 16</div>
+                <div class="match-box" id="R16-1"><div class="player-name">Waiting...</div></div>
+                <div class="match-box" id="R16-2"><div class="player-name">Waiting...</div></div>
+                <div class="match-box" id="R16-3"><div class="player-name">Waiting...</div></div>
+                <div class="match-box" id="R16-4"><div class="player-name">Waiting...</div></div>
+                <div class="match-box" id="R16-5"><div class="player-name">Waiting...</div></div>
+                <div class="match-box" id="R16-6"><div class="player-name">Waiting...</div></div>
+                <div class="match-box" id="R16-7"><div class="player-name">Waiting...</div></div>
+                <div class="match-box" id="R16-8"><div class="player-name">Waiting...</div></div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        // --- TEMPLATE LOGIC FOR TESTING ---
+        // This will eventually be replaced by real networking code
+        
+        /* Example of how to highlight a box:
+           document.getElementById('L16-1').classList.add('occupied');
+           document.getElementById('L16-1').querySelector('.player-name').innerText = "George";
+        */
+    </script>
+
+</body>
+</html>
