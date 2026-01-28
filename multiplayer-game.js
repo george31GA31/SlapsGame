@@ -959,30 +959,21 @@ function requestMoveToHost(cardData, dropSide) {
         return;
     }
 
-    // --- FIX: LOGIC MIRRORING ---
-    // If I am the Guest, my "Left" is the Host's "Right".
-    // We must send the Host the side relative to *their* board (the True State).
-    let targetSideForHost = dropSide;
-    
-    if (!gameState.isHost) {
-        if (dropSide === 'left') targetSideForHost = 'right';
-        else if (dropSide === 'right') targetSideForHost = 'left';
-    }
-
     const req = {
         reqId: `${gameState.myId}:${Date.now()}:${(++gameState.moveSeq)}`,
-        dropSide: targetSideForHost, // <--- Send the swapped side
+        dropSide,
         card: packCardWithMeta(cardData)
     };
 
     if (gameState.isHost) {
-        // Host processes their own move locally (No swap needed, Host View = True State)
+        // CRITICAL FIX: Host processes their own move locally as 'player'
         adjudicateMove(req, 'player');
     } else {
-        // Guest sends request to Host
+        // Guest sends request to Host (who will receive it as 'ai')
         sendNet({ type: 'MOVE_REQ', move: req });
     }
 }
+
 function adjudicateMove(m, moverOverride) {
     // If no override provided, assume it came from network (AI/Opponent)
     const mover = moverOverride || 'ai';
