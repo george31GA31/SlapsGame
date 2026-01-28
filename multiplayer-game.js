@@ -148,7 +148,8 @@ function bindConnection(conn) {
         sendNet({ type: 'HANDSHAKE', name: gameState.myName });
     });
 
-    conn.on('data', (msg) => (msg));
+    // FIX: Actually send the message to the handler!
+    conn.on('data', (msg) => handleNet(msg)); 
 
     conn.on('close', () => {
         showRoundMessage("DISCONNECTED", "The other player left the match.");
@@ -159,7 +160,6 @@ function bindConnection(conn) {
         showRoundMessage("CONNECTION ERROR", "Return to matchmaking and try again.");
     });
 }
-
 function sendNet(obj) {
     if (gameState.conn && gameState.conn.open) {
         gameState.conn.send(obj);
@@ -1064,34 +1064,33 @@ function applyMoveAuthoritative(mover, cardObj, side, reqId) {
     checkSlapCondition();
 
     // 4. Handle Reveal (Host Side)
+    // ... (keep the top part of the function) ...
+
+    // 4. Handle Reveal (Host Side)
     let newTopCardPayload = null;
     const laneCards = hand.filter(c => c.laneIndex === cardObj.laneIndex);
     
     if (laneCards.length > 0) {
         const newTop = laneCards[laneCards.length - 1];
-        
-        // If I am the Host ('player'), I must send my new card to the Guest
         if (mover === 'player') {
             newTopCardPayload = packCardWithMeta(newTop);
         }
-        
-        // If AI/Opponent moved, auto-flip for Host to see.
         if (mover === 'ai' && !newTop.isFaceUp && newTop.element) {
             setCardFaceUp(newTop.element, newTop, 'ai');
         }
     }
 
-   // --- CHECK FOR ROUND/MATCH END ---
+    // --- FIX: CHECK FOR ROUND END (EMPTY HAND) ---
+    // Instead of ending match at 0 cards, we trigger Round End when hand is empty.
     
-    // 1. Check if the mover's hand is now empty (Round Win)
-    // Note: We already removed the card from the hand array earlier in this function
     const moverHandRef = (mover === 'player') ? gameState.playerHand : gameState.aiHand;
     
     if (moverHandRef.length === 0) {
-        handleRoundOver(mover); // Trigger Round End Logic
+        // Hand is empty -> Round Over!
+        handleRoundOver(mover);
     } 
-    // 2. Safety Check: If total somehow hit 0 (e.g. via penalties)
     else if (gameState.playerTotal <= 0) {
+        // Safety: If total is 0 but hand isn't empty (rare), treat as win
         handleRoundOver('player');
     } else if (gameState.aiTotal <= 0) {
         handleRoundOver('ai');
