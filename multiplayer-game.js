@@ -1218,13 +1218,34 @@ function startCountdownFromHost() {
             if (gameState.isHost) {
                 const result = performRevealHostOnly();
                 sendNet({ type: 'REVEAL_RESULT', result });
-                // Host also applies immediately for consistency
-                applyRevealFromHost(result);
+
+                // --- HOST MANUAL UI UPDATE (The Fix) ---
+                // Do NOT call applyRevealFromHost here. We do it manually:
+                
+                // 1. Clear Deck Ready UI
+                document.getElementById('player-draw-deck')?.classList.remove('deck-ready');
+                document.getElementById('ai-draw-deck')?.classList.remove('deck-ready');
+
+                // 2. Render Normal (Right is Right)
+                // We use unpackCard to create a temporary card object for rendering
+                if (result.right) {
+                    renderCenterPile('right', unpackCard(result.right));
+                }
+                if (result.left) {
+                    renderCenterPile('left', unpackCard(result.left));
+                }
+
+                // 3. Unlock Game
+                gameState.gameActive = true;
+                gameState.playerReady = false;
+                gameState.aiReady = false;
+                
+                updateScoreboard();
+                checkSlapCondition();
             }
         }
     }, 800);
 }
-
 function performRevealHostOnly() {
     // Equivalent to your old performReveal(), but returns a payload instead of rendering on joiner.
 
@@ -1454,4 +1475,18 @@ async function preloadCardImages(cards) {
         Promise.all(tasks),
         new Promise(resolve => setTimeout(resolve, 2500))
     ]);
+}
+function quitMatch() {
+    console.log("Quitting match...");
+    try {
+        sendNet({ type: 'OPPONENT_LEFT' });
+    } catch (e) {
+        console.error("Connection already closed", e);
+    }
+    setTimeout(() => {
+        if (gameState.peer) {
+            gameState.peer.destroy();
+        }
+        window.location.href = 'index.html';
+    }, 100); 
 }
