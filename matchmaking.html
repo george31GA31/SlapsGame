@@ -5,13 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Find Match - ISF</title>
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,400;0,700;1,900&family=Roboto:wght@400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
     
     <style>
-        /* --- CRITICAL STYLES FOR THIS PAGE --- */
+        /* --- VISUAL STYLES MATCHING THE SCREENSHOT --- */
         body.matchmaking-body {
-            background-color: #1a1a1a;
-            background-image: radial-gradient(circle at center, #2a2a2a 0%, #000000 100%);
+            background-color: #0a0a0a; /* Dark background */
+            background-image: radial-gradient(circle at 50% 50%, #1a1a1a 0%, #000000 100%);
             color: white;
             font-family: 'Roboto', sans-serif;
             display: flex;
@@ -26,140 +28,178 @@
             display: none !important;
         }
 
-        .search-container {
+        /* The Main Card Container */
+        .menu-card {
+            background-color: #111;
+            border-radius: 20px;
+            padding: 40px;
+            width: 350px;
             text-align: center;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
             position: relative;
+            border: 1px solid #222;
         }
 
-        /* Input Styling */
-        .modern-input {
-            background: rgba(255, 255, 255, 0.1);
-            border: 2px solid #444;
+        /* The Blue Icon Group */
+        .icon-group {
+            color: #00ccff;
+            font-size: 3rem;
+            margin-bottom: 15px;
+            text-shadow: 0 0 15px rgba(0, 204, 255, 0.4);
+        }
+
+        /* The Header Text */
+        .menu-title {
+            font-family: 'Montserrat', sans-serif;
+            font-weight: 900;
+            font-style: italic;
+            font-size: 2rem;
+            margin: 0 0 30px 0;
+            color: white;
+            letter-spacing: 1px;
+        }
+
+        /* The Grey Input Box */
+        .input-group {
+            margin-bottom: 25px;
+        }
+
+        .styled-input {
+            background-color: #222; /* Greyed out box */
+            border: 1px solid #333;
             border-radius: 8px;
             padding: 15px;
-            font-size: 1.5rem;
+            width: 100%;
+            box-sizing: border-box; /* Ensures padding doesn't widen element */
             color: white;
+            font-family: 'Montserrat', sans-serif;
+            font-weight: 700;
+            text-transform: uppercase;
             text-align: center;
-            width: 250px;
+            font-size: 1rem;
             outline: none;
-            font-family: 'Roboto', sans-serif;
-            font-weight: bold;
-            text-transform: uppercase;
-            transition: all 0.3s ease;
+            transition: border-color 0.3s, background-color 0.3s;
         }
-        .modern-input:focus {
+
+        .styled-input::placeholder {
+            color: #555;
+        }
+
+        .styled-input:focus {
             border-color: #00ccff;
-            box-shadow: 0 0 15px rgba(0, 204, 255, 0.3);
-            background: rgba(0, 0, 0, 0.5);
+            background-color: #2a2a2a;
         }
 
-        /* Button Styling */
-        .btn-action-large {
-            background: linear-gradient(135deg, #00c6ff, #0072ff);
+        /* The Blue Gradient Button */
+        .btn-blue-gradient {
+            background: linear-gradient(90deg, #00c6ff, #0072ff);
             border: none;
-            color: white;
-            padding: 15px 40px;
-            font-size: 1.2rem;
-            font-weight: 900;
             border-radius: 50px;
+            padding: 15px 0;
+            width: 100%;
+            color: white;
+            font-family: 'Montserrat', sans-serif;
+            font-weight: 800;
+            font-size: 1.1rem;
             cursor: pointer;
-            box-shadow: 0 5px 15px rgba(0, 114, 255, 0.4);
-            transition: transform 0.2s, box-shadow 0.2s;
             text-transform: uppercase;
-            margin-top: 20px;
-        }
-        .btn-action-large:hover {
-            transform: scale(1.05);
-            box-shadow: 0 8px 25px rgba(0, 114, 255, 0.6);
+            box-shadow: 0 4px 15px rgba(0, 114, 255, 0.3);
+            transition: transform 0.2s, box-shadow 0.2s;
         }
 
-        .btn-cancel {
-            background: transparent;
-            border: 2px solid #444;
-            color: #888;
-            padding: 10px 30px;
-            font-weight: bold;
+        .btn-blue-gradient:hover {
+            transform: scale(1.02);
+            box-shadow: 0 6px 20px rgba(0, 114, 255, 0.5);
+        }
+
+        /* The "Back to Home" Link */
+        .link-back {
+            display: block;
+            margin-top: 25px;
+            color: #666;
+            font-size: 0.9rem;
+            text-decoration: none;
+            font-weight: 700;
+            text-transform: uppercase;
             cursor: pointer;
-            margin-top: 20px;
-            transition: all 0.2s;
-        }
-        .btn-cancel:hover {
-            border-color: #fff;
-            color: #fff;
+            transition: color 0.2s;
         }
 
-        /* Animation Styles */
-        .animation-wrapper {
-            position: relative;
-            width: 250px;
-            height: 350px;
-            margin: 0 auto 30px auto;
-            display: flex;
-            justify-content: center;
-            align-items: center;
+        .link-back:hover {
+            color: white;
         }
-        .search-card-img {
-            width: 160px;
-            height: auto;
-            border-radius: 10px;
-            box-shadow: 0 0 20px rgba(0,0,0,0.5);
-            z-index: 2;
-        }
+
+        /* --- SEARCHING UI STYLES --- */
         .spinner-ring {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 280px;
-            height: 280px;
-            border: 8px solid rgba(255, 255, 255, 0.1);
-            border-top: 8px solid #ffffff;
+            width: 80px;
+            height: 80px;
+            border: 6px solid rgba(255, 255, 255, 0.1);
+            border-top: 6px solid #00ccff;
             border-radius: 50%;
-            animation: spin 1.5s linear infinite;
-            z-index: 1;
-        }
-        @keyframes spin {
-            0% { transform: translate(-50%, -50%) rotate(0deg); }
-            100% { transform: translate(-50%, -50%) rotate(360deg); }
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px auto;
         }
 
-        /* Success State */
-        .match-found .spinner-ring {
-            border-color: #00ff00;
-            animation: none;
-            box-shadow: 0 0 30px #00ff00;
+        .timer-text {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #888;
+            margin-bottom: 20px;
         }
-        .match-found h1 {
-            color: #00ff00;
-            text-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .match-found .spinner-ring {
+            border-top-color: #00ff00;
+            box-shadow: 0 0 20px #00ff00;
+            animation: none;
+        }
+        
+        .status-text {
+            font-weight: bold;
+            color: #ccc;
+            margin-bottom: 15px;
         }
     </style>
 </head>
 <body class="matchmaking-body">
 
-    <div id="name-setup" class="search-container">
-        <h1>ENTER NICKNAME</h1>
-        <div class="input-wrapper">
-            <input type="text" id="nickname-input" class="modern-input" placeholder="PLAYER 1" maxlength="12">
+    <div id="name-setup" class="menu-card">
+        <div class="icon-group">
+            <i class="fa-solid fa-users"></i> </div>
+
+        <h1 class="menu-title">FIND MATCH</h1>
+
+        <div class="input-group">
+            <input type="text" id="nickname-input" class="styled-input" placeholder="ENTER NICKNAME" maxlength="12">
         </div>
-        <button class="btn-action-large" onclick="startSearch()">FIND MATCH</button>
-        <br>
-        <button class="btn-cancel" onclick="window.location.href='index.html'">BACK</button>
+
+        <button class="btn-blue-gradient" onclick="startSearch()">
+            FIND MATCH
+        </button>
+
+        <div class="link-back" onclick="window.location.href='index.html'">
+            BACK TO HOME
+        </div>
     </div>
 
-    <div id="search-ui" class="search-container hidden">
-        <h1 id="status-text">SEARCHING FOR OPPONENT</h1>
-        
-        <div class="animation-wrapper">
-            <div class="spinner-ring" id="spinner"></div>
-            <div class="center-card-display">
-                <img src="assets/cards/ace_of_hearts.png" alt="Card" class="search-card-img">
-            </div>
+    <div id="search-ui" class="menu-card hidden">
+        <div class="icon-group">
+            <i class="fa-solid fa-globe"></i>
         </div>
-
-        <div class="timer" id="timer">00:00</div>
         
-        <button class="btn-cancel" onclick="window.location.href='index.html'">CANCEL</button>
+        <h1 class="menu-title" id="status-text">SEARCHING...</h1>
+        
+        <div class="spinner-ring" id="spinner"></div>
+        
+        <div class="timer-text" id="timer">00:00</div>
+        
+        <button class="btn-blue-gradient" style="background: #333; border: 1px solid #555;" onclick="window.location.href='index.html'">
+            CANCEL
+        </button>
     </div>
 
     <script>
@@ -268,14 +308,16 @@
         function handleMatchFound(role, code, defaultOpponentName) {
             clearInterval(searchTimer);
             document.body.classList.add('match-found');
+            
             const statusText = document.getElementById('status-text');
             statusText.innerText = "OPPONENT FOUND!";
+            statusText.style.color = "#00ff00"; // Green text for success
             
             if (conn) {
                 conn.send({ type: 'HANDSHAKE', name: myName });
                 conn.on('data', (data) => {
                     if (data.type === 'HANDSHAKE') {
-                        statusText.innerText = `CONNECTED TO ${data.name.toUpperCase()}`;
+                        statusText.innerText = `PLAYING VS ${data.name.toUpperCase()}`;
                         localStorage.setItem('isf_role', role);
                         localStorage.setItem('isf_code', code);
                         localStorage.setItem('isf_my_name', myName);
