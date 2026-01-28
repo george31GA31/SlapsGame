@@ -353,7 +353,11 @@ function checkMyMatch() {
             localStorage.setItem('isf_tourney_opponent', opponentSlot.name);
             localStorage.setItem('isf_tourney_match_id', myCurrentMatchId);
             
-            const amISubHost = (state.myName < opponentSlot.name);
+            const myData = state.players.find(p => p.name === state.myName); 
+const oppData = state.players.find(p => p.name === opponentSlot.name);
+
+// Use ID string comparison (always unique)
+const amISubHost = (myData.id < oppData.id);
             localStorage.setItem('isf_role', amISubHost ? 'host' : 'guest');
             localStorage.setItem('isf_code', myCurrentMatchId);
 
