@@ -529,20 +529,29 @@ function applySlapUpdate(data) {
     document.getElementById('center-pile-left').innerHTML = '';
     document.getElementById('center-pile-right').innerHTML = '';
     
-    // 4. Update Ghosts
-    if (gameState.opponentDragGhosts) gameState.opponentDragGhosts.clear();
+    // --- FIX: PROPERLY REMOVE GHOSTS ---
+    // Previously we only cleared the Map, leaving the images on screen.
+    if (gameState.opponentDragGhosts) {
+        gameState.opponentDragGhosts.forEach(el => el.remove()); // Delete from DOM
+        gameState.opponentDragGhosts.clear(); // Clear from Memory
+    }
+
+    // --- FIX: RESET HAND VISIBILITY ---
+    // If a card was mid-drag (hidden) when slap happened, show it again.
+    gameState.aiHand.forEach(c => {
+        if (c.element) c.element.style.opacity = '1';
+    });
+    // ----------------------------------
 
     // 5. Update Stats & Scores
-    // --- FIX: PERSPECTIVE SWAP ---
     if (gameState.isHost) {
         gameState.playerTotal = data.pTotal;
         gameState.aiTotal = data.aTotal;
     } else {
-        // I am Guest: My total is the 'AI' total from the message
         gameState.playerTotal = data.aTotal;
         gameState.aiTotal = data.pTotal;
     }
-    // -----------------------------
+    
     updateScoreboard();
     
     if (iWon) {
