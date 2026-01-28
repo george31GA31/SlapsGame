@@ -194,25 +194,118 @@ function showScreen(name) {
 
 // --- BRACKET START LOGIC ---
 
+// --- BRACKET START LOGIC ---
+
 function startTournament() {
     if (!state.isHost) return;
     
-    // Shuffle players
+    // Shuffle players for randomness
     const shuffled = [...state.players].sort(() => 0.5 - Math.random());
     
-    // Assign to Bracket Slots (Simple logic: Fill R16 or QF depending on count)
-    // For simplicity, we just send the ordered list and let clients populate visual slots
+    // Broadcast the ordered list
     const bracketData = shuffled.map(p => ({ name: p.name, id: p.id }));
 
-    // Broadcast Start
     state.conns.forEach(conn => {
         conn.send({ type: 'START_TOURNAMENT', bracketData: bracketData });
     });
 
-    // Start Host
     startVisualTournament(bracketData);
 }
 
+function startVisualTournament(playerList) {
+    // 1. Setup UI
+    screens.overlay.classList.add('hidden');
+    screens.bracket.classList.add('active'); // Remove blur
+    screens.controls.classList.remove('hidden');
+
+    // 2. Clear Bracket
+    document.querySelectorAll('.player-name').forEach(el => el.innerText = "");
+    document.querySelectorAll('.match-box').forEach(el => el.classList.remove('occupied'));
+
+    // 3. Calculate Slots
+    const n = playerList.length;
+    
+    // Split players into Left and Right bracket halves
+    const leftCount = Math.ceil(n / 2);
+    const rightCount = Math.floor(n / 2);
+    
+    const leftPlayers = playerList.slice(0, leftCount);
+    const rightPlayers = playerList.slice(leftCount);
+
+    let slotsToFill = [];
+
+    // --- LOGIC: DETERMINE STARTING ROUND BASED ON PLAYER COUNT ---
+    
+    if (n <= 4) {
+        // SMALL TOURNAMENT: Start at Semi-Finals
+        // Everyone gets placed directly into SF slots
+        leftPlayers.forEach((p, i) => slotsToFill.push({ id: `LSF-${i+1}`, name: p.name }));
+        rightPlayers.forEach((p, i) => slotsToFill.push({ id: `RSF-${i+1}`, name: p.name }));
+    } 
+    else if (n <= 8) {
+        // MEDIUM TOURNAMENT: Start at Quarter-Finals
+        // Max capacity per side is 4. Calculate Byes.
+        slotsToFill = slotsToFill.concat(distributeSide(leftPlayers, 'L', 4));
+        slotsToFill = slotsToFill.concat(distributeSide(rightPlayers, 'R', 4));
+    } 
+    else {
+        // LARGE TOURNAMENT: Start at Round of 16
+        // Max capacity per side is 8. Calculate Byes.
+        slotsToFill = slotsToFill.concat(distributeSide(leftPlayers, 'L', 8));
+        slotsToFill = slotsToFill.concat(distributeSide(rightPlayers, 'R', 8));
+    }
+
+    // 4. Render to DOM
+    slotsToFill.forEach(item => {
+        const box = document.getElementById(item.id);
+        if (box) {
+            box.classList.add('occupied');
+            box.querySelector('.player-name').innerText = item.name;
+        }
+    });
+}
+
+// --- HELPER: DISTRIBUTE PLAYERS WITH BYES ---
+function distributeSide(players, side, capacity) {
+    const k = players.length;
+    const byes = capacity - k; // How many "free passes" available
+    let mapped = [];
+    let pIndex = 0;
+
+    // We iterate through the "Matches" of the base round.
+    // If Capacity is 8 (R16), there are 4 Matches (QF1..QF4).
+    // If Capacity is 4 (QF), there are 2 Matches (SF1..SF2).
+    const matchesCount = capacity / 2;
+
+    for (let i = 1; i <= matchesCount; i++) {
+        // Logic: Fill from Top to Bottom.
+        // If we still have Byes left, this match slot becomes a Bye.
+        // A Bye means 1 player skips the outer round and goes to the inner round.
+        
+        if (pIndex < byes) {
+            // --- GIVE BYE (Place in Inner Round) ---
+            let nextRoundId;
+            if (capacity === 8) nextRoundId = `${side}QF-${i}`; // Skip R16 -> Go QF
+            else nextRoundId = `${side}SF-${i}`;               // Skip QF -> Go SF
+
+            // Take 1 player
+            if (players[pIndex]) mapped.push({ id: nextRoundId, name: players[pIndex].name });
+            pIndex++;
+        } else {
+            // --- REAL MATCH (Place in Current Round) ---
+            let prefix = (capacity === 8) ? `${side}16` : `${side}QF`;
+            let s1 = `${prefix}-${(i*2)-1}`; // e.g., L16-1
+            let s2 = `${prefix}-${(i*2)}`;   // e.g., L16-2
+
+            // Take 2 players
+            if (players[pIndex]) mapped.push({ id: s1, name: players[pIndex].name });
+            pIndex++;
+            if (players[pIndex]) mapped.push({ id: s2, name: players[pIndex].name });
+            pIndex++;
+        }
+    }
+    return mapped;
+}
 function startVisualTournament(playerList) {
     // 1. Hide Overlay
     screens.overlay.classList.add('hidden');
