@@ -1418,8 +1418,15 @@ function updateScoreboardWidget() {
     if (p2R) p2R.innerText = gameState.aiRounds;
     if (p1S) p1S.innerText = gameState.p1Slaps;
     if (p2S) p2S.innerText = gameState.aiSlaps;
-}
 
+    // --- CHECK IF YOU ARE MISSING THIS PART BELOW ---
+    const oppLabel = document.getElementById('opponent-display-name');
+    if (oppLabel) {
+        // This takes the opponent's name and puts it in the top left label
+        const name = gameState.opponentName || "OPPONENT";
+        oppLabel.innerText = name.toUpperCase();
+    }
+}
 function showRoundMessage(title, sub) {
     const modal = document.getElementById('game-message');
     if (!modal) return;
