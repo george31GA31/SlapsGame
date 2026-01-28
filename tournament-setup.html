@@ -176,15 +176,15 @@
             </div>
             
             <div style="width: 100%; display: flex; flex-direction: column; align-items: center;">
-                <input type="text" class="modern-input" placeholder="ENTER NICKNAME">
-                <button class="btn-blue">Host Tournament</button>
+                <input type="text" id="friend-nick" class="modern-input" placeholder="ENTER NICKNAME">
+                <button class="btn-blue" onclick="goFriendHost()">Host Tournament</button>
             </div>
 
             <div class="divider">OR</div>
 
             <div style="width: 100%; display: flex; flex-direction: column; align-items: center;">
-                <input type="text" class="modern-input" placeholder="ENTER ISF-CODE">
-                <button class="btn-outline"><i class="fa-solid fa-plug"></i> Join Tournament</button>
+                <input type="text" id="friend-code" class="modern-input" placeholder="ENTER ISF-CODE">
+                <button class="btn-outline" onclick="goFriendJoin()"><i class="fa-solid fa-plug"></i> Join Tournament</button>
             </div>
         </div>
 
@@ -193,23 +193,15 @@
             <div class="t-card">
                 <i class="fa-solid fa-globe icon-large"></i>
                 <h2>Connect to Online Tournament</h2>
-                <input type="text" class="modern-input" placeholder="ENTER NICKNAME">
-                <button class="btn-blue">Join Tournament</button>
+                <input type="text" id="online-nick" class="modern-input" placeholder="ENTER NICKNAME">
+                <button class="btn-blue" onclick="goOnline()">Join Tournament</button>
             </div>
 
             <div class="t-card">
-    <i class="fa-solid fa-robot icon-large"></i>
-    <h2>AI Bot Tournament</h2>
-    <button class="btn-blue" onclick="startBotTournament()">Play Tournament</button>
-</div>
-
-<script>
-    function startBotTournament() {
-        // Reset progress to Round 0 (Round of 16)
-        localStorage.setItem('isf_tourney_round', 0);
-        window.location.href = 'tournament-match.html';
-    }
-</script>
+                <i class="fa-solid fa-robot icon-large"></i>
+                <h2>AI Bot Tournament</h2>
+                <button class="btn-blue" onclick="startBotTournament()">Play Tournament</button>
+            </div>
 
         </div>
     </div>
@@ -217,6 +209,56 @@
     <div class="bottom-nav">
         <button class="btn-text" onclick="window.location.href='index.html'">Back Home</button>
     </div>
+
+    <script>
+        function saveNick(inputId) {
+            const val = document.getElementById(inputId).value.trim();
+            if(val) {
+                localStorage.setItem('isf_my_name', val);
+                return true;
+            }
+            return false;
+        }
+
+        function goFriendHost() {
+            if(!saveNick('friend-nick')) {
+                alert("Please enter a nickname to host!");
+                return;
+            }
+            // Flag to tell the next page we want to HOST immediately
+            localStorage.setItem('isf_friend_action', 'host');
+            window.location.href = 'friend-tournament.html';
+        }
+
+        function goFriendJoin() {
+            // It's okay if nickname is empty here, the lobby page will ask, 
+            // but if they entered it, we save it.
+            saveNick('friend-nick');
+            
+            const code = document.getElementById('friend-code').value.trim();
+            if(code) {
+                localStorage.setItem('isf_friend_code', code);
+                localStorage.setItem('isf_friend_action', 'join');
+                window.location.href = 'friend-tournament.html';
+            } else {
+                alert("Please enter a code to join!");
+            }
+        }
+
+        function goOnline() {
+            if(!saveNick('online-nick')) {
+                alert("Please enter a nickname!");
+                return;
+            }
+            window.location.href = 'online-tournament.html';
+        }
+
+        function startBotTournament() {
+            // Reset progress to Round 0 (Round of 16)
+            localStorage.setItem('isf_tourney_round', 0);
+            window.location.href = 'tournament-match.html';
+        }
+    </script>
 
 </body>
 </html>
