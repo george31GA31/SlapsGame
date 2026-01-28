@@ -123,10 +123,38 @@
         .hidden { display: none !important; }
 
         /* NEXT MATCH FOOTER */
+        /* NEXT MATCH FOOTER - FIXED VISIBILITY */
         .footer-controls {
-            height: 80px; background: rgba(0,0,0,0.8); border-top: 1px solid #333;
-            display: flex; justify-content: center; align-items: center;
-            position: absolute; bottom: 0; width: 100%; z-index: 150;
+            height: 100px; 
+            background: transparent; /* Remove black background */
+            border: none; /* Remove border */
+            display: flex; 
+            justify-content: center; 
+            align-items: flex-end; /* Push button to bottom */
+            padding-bottom: 20px;
+            position: absolute; 
+            bottom: 0; 
+            width: 100%; 
+            z-index: 150;
+            pointer-events: none; /* Allow clicking THROUGH the empty space */
+        }
+        
+        .footer-controls button {
+            pointer-events: auto; /* Re-enable clicking on the button itself */
+            box-shadow: 0 0 20px rgba(0,0,0,0.8); /* Add shadow to button so it pops */
+        }
+
+        /* Add padding to bracket so we can scroll past the button */
+        .bracket-container {
+            flex: 1; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            padding: 20px;
+            padding-bottom: 120px; /* EXTRA SPACE AT BOTTOM */
+            overflow-x: auto; 
+            filter: blur(5px);
+            transition: filter 0.5s ease;
         }
     </style>
 </head>
