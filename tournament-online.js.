@@ -121,7 +121,6 @@ function initTournamentMatch() {
     gameState.peer.on('error', (err) => {
         console.error("Peer Error:", err);
         if (err.type === 'unavailable-id') {
-            // This usually means the match is already running or didn't close properly.
             console.log("ID taken, attempting to connect anyway (might be reconnecting)...");
         }
     });
@@ -140,8 +139,7 @@ function bindConnection(conn) {
 
     conn.on('close', () => {
         if (!gameState.matchEnded) {
-            // Don't auto-quit, opponent might reconnect? 
-            // For tournament, usually strictly end it.
+            // If opponent drops during tournament, you win by default
             // showEndGame("OPPONENT DISCONNECTED", true);
         }
     });
@@ -260,7 +258,6 @@ function returnToTournament(didWin) {
     localStorage.removeItem('isf_tourney_opponent');
 
     // 3. Signal Parent Window (The Bracket)
-    // This tells friend-tournament.js to close the iframe and update the bracket
     window.parent.postMessage({ 
         type: 'GAME_OVER', 
         result: didWin ? 'win' : 'loss' 
@@ -305,6 +302,11 @@ async function startRoundHostAuthoritative() {
     gameState.aiDeck = aAll;
 
     // Reset Visuals
+    const bp = document.getElementById('borrowed-player');
+    const ba = document.getElementById('borrowed-ai');
+    if (bp) bp.classList.add('hidden');
+    if (ba) ba.classList.add('hidden');
+
     await preloadCardImages([...pHand, ...aHand]);
     
     dealSmartHand(pHand, 'player');
@@ -374,12 +376,14 @@ function applyRoundOver(data) {
     if (gameState.isHost) {
         gameState.playerTotal = data.pTotal;
         gameState.aiTotal = data.aTotal;
+        gameState.p1Rounds = data.p1Rounds;
+        gameState.aiRounds = data.aiRounds;
     } else {
         gameState.playerTotal = data.aTotal; 
         gameState.aiTotal = data.pTotal;    
+        gameState.p1Rounds = data.aiRounds;
+        gameState.aiRounds = data.p1Rounds;
     }
-    gameState.p1Rounds = data.p1Rounds;  
-    gameState.aiRounds = data.aiRounds;  
 
     updateScoreboard();
     updateScoreboardWidget(); 
@@ -387,6 +391,8 @@ function applyRoundOver(data) {
     const iAmHost = gameState.isHost;
     const hostWon = (data.winner === 'player');
     const iWon = (iAmHost && hostWon) || (!iAmHost && !hostWon);
+    
+    const oppName = (gameState.opponentName || "OPPONENT").toUpperCase();
     
     showRoundMessage(iWon ? "ROUND WON!" : "ROUND LOST!", 
         iWon ? `Next round: ${gameState.playerTotal} cards.` : `Next round: ${gameState.aiTotal} cards.`);
@@ -424,7 +430,7 @@ function applyMatchOver(data) {
 }
 
 // ==========================================
-// 5. HELPER FUNCTIONS (Copy-Pasted & Cleaned)
+// 5. HELPER FUNCTIONS 
 // ==========================================
 
 function updateScoreboardWidget() {
@@ -479,6 +485,8 @@ function importState(s) {
     gameState.aiDeck = (s.aiDeck||[]).map(unpackCard);
     gameState.playerHand = (s.playerHand||[]).map(unpackCard);
     gameState.aiHand = (s.aiHand||[]).map(unpackCard);
+    gameState.centerPileLeft = (s.centerPileLeft || []).map(unpackCard);
+    gameState.centerPileRight = (s.centerPileRight || []).map(unpackCard);
 }
 
 function updateScoreboard() {
@@ -486,7 +494,7 @@ function updateScoreboard() {
     document.getElementById('score-ai').innerText = gameState.aiTotal;
 }
 
-// --- CARD RENDERING & DRAG (Must be present) ---
+// --- CARD RENDERING & DRAG ---
 function dealSmartHand(cards, owner) {
     const container = document.getElementById(`${owner}-foundation-area`);
     if (!container) return;
@@ -655,8 +663,7 @@ async function preloadCardImages(cards) {
     await Promise.race([ Promise.all(tasks), new Promise(resolve => setTimeout(resolve, 2500)) ]);
 }
 
-// --- MISSING ADJUDICATION & SLAP LOGIC FILLERS ---
-// (Paste these from your original if they were missing, but simplified versions here for safety)
+// --- CORE GAME ENGINE (Adjudication & Slaps) ---
 
 function adjudicateMove(m, moverOverride) {
     const mover = moverOverride || 'ai';
@@ -801,6 +808,8 @@ function adjudicateSlap(who) {
         sendNet(update); applySlapUpdate(update);
     } else {
         // Penalty logic here (simplified)
+        applyPenaltyUpdate({ target: who, yellows:1, reds:0, isRed:false, pTotal: gameState.playerTotal, aTotal: gameState.aiTotal });
+        sendNet({ type: 'PENALTY_UPDATE', target: who, yellows:1, reds:0, isRed:false, pTotal: gameState.playerTotal, aTotal: gameState.aiTotal });
     }
 }
 
@@ -829,6 +838,12 @@ function applySlapUpdate(data) {
         if (gameState.playerTotal <= 0) showEndGame("YOU WIN!", true);
         if (gameState.aiTotal <= 0) showEndGame("OPPONENT WINS!", false);
     }, 2000);
+}
+
+function applyPenaltyUpdate(data) {
+    if (gameState.isHost) { gameState.playerTotal = data.pTotal; gameState.aiTotal = data.aTotal; }
+    else { gameState.playerTotal = data.aTotal; gameState.aiTotal = data.pTotal; }
+    updateScoreboard();
 }
 
 // --- COUNTDOWN HELPERS ---
