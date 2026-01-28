@@ -3,211 +3,388 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tournament Bracket</title>
+    <title>ISF - Tournament Lobby</title>
     <link rel="stylesheet" href="style.css">
-    <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700;900&display=swap" rel="stylesheet">
-
+    <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+    
     <style>
-        /* BASE STYLES */
+        /* --- DARK THEME BASE --- */
         body {
-            background-color: #050505;
-            background-image: radial-gradient(circle at 50% 50%, #111 0%, #000 100%);
+            background-color: #1a1a1a;
+            background-image: radial-gradient(circle at center, #2a2a2a 0%, #000000 100%);
             color: white;
             font-family: 'Roboto', sans-serif;
-            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
             margin: 0;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
+            overflow: hidden; 
         }
 
-        /* HEADER */
-        .nav-bar {
-            height: 60px; display: flex; justify-content: space-between; align-items: center;
-            padding: 0 30px; background: #111; border-bottom: 1px solid #333; z-index: 10;
-        }
-        .nav-title { font-weight: 900; font-style: italic; letter-spacing: 1px; }
-
-        /* BRACKET CONTAINER */
-        .bracket-container {
-            flex: 1;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            padding: 20px;
-            overflow-x: auto; /* Allows scrolling if bracket is huge */
-            position: relative;
-        }
-
-        .bracket-wrapper {
-            display: flex;
-            justify-content: center;
+        /* --- LAYOUT GRID --- */
+        .tournament-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr; /* Two equal columns */
             gap: 20px;
-            width: 100%;
-            max-width: 1600px;
-            height: 80%;
+            width: 90%;
+            max-width: 900px;
+            height: auto;
+            transition: all 0.5s ease;
         }
 
-        /* COLUMNS */
-        .column {
-            flex: 1;
+        .right-column {
             display: flex;
             flex-direction: column;
-            justify-content: space-around;
-            position: relative;
+            gap: 20px;
+            transition: opacity 0.5s ease;
         }
 
-        .col-title {
-            position: absolute; top: -40px; width: 100%; text-align: center;
-            font-weight: 900; color: #00ccff; text-transform: uppercase; font-size: 0.9rem;
-            text-shadow: 0 0 10px rgba(0, 204, 255, 0.5);
-        }
-
-        /* MATCH BOXES */
-        .match-box {
-            background: #151515;
+        /* --- CARD STYLE --- */
+        .t-card {
+            background: rgba(0, 0, 0, 0.6);
             border: 1px solid #333;
-            border-radius: 8px;
-            height: 50px;
+            border-radius: 15px;
+            padding: 30px;
+            text-align: center;
             display: flex;
-            align-items: center;
+            flex-direction: column;
             justify-content: center;
-            font-weight: bold;
-            color: #555;
-            position: relative;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
-            transition: 0.3s;
+            align-items: center;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            transition: transform 0.2s, width 0.5s, height 0.5s;
         }
 
-        /* ACTIVE / OCCUPIED STYLES */
-        .match-box.occupied {
-            background: linear-gradient(90deg, #222, #333);
-            border-color: #666;
-            color: white;
-            text-shadow: 0 1px 2px black;
+        .t-card:hover { border-color: #555; transform: translateY(-2px); }
+
+        .t-card.large {
+            height: 100%; 
+            justify-content: space-around;
         }
+
+        /* --- TYPOGRAPHY --- */
+        h2 {
+            font-weight: 900; font-size: 1.5rem; margin: 15px 0 20px 0;
+            text-transform: uppercase; font-style: italic; letter-spacing: 1px;
+        }
+        .icon-large { font-size: 3rem; color: #00ccff; margin-bottom: 10px; }
+
+        /* --- INPUTS --- */
+        .modern-input {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid #444; border-radius: 8px; padding: 12px;
+            font-size: 1rem; color: white; text-align: center; width: 80%;
+            outline: none; font-weight: bold; text-transform: uppercase;
+            margin-bottom: 15px; transition: 0.3s;
+        }
+        .modern-input:focus { border-color: #00ccff; background: rgba(0, 0, 0, 0.6); }
+
+        /* --- BUTTONS --- */
+        .btn-blue {
+            background: linear-gradient(135deg, #00c6ff, #0072ff);
+            border: none; color: white; padding: 15px 0; font-size: 1.1rem;
+            font-weight: 900; border-radius: 50px; cursor: pointer;
+            text-transform: uppercase; width: 90%;
+            box-shadow: 0 0 15px rgba(0, 114, 255, 0.3); transition: 0.2s;
+        }
+        .btn-blue:hover { transform: scale(1.02); box-shadow: 0 0 25px rgba(0, 114, 255, 0.6); }
+        .btn-blue:disabled { background: #333; color: #777; cursor: not-allowed; box-shadow: none; transform: none; }
+
+        .btn-outline {
+            background: transparent; border: 2px solid #00ccff; color: white;
+            padding: 12px 0; font-size: 1rem; font-weight: 900;
+            border-radius: 50px; cursor: pointer; text-transform: uppercase;
+            width: 90%; transition: 0.2s;
+        }
+        .btn-outline:hover { background: rgba(0, 204, 255, 0.1); color: #00ccff; }
+
+        /* --- BACK BUTTON --- */
+        .bottom-nav { margin-top: 30px; }
+        .btn-text {
+            background: none; border: none; color: #888; font-size: 1rem;
+            font-weight: 900; cursor: pointer; text-transform: uppercase; letter-spacing: 1px;
+        }
+        .btn-text:hover { color: white; }
+
+        /* --- LOBBY SPECIFIC STYLES --- */
+        .hidden { display: none !important; }
+        .lobby-code { font-size: 2.5rem; color: #00ff00; font-weight: 900; letter-spacing: 3px; margin: 10px 0; text-shadow: 0 0 10px #00ff00; }
+        .player-list { width: 100%; text-align: left; margin: 20px 0; max-height: 200px; overflow-y: auto; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 10px; }
+        .player-item { padding: 8px; border-bottom: 1px solid #333; font-weight: bold; color: #ccc; display: flex; align-items: center; }
+        .player-item i { color: #00ccff; margin-right: 10px; }
         
-        .match-box.my-match { border: 2px solid #00ff00; box-shadow: 0 0 15px rgba(0, 255, 0, 0.3); }
-        .match-box.opponent-match { border: 2px solid #ff0000; box-shadow: 0 0 15px rgba(255, 0, 0, 0.3); }
-        .match-box.winner { background: linear-gradient(90deg, #00c6ff, #0072ff); border-color: #00ccff; }
-
-        /* CONNECTORS (Lines between boxes) */
-        .connector-right::after {
-            content: ''; position: absolute; right: -22px; width: 22px; height: 2px; background: #333; top: 50%;
+        /* EXPANDED LOBBY VIEW */
+        .expanded-lobby {
+            grid-template-columns: 1fr; /* Single column */
+            max-width: 600px;
         }
-        .connector-left::after {
-            content: ''; position: absolute; left: -22px; width: 22px; height: 2px; background: #333; top: 50%;
-        }
-
-        /* FOOTER ACTION BAR */
-        .action-bar {
-            height: 100px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            background: linear-gradient(to top, #000 20%, transparent);
-            position: absolute;
-            bottom: 0; width: 100%;
-            pointer-events: none; /* Let clicks pass through empty areas */
-        }
-
-        .btn-play {
-            pointer-events: auto;
-            padding: 15px 50px;
-            font-size: 1.2rem;
-            font-weight: 900;
-            text-transform: uppercase;
-            border-radius: 50px;
-            border: none;
-            background: #333;
-            color: #777;
-            box-shadow: 0 0 30px rgba(0,0,0,0.8);
-            transition: 0.3s;
-            cursor: not-allowed;
-        }
-
-        .btn-play.ready {
-            background: linear-gradient(90deg, #00c6ff, #0072ff);
-            color: white;
-            cursor: pointer;
-            box-shadow: 0 0 25px rgba(0, 114, 255, 0.6);
-        }
-        .btn-play.ready:hover { transform: scale(1.05); }
-
-        /* IFRAME OVERLAY FOR GAME */
-        #game-overlay {
-            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-            background: black; z-index: 9999; display: none;
-        }
-        iframe { width: 100%; height: 100%; border: none; }
     </style>
 </head>
 <body>
 
-    <div class="nav-bar">
-        <div class="nav-title">FRIEND TOURNAMENT</div>
-        <button onclick="window.location.href='index.html'" style="background:none; border:1px solid #444; color:#888; padding:5px 15px; border-radius:20px; cursor:pointer;">EXIT</button>
-    </div>
-
-    <div class="bracket-container">
-        <div class="bracket-wrapper">
+    <div class="tournament-grid" id="main-grid">
+        
+        <div class="t-card large" id="friends-card">
             
-            <div class="column">
-                <div class="col-title">Round of 16</div>
-                <div id="L16-1" class="match-box connector-right"></div>
-                <div id="L16-2" class="match-box connector-right"></div>
-                <div id="L16-3" class="match-box connector-right"></div>
-                <div id="L16-4" class="match-box connector-right"></div>
-            </div>
-            <div class="column">
-                <div class="col-title">Quarter Final</div>
-                <div id="LQF-1" class="match-box connector-right"></div>
-                <div id="LQF-2" class="match-box connector-right"></div>
-            </div>
-            <div class="column">
-                <div class="col-title">Semi Final</div>
-                <div id="LSF-1" class="match-box connector-right"></div>
-            </div>
-
-            <div class="column" style="flex: 0.8; justify-content: center; gap: 20px;">
-                <div class="col-title" style="color:white; text-shadow:none;">FINAL</div>
-                <div id="FINAL-L" class="match-box" style="height:60px; font-size:1.2rem;"></div>
-                <div style="text-align:center; font-weight:900; font-style:italic; font-size:1.5rem;">VS</div>
-                <div id="FINAL-R" class="match-box" style="height:60px; font-size:1.2rem;"></div>
+            <div id="friends-menu" style="width:100%; display:flex; flex-direction:column; align-items:center;">
+                <i class="fa-solid fa-users icon-large"></i>
+                <h2>Play Friends</h2>
+                <input type="text" id="friend-nick" class="modern-input" placeholder="ENTER NICKNAME" maxlength="12">
+                
+                <div style="width: 100%; display: flex; flex-direction: column; align-items: center; gap: 15px;">
+                    <button class="btn-blue" onclick="initHost()">HOST TOURNAMENT</button>
+                    
+                    <div style="color:#666; font-weight:bold; font-size:0.8rem;">- OR -</div>
+                    
+                    <input type="text" id="join-code-input" class="modern-input hidden" placeholder="ENTER CODE (ISF-XXXX)" style="margin-bottom:5px;">
+                    <button id="btn-join-main" class="btn-outline" onclick="showJoinField()">
+                        <i class="fa-solid fa-plug"></i> JOIN TOURNAMENT
+                    </button>
+                    <button id="btn-connect" class="btn-blue hidden" onclick="initJoin()">CONNECT</button>
+                </div>
             </div>
 
-            <div class="column">
-                <div class="col-title">Semi Final</div>
-                <div id="RSF-1" class="match-box connector-left"></div>
+            <div id="friends-lobby" class="hidden" style="width:100%; display:flex; flex-direction:column; align-items:center;">
+                <h2 style="margin-bottom:5px;">TOURNAMENT LOBBY</h2>
+                <div style="color:#888; font-size:0.9rem;">SHARE CODE WITH FRIENDS</div>
+                
+                <div id="lobby-code-display" class="lobby-code">---</div>
+                
+                <div class="player-list" id="player-list-container">
+                    </div>
+
+                <div id="host-controls" class="hidden" style="width:100%;">
+                    <button id="btn-start" class="btn-blue" onclick="startTournament()" disabled>
+                        WAITING FOR PLAYERS (1/4)
+                    </button>
+                </div>
+
+                <div id="guest-controls" class="hidden" style="width:100%; text-align:center;">
+                    <div style="color:#00ff00; font-weight:bold; margin-bottom:10px;">CONNECTED!</div>
+                    <div style="color:#888; font-style:italic;">Waiting for host to start bracket...</div>
+                </div>
+
+                <button class="btn-text" style="margin-top:20px; font-size:0.8rem;" onclick="location.reload()">LEAVE LOBBY</button>
             </div>
-            <div class="column">
-                <div class="col-title">Quarter Final</div>
-                <div id="RQF-1" class="match-box connector-left"></div>
-                <div id="RQF-2" class="match-box connector-left"></div>
+
+        </div>
+
+        <div class="right-column" id="right-col">
+            
+            <div class="t-card">
+                <i class="fa-solid fa-globe icon-large" style="font-size: 2.5rem;"></i>
+                <h2>ONLINE</h2>
+                <input type="text" id="online-nick" class="modern-input" placeholder="ENTER NICKNAME">
+                <button class="btn-blue" onclick="goOnline()">Find Match</button>
             </div>
-            <div class="column">
-                <div class="col-title">Round of 16</div>
-                <div id="R16-1" class="match-box connector-left"></div>
-                <div id="R16-2" class="match-box connector-left"></div>
-                <div id="R16-3" class="match-box connector-left"></div>
-                <div id="R16-4" class="match-box connector-left"></div>
+
+            <div class="t-card">
+                <i class="fa-solid fa-robot icon-large" style="font-size: 2.5rem;"></i>
+                <h2>VS BOTS</h2>
+                <button class="btn-blue" onclick="startBotTournament()">Play Solo</button>
             </div>
 
         </div>
     </div>
 
-    <div class="action-bar">
-        <button id="play-btn" class="btn-play" onclick="openGamePopup()" disabled>
-            WAITING FOR OPPONENT...
-        </button>
+    <div class="bottom-nav">
+        <button class="btn-text" onclick="window.location.href='index.html'">Back Home</button>
     </div>
 
-    <div id="game-overlay">
-        <iframe id="game-frame" src=""></iframe>
-    </div>
+    <script>
+        // --- STATE VARIABLES ---
+        let myName = "";
+        let peer = null;
+        let connections = []; // For Host
+        let players = [];     // [{name, id, isHost}]
+        let isHost = false;
+        let hostConn = null;  // For Guest
 
-    <script src="friend-tournament.js"></script>
+        // --- UI FUNCTIONS ---
+        
+        function showJoinField() {
+            document.getElementById('join-code-input').classList.remove('hidden');
+            document.getElementById('btn-join-main').classList.add('hidden');
+            document.getElementById('btn-connect').classList.remove('hidden');
+        }
+
+        function enterLobbyMode() {
+            // 1. Hide Right Column
+            document.getElementById('right-col').style.opacity = '0';
+            setTimeout(() => {
+                document.getElementById('right-col').classList.add('hidden');
+                
+                // 2. Expand Left Card to Center
+                document.getElementById('main-grid').classList.add('expanded-lobby');
+                
+                // 3. Switch Content inside card
+                document.getElementById('friends-menu').classList.add('hidden');
+                document.getElementById('friends-lobby').classList.remove('hidden');
+            }, 300);
+        }
+
+        // --- HOST LOGIC ---
+        
+        function initHost() {
+            myName = document.getElementById('friend-nick').value.trim();
+            if (!myName) return alert("Please enter a nickname to host!");
+
+            // Generate Code
+            const code = "ISF-" + Math.floor(1000 + Math.random() * 9000);
+            
+            isHost = true;
+            players = [{ name: myName, id: code, isHost: true }];
+            
+            // Start Peer
+            peer = new Peer(code);
+            
+            peer.on('open', (id) => {
+                document.getElementById('lobby-code-display').innerText = id;
+                document.getElementById('host-controls').classList.remove('hidden');
+                enterLobbyMode();
+                updatePlayerList();
+            });
+
+            peer.on('connection', (conn) => {
+                conn.on('data', (data) => {
+                    if (data.type === 'JOIN') {
+                        const newPlayer = { name: data.name, id: data.id, isHost: false };
+                        players.push(newPlayer);
+                        connections.push(conn);
+                        
+                        // Broadcast new list to everyone
+                        broadcastLobby();
+                    }
+                });
+            });
+
+            peer.on('error', (err) => {
+                alert("Error: Code taken or network issue. Try again.");
+                location.reload();
+            });
+        }
+
+        // --- GUEST LOGIC ---
+
+        function initJoin() {
+            myName = document.getElementById('friend-nick').value.trim();
+            if (!myName) return alert("Please enter a nickname to join!");
+
+            const code = document.getElementById('join-code-input').value.trim().toUpperCase();
+            if (!code) return alert("Please enter the Host Code!");
+
+            isHost = false;
+            peer = new Peer(); // Random ID for guest
+
+            peer.on('open', (id) => {
+                const conn = peer.connect(code);
+                hostConn = conn;
+
+                conn.on('open', () => {
+                    // Request to Join
+                    conn.send({ type: 'JOIN', name: myName, id: id });
+                });
+
+                conn.on('data', (data) => {
+                    if (data.type === 'LOBBY_UPDATE') {
+                        players = data.players;
+                        document.getElementById('lobby-code-display').innerText = code; // Show room code
+                        document.getElementById('guest-controls').classList.remove('hidden');
+                        enterLobbyMode();
+                        updatePlayerList();
+                    }
+                    if (data.type === 'START_GAME') {
+                        saveAndGo(data.players);
+                    }
+                });
+
+                conn.on('close', () => {
+                    alert("Host disconnected.");
+                    location.reload();
+                });
+                
+                // Timeout check if code is wrong
+                setTimeout(() => {
+                    if(players.length === 0) {
+                        alert("Could not connect. Check the code.");
+                        location.reload();
+                    }
+                }, 3000);
+            });
+        }
+
+        // --- SHARED LOGIC ---
+
+        function updatePlayerList() {
+            const list = document.getElementById('player-list-container');
+            list.innerHTML = '';
+            
+            players.forEach(p => {
+                list.innerHTML += `
+                    <div class="player-item">
+                        <i class="fa-solid fa-user"></i> ${p.name} 
+                        ${p.isHost ? '<span style="color:#00ccff; margin-left:10px; font-size:0.8rem;">(HOST)</span>' : ''}
+                    </div>`;
+            });
+
+            // Update Start Button Text
+            if (isHost) {
+                const btn = document.getElementById('btn-start');
+                // REQUIRE 4 PLAYERS
+                if (players.length >= 4) {
+                    btn.disabled = false;
+                    btn.innerText = "START TOURNAMENT";
+                    btn.style.background = "linear-gradient(90deg, #00ff00, #00aa00)";
+                } else {
+                    btn.disabled = true;
+                    btn.style.background = "#333";
+                    btn.innerText = `WAITING FOR PLAYERS (${players.length}/4)`;
+                }
+            }
+        }
+
+        function broadcastLobby() {
+            updatePlayerList();
+            connections.forEach(conn => conn.send({ type: 'LOBBY_UPDATE', players: players }));
+        }
+
+        function startTournament() {
+            if(!isHost) return;
+            // 1. Shuffle Players
+            const shuffled = players.sort(() => 0.5 - Math.random());
+            
+            // 2. Tell Guests to Start
+            connections.forEach(conn => conn.send({ type: 'START_GAME', players: shuffled }));
+            
+            // 3. Host Starts
+            saveAndGo(shuffled);
+        }
+
+        function saveAndGo(finalPlayerList) {
+            localStorage.setItem('isf_bracket_players', JSON.stringify(finalPlayerList));
+            localStorage.setItem('isf_my_name', myName);
+            localStorage.setItem('isf_is_host', isHost);
+            // Redirect to Part 2
+            window.location.href = 'friend-tournament.html';
+        }
+
+        // --- OTHER MODES ---
+        function goOnline() {
+            const nick = document.getElementById('online-nick').value.trim();
+            if(!nick) return alert("Enter nickname!");
+            localStorage.setItem('isf_my_name', nick);
+            window.location.href = 'online-tournament.html';
+        }
+
+        function startBotTournament() {
+            localStorage.setItem('isf_tourney_round', 0);
+            window.location.href = 'tournament-match.html';
+        }
+
+    </script>
 
 </body>
 </html>
