@@ -365,6 +365,10 @@ function checkMyMatch() {
 
 function goToNextMatch() {
     if (!iAmReadyToPlay) return;
+    
+    // Destroy lobby connection so we don't conflict with the match connection
     if (state.peer) state.peer.destroy();
-    window.location.href = 'multiplayer-game.html';
+    
+    // Redirect to the Match Setup screen
+    window.location.href = 'friend-match.html';
 }
