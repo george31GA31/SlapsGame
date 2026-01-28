@@ -148,7 +148,7 @@ function bindConnection(conn) {
         sendNet({ type: 'HANDSHAKE', name: gameState.myName });
     });
 
-    conn.on('data', (msg) => handleNet(msg));
+    conn.on('data', (msg) => (msg));
 
     conn.on('close', () => {
         showRoundMessage("DISCONNECTED", "The other player left the match.");
@@ -261,6 +261,15 @@ function handleNet(msg) {
 
     if (msg.type === 'PENALTY_UPDATE') {
         applyPenaltyUpdate(msg);
+        return;
+    }
+   if (msg.type === 'ROUND_OVER') {
+        applyRoundOver(msg);
+        return;
+    }
+
+    if (msg.type === 'MATCH_OVER') {
+        applyMatchOver(msg);
         return;
     }
     if (msg.type === 'OPPONENT_LEFT') {
@@ -1072,9 +1081,21 @@ function applyMoveAuthoritative(mover, cardObj, side, reqId) {
         }
     }
 
-    // End checks
-    if (gameState.playerTotal <= 0) showEndGame("YOU WIN THE MATCH!", true);
-    if (gameState.aiTotal <= 0) showEndGame("OPPONENT WINS THE MATCH!", false);
+   // --- CHECK FOR ROUND/MATCH END ---
+    
+    // 1. Check if the mover's hand is now empty (Round Win)
+    // Note: We already removed the card from the hand array earlier in this function
+    const moverHandRef = (mover === 'player') ? gameState.playerHand : gameState.aiHand;
+    
+    if (moverHandRef.length === 0) {
+        handleRoundOver(mover); // Trigger Round End Logic
+    } 
+    // 2. Safety Check: If total somehow hit 0 (e.g. via penalties)
+    else if (gameState.playerTotal <= 0) {
+        handleRoundOver('player');
+    } else if (gameState.aiTotal <= 0) {
+        handleRoundOver('ai');
+    }
 
     // 5. Send Payload
     return {
@@ -1431,7 +1452,114 @@ async function preloadCardImages(cards) {
         new Promise(resolve => setTimeout(resolve, 2500))
     ]);
 }
+/* ================================
+   ROUND & MATCH END LOGIC
+   ================================ */
 
+function handleRoundOver(winner) {
+    // Logic transferred from game.js:
+    // Winner keeps their current count. Loser takes the rest (52 - winner).
+    
+    if (winner === 'player') {
+        // Host Won
+        gameState.aiTotal = 52 - gameState.playerTotal;
+        gameState.p1Rounds++; 
+    } else {
+        // Guest Won
+        gameState.playerTotal = 52 - gameState.aiTotal;
+        gameState.aiRounds++; 
+    }
+
+    // Check for TRUE Match Win (If a player enters next round with 0 or 52)
+    if (gameState.playerTotal <= 0 || gameState.aiTotal >= 52) {
+        const payload = { type: 'MATCH_OVER', winner: 'player' };
+        sendNet(payload);
+        applyMatchOver(payload);
+    } else if (gameState.aiTotal <= 0 || gameState.playerTotal >= 52) {
+        const payload = { type: 'MATCH_OVER', winner: 'ai' };
+        sendNet(payload);
+        applyMatchOver(payload);
+    } else {
+        // Just a Round Win -> Continue Game
+        const payload = {
+            type: 'ROUND_OVER',
+            winner: winner,
+            pTotal: gameState.playerTotal,
+            aTotal: gameState.aiTotal,
+            p1Rounds: gameState.p1Rounds, 
+            aiRounds: gameState.aiRounds
+        };
+        sendNet(payload);
+        applyRoundOver(payload);
+    }
+}
+
+function applyRoundOver(data) {
+    gameState.gameActive = false;
+    
+    // 1. Sync Totals & Stats
+    if (gameState.isHost) {
+        gameState.playerTotal = data.pTotal;
+        gameState.aiTotal = data.aTotal;
+        gameState.p1Rounds = data.p1Rounds;
+        gameState.aiRounds = data.aiRounds;
+    } else {
+        // Guest Perspective Swap
+        gameState.playerTotal = data.aTotal; // My total is AI's total
+        gameState.aiTotal = data.pTotal;     // Opponent total is Player's total
+        gameState.p1Rounds = data.aiRounds;  // My rounds won
+        gameState.aiRounds = data.p1Rounds;  // Opponent rounds won
+    }
+
+    updateScoreboard();
+    updateScoreboardWidget(); 
+
+    // 2. Determine Message
+    const iAmHost = gameState.isHost;
+    const hostWon = (data.winner === 'player');
+    const iWon = (iAmHost && hostWon) || (!iAmHost && !hostWon);
+
+    const title = iWon ? "ROUND WON!" : "ROUND LOST!";
+    const sub = iWon 
+        ? `You start next round with ${gameState.playerTotal} cards.` 
+        : `Opponent starts next round with ${gameState.aiTotal} cards.`;
+
+    // 3. Show Modal
+    const modal = document.getElementById('game-message');
+    if (modal) {
+        modal.querySelector('h1').innerText = title;
+        modal.querySelector('h1').style.color = iWon ? '#66ff66' : '#ff7575';
+        modal.querySelector('p').innerText = sub;
+        
+        const btn = document.getElementById('msg-btn');
+        if (btn) {
+            btn.classList.remove('hidden');
+            if (gameState.isHost) {
+                btn.innerText = "START NEXT ROUND";
+                btn.onclick = () => {
+                    modal.classList.add('hidden');
+                    startRoundHostAuthoritative(); // Reshuffle and deal
+                };
+            } else {
+                btn.innerText = "WAITING FOR HOST...";
+                btn.onclick = null; // Guest waits
+            }
+        }
+        modal.classList.remove('hidden');
+    }
+}
+
+function applyMatchOver(data) {
+    gameState.gameActive = false;
+    
+    const iAmHost = gameState.isHost;
+    const hostWon = (data.winner === 'player');
+    const iWon = (iAmHost && hostWon) || (!iAmHost && !hostWon);
+
+    const title = iWon ? "YOU WON THE MATCH!" : "OPPONENT WINS THE MATCH!";
+    
+    showEndGame(title, iWon);
+}
 function quitMatch() {
     console.log("Quitting match...");
     try {
