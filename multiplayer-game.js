@@ -208,8 +208,13 @@ function handleNet(msg) {
         return;
     }
 
-    if (msg.type === 'REVEAL_RESULT') {
-        applyRevealFromHost(msg.result);
+    if (msg.type === 'REVEAL_PRELOAD') {
+        applyRevealPreload(msg.result);
+        return;
+    }
+
+    if (msg.type === 'REVEAL_SHOW') {
+        applyRevealShow();
         return;
     }
 
@@ -1012,6 +1017,17 @@ function requestMoveToHost(cardData, dropSide) {
         return;
     }
 
+    // --- FIX: CAPTURE TARGET ID (What are we trying to cover?) ---
+    let targetId = null;
+    if (dropSide === 'left') {
+        const p = gameState.centerPileLeft;
+        if (p.length > 0) targetId = p[p.length - 1].id;
+    } else {
+        const p = gameState.centerPileRight;
+        if (p.length > 0) targetId = p[p.length - 1].id;
+    }
+    // -------------------------------------------------------------
+
     // MIRROR LOGIC: Guest's Left is Host's Right.
     let targetSideForHost = dropSide;
     if (!gameState.isHost) {
@@ -1022,6 +1038,7 @@ function requestMoveToHost(cardData, dropSide) {
     const req = {
         reqId: `${gameState.myId}:${Date.now()}:${(++gameState.moveSeq)}`,
         dropSide: targetSideForHost, 
+        targetId: targetId, // Send the ID we are aiming at
         card: packCardWithMeta(cardData)
     };
 
@@ -1031,26 +1048,57 @@ function requestMoveToHost(cardData, dropSide) {
         sendNet({ type: 'MOVE_REQ', move: req });
     }
 }
-
 function adjudicateMove(m, moverOverride) {
     const mover = moverOverride || 'ai';
     const moverHand = (mover === 'player') ? gameState.playerHand : gameState.aiHand;
     const idx = moverHand.findIndex(c => c.id === m.card.id);
 
+    // 1. Basic Validity Check
     if (idx === -1) {
         if (mover === 'ai') sendNet({ type: 'MOVE_REJECT', reject: { reqId: m.reqId } });
         return;
     }
 
     const cardObj = moverHand[idx];
-    const isLeftLegal = checkPileLogic(cardObj, gameState.centerPileLeft);
-    const isRightLegal = checkPileLogic(cardObj, gameState.centerPileRight);
+    
+    // --- FIX: STRICT RACE CONDITION CHECK ---
+    // Determine which pile is being targeted
+    let pile = null;
+    let isLeftLegal = false;
+    let isRightLegal = false;
 
-    let side = null;
-    if (m.dropSide === 'left' && isLeftLegal) side = 'left';
-    if (m.dropSide === 'right' && isRightLegal) side = 'right';
+    // Check specific side requested
+    if (m.dropSide === 'left') {
+        pile = gameState.centerPileLeft;
+    } else if (m.dropSide === 'right') {
+        pile = gameState.centerPileRight;
+    }
 
-    if (!side) {
+    // 2. Verify Target Has Not Changed
+    // We compare the ID the player SENT (m.targetId) vs the ACTUAL top card (currentTopId)
+    const currentTop = (pile && pile.length > 0) ? pile[pile.length - 1] : null;
+    const currentTopId = currentTop ? currentTop.id : null;
+
+    if (m.targetId !== currentTopId) {
+        // RACE LOST! The pile changed before this move arrived.
+        // Reject immediately (Snap Back).
+        if (mover === 'ai') sendNet({ type: 'MOVE_REJECT', reject: { reqId: m.reqId } });
+        else {
+            // Host lost the race (rare, but possible if logic is async)
+            if (cardObj.element) {
+                cardObj.element.style.left = cardObj.originalLeft;
+                cardObj.element.style.top = cardObj.originalTop;
+            }
+        }
+        return;
+    }
+    // ----------------------------------------
+
+    // 3. Mathematical Logic Check (Standard)
+    // Now we know the target card is correct, does the Math work?
+    const isLegal = checkPileLogic(cardObj, pile);
+
+    if (!isLegal) {
         if (mover === 'ai') sendNet({ type: 'MOVE_REJECT', reject: { reqId: m.reqId } });
         else {
             if (cardObj.element) {
@@ -1061,7 +1109,7 @@ function adjudicateMove(m, moverOverride) {
         return;
     }
 
-    const applyPayload = applyMoveAuthoritative(mover, cardObj, side, m.reqId);
+    const applyPayload = applyMoveAuthoritative(mover, cardObj, m.dropSide, m.reqId);
     sendNet({ type: 'MOVE_APPLY', apply: applyPayload });
 }
 
@@ -1268,28 +1316,35 @@ function startCountdownFromHost() {
             overlay.style.animation = 'none';
             overlay.offsetHeight;
             overlay.style.animation = 'popIn 0.5s ease';
+
+            // --- NEW: PRE-LOAD AT COUNT 1 ---
+            if (count === 1 && gameState.isHost) {
+                // 1. Calculate the result early
+                const result = performRevealHostOnly();
+                
+                // 2. Send "Preload" command to Guest
+                sendNet({ type: 'REVEAL_PRELOAD', result });
+
+                // 3. Render Locally (Hidden)
+                if (result.right) renderCenterPile('right', unpackCard(result.right), true);
+                if (result.left) renderCenterPile('left', unpackCard(result.left), true);
+                
+                // Update UI data (scores/borrowed tags) immediately
+                updateScoreboard(); 
+            }
+            // --------------------------------
+
         } else {
             clearInterval(timer);
             overlay.classList.add('hidden');
             gameState.countdownRunning = false;
 
+            // --- NEW: SHOW TIME AT COUNT 0 ---
             if (gameState.isHost) {
-                const result = performRevealHostOnly();
-                sendNet({ type: 'REVEAL_RESULT', result });
-
-                // Host Renders Normally (No Mirror)
-                document.getElementById('player-draw-deck')?.classList.remove('deck-ready');
-                document.getElementById('ai-draw-deck')?.classList.remove('deck-ready');
-
-                if (result.right) renderCenterPile('right', unpackCard(result.right));
-                if (result.left) renderCenterPile('left', unpackCard(result.left));
-
-                gameState.gameActive = true;
-                gameState.playerReady = false;
-                gameState.aiReady = false;
-                updateScoreboard();
-                checkSlapCondition();
+                sendNet({ type: 'REVEAL_SHOW' });
+                applyRevealShow(); // Trigger local show
             }
+            // --------------------------------
         }
     }, 800);
 }
@@ -1396,7 +1451,7 @@ function applyRevealFromHost(payload) {
     checkSlapCondition();
 }
 
-function renderCenterPile(side, card) {
+function renderCenterPile(side, card, hidden = false) {
     const id = side === 'left' ? 'center-pile-left' : 'center-pile-right';
     const container = document.getElementById(id);
     if (!container) return;
@@ -1407,11 +1462,18 @@ function renderCenterPile(side, card) {
     img.style.left = '50%';
     img.style.top = '50%';
 
+    // --- NEW: Handle Pre-loading ---
+    if (hidden) {
+        img.style.opacity = '0';
+        img.classList.add('pending-reveal'); // Tag them so we can find them later
+        img.style.transition = 'opacity 0.1s ease-out'; // Fast pop-in
+    }
+    // -------------------------------
+
     const rot = Math.random() * 20 - 10;
     img.style.transform = `translate(-50%, -50%) rotate(${rot}deg)`;
     container.appendChild(img);
 }
-
 /* ================================
    UTILITIES
    ================================ */
@@ -1686,4 +1748,52 @@ function acceptRematch() {
 function declineRematch() {
     sendNet({ type: 'REMATCH_NO' });
     window.location.href = 'index.html';
+}
+function applyRevealPreload(payload) {
+    // 1. Update UI Tags (Borrowed)
+    const bpEl = document.getElementById('borrowed-player');
+    const baEl = document.getElementById('borrowed-ai');
+
+    // Swap logic (Guest Perspective)
+    if (baEl) payload.borrowedPlayer ? baEl.classList.remove('hidden') : baEl.classList.add('hidden');
+    if (bpEl) payload.borrowedAi ? bpEl.classList.remove('hidden') : bpEl.classList.add('hidden');
+
+    // 2. Update Scores (Guest Perspective)
+    gameState.playerTotal = payload.aiTotal;
+    gameState.aiTotal = payload.playerTotal;
+    updateScoreboard();
+
+    // 3. Update Deck Graphics
+    document.getElementById('player-draw-deck')?.classList.remove('deck-ready');
+    document.getElementById('ai-draw-deck')?.classList.remove('deck-ready');
+
+    // 4. RENDER HIDDEN CARDS
+    // These will sit in the DOM waiting for the 'SHOW' signal
+    if (payload.right) {
+        const c = unpackCard(payload.right);
+        gameState.centerPileLeft.push(c);
+        renderCenterPile('left', c, true); // true = hidden
+    }
+    if (payload.left) {
+        const c = unpackCard(payload.left);
+        gameState.centerPileRight.push(c);
+        renderCenterPile('right', c, true); // true = hidden
+    }
+}
+
+function applyRevealShow() {
+    // 1. Reveal the Pre-loaded cards
+    const hiddenCards = document.querySelectorAll('.pending-reveal');
+    hiddenCards.forEach(img => {
+        img.style.opacity = '1';
+        img.classList.remove('pending-reveal');
+    });
+
+    // 2. Activate Game
+    gameState.gameActive = true;
+    gameState.playerReady = false;
+    gameState.aiReady = false;
+    
+    // 3. Check Slaps (Now that cards are "Visible")
+    checkSlapCondition();
 }
