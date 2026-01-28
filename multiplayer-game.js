@@ -435,15 +435,12 @@ function applySlapUpdate(data) {
     gameState.gameActive = false;
     gameState.slapActive = false;
 
-    // 1. Determine Perspective
+    // 1. Determine Perspective for "Winner" Text
     let winnerText = "";
     let color = "";
     
-    // Compare data.winner to OUR role
     const iAmHost = gameState.isHost;
     const hostWon = (data.winner === 'player');
-    
-    // If (I am Host AND Host Won) OR (I am Guest AND Guest Won) -> I WON
     const iWon = (iAmHost && hostWon) || (!iAmHost && !hostWon);
 
     if (iWon) {
@@ -474,15 +471,22 @@ function applySlapUpdate(data) {
     if (gameState.opponentDragGhosts) gameState.opponentDragGhosts.clear();
 
     // 5. Update Stats & Scores
-    gameState.playerTotal = data.pTotal;
-    gameState.aiTotal = data.aTotal;
+    // --- FIX: PERSPECTIVE SWAP ---
+    if (gameState.isHost) {
+        gameState.playerTotal = data.pTotal;
+        gameState.aiTotal = data.aTotal;
+    } else {
+        // I am Guest: My total is the 'AI' total from the message
+        gameState.playerTotal = data.aTotal;
+        gameState.aiTotal = data.pTotal;
+    }
+    // -----------------------------
     updateScoreboard();
     
-    // --- FIX: UPDATE THE CORRECT SLAP COUNTER ---
     if (iWon) {
-        gameState.p1Slaps++; // I won (whether Host or Guest) -> Update My Counter
+        gameState.p1Slaps++; 
     } else {
-        gameState.aiSlaps++; // They won -> Update Opponent Counter
+        gameState.aiSlaps++;
     }
     updateScoreboardWidget();
 
@@ -500,19 +504,21 @@ function applySlapUpdate(data) {
     }, 2000);
 }
 function applyPenaltyUpdate(data) {
-    // Sync Scores (in case of red card penalty)
-    gameState.playerTotal = data.pTotal;
-    gameState.aiTotal = data.aTotal;
+    // 1. Sync Scores
+    // --- FIX: PERSPECTIVE SWAP ---
+    if (gameState.isHost) {
+        gameState.playerTotal = data.pTotal;
+        gameState.aiTotal = data.aTotal;
+    } else {
+        // I am Guest: My total is the 'AI' total from the message
+        gameState.playerTotal = data.aTotal;
+        gameState.aiTotal = data.pTotal;
+    }
+    // -----------------------------
     updateScoreboard();
 
-    // Determine whose badges to update locally
-    // data.target is 'player' (Host) or 'ai' (Guest)
-    
-    // If I am Guest:
-    // data.target 'player' -> Opponent's badges
-    // data.target 'ai' -> My badges
-    
-    let localTarget = data.target; // Default for Host
+    // 2. Determine whose badges to update locally
+    let localTarget = data.target; 
     
     if (!gameState.isHost) {
         // Perspective Swap for Guest
@@ -522,14 +528,13 @@ function applyPenaltyUpdate(data) {
     renderBadges(localTarget, data.yellows, data.reds);
 
     if (data.isRed) {
-        // Optional: Flash screen red or show message
-        console.log("RED CARD ISSUED TO " + localTarget);
+        const penaltiesDiv = document.getElementById(`${localTarget}-penalties`);
+        if (penaltiesDiv) {
+            penaltiesDiv.style.backgroundColor = 'rgba(255, 0, 0, 0.5)';
+            setTimeout(() => penaltiesDiv.style.backgroundColor = 'transparent', 300);
+        }
     }
 }
-
-/* ================================
-   HOST AUTHORITATIVE ROUND START
-   ================================ */
 
 async function startRoundHostAuthoritative() {
     gameState.matchEnded = false;
@@ -1086,8 +1091,7 @@ function applyMoveFromHost(a) {
     const localMover = (a.mover === 'player') ? 'ai' : 'player';
     const localSide = (a.side === 'left') ? 'right' : 'left';
 
-    // --- FIX: KILL THE ZOMBIE GHOST (FUZZY MATCH) ---
-    // Same logic as Host: Find ghost by Suit/Rank/Value and destroy it
+    // Ghost cleanup
     gameState.opponentDragGhosts.forEach((ghostEl, key) => {
         const parts = key.split(':'); 
         if (parts[0] === a.card.suit && parts[1] === a.card.rank && parseInt(parts[2]) === a.card.value) {
@@ -1095,10 +1099,15 @@ function applyMoveFromHost(a) {
             gameState.opponentDragGhosts.delete(key);
         }
     });
-    // ------------------------------------------------
 
-    gameState.playerTotal = a.playerTotal;
-    gameState.aiTotal = a.aiTotal;
+    // --- FIX: SWAP SCORES FOR GUEST ---
+    // Host sent 'playerTotal' (Host) and 'aiTotal' (Guest).
+    // I am Guest, so:
+    // My Total = Incoming 'aiTotal'
+    // Opponent Total = Incoming 'playerTotal'
+    gameState.playerTotal = a.aiTotal;
+    gameState.aiTotal = a.playerTotal;
+    // ----------------------------------
 
     const hand = (localMover === 'player') ? gameState.playerHand : gameState.aiHand;
     const idx = hand.findIndex(c => c.id === a.card.id);
@@ -1127,7 +1136,6 @@ function applyMoveFromHost(a) {
         }
     }
 }
-
 function rejectMoveFromHost(j) {
     const c = gameState.lastDraggedCard;
     const el = gameState.lastDraggedEl;
@@ -1273,25 +1281,25 @@ function performRevealHostOnly() {
 }
 
 function applyRevealFromHost(payload) {
-    // Guest Renders Mirrored
     const bpEl = document.getElementById('borrowed-player');
     const baEl = document.getElementById('borrowed-ai');
     if (bpEl) payload.borrowedPlayer ? bpEl.classList.remove('hidden') : bpEl.classList.add('hidden');
     if (baEl) payload.borrowedAi ? baEl.classList.remove('hidden') : baEl.classList.add('hidden');
 
-    gameState.playerTotal = payload.playerTotal;
-    gameState.aiTotal = payload.aiTotal;
+    // --- FIX: SWAP SCORES FOR GUEST ---
+    // The Host sent their values. We must swap them to match our perspective.
+    gameState.playerTotal = payload.aiTotal;
+    gameState.aiTotal = payload.playerTotal;
+    // ----------------------------------
 
     document.getElementById('player-draw-deck')?.classList.remove('deck-ready');
     document.getElementById('ai-draw-deck')?.classList.remove('deck-ready');
 
-    // Host Right -> Guest Left
     if (payload.right) {
         const c = unpackCard(payload.right);
         gameState.centerPileLeft.push(c);
         renderCenterPile('left', c); 
     }
-    // Host Left -> Guest Right
     if (payload.left) {
         const c = unpackCard(payload.left);
         gameState.centerPileRight.push(c);
