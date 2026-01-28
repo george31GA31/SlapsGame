@@ -1900,3 +1900,19 @@ function cleanupGhost(cardData) {
         realCard.element.style.opacity = '1'; 
     }
 }
+// --- TOURNAMENT RETURN LOGIC ---
+function returnToTournament(didWin) {
+    // 1. Clean up local storage for the next match
+    localStorage.removeItem('isf_role');
+    localStorage.removeItem('isf_code');
+    localStorage.removeItem('isf_tourney_opponent');
+
+    // 2. Send the result to the Parent Window (friend-tournament.html)
+    // We are inside an iframe, so we yell at 'window.parent'
+    const msg = {
+        type: 'GAME_OVER',
+        result: didWin ? 'win' : 'loss'
+    };
+    
+    window.parent.postMessage(msg, '*');
+}
