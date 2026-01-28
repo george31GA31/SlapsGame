@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tournament Match</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700;900&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+</head>
+<body class="game-body" ondragstart="return false;" ondrop="return false;">
+
+    <div id="scoreboard-widget" class="scoreboard-widget">
+        <div class="sb-header">
+            <span>PLAYER</span>
+            <span>ROUNDS</span>
+            <span>SLAPS</span>
+        </div>
+        <div class="sb-row">
+            <span id="sb-p1-name">You</span>
+            <span id="sb-p1-rounds">0</span>
+            <span id="sb-p1-slaps">0</span>
+        </div>
+        <div class="sb-row">
+            <span id="sb-p2-name">OPPONENT</span>
+            <span id="sb-p2-rounds">0</span>
+            <span id="sb-p2-slaps">0</span>
+        </div>
+    </div> 
+
+    <div class="ui-widget-left" style="top: 20%; left: 20px;">
+        <span id="opponent-display-name" class="stat-label">OPPONENT</span>
+        <div class="stat-value text-red" id="score-ai">26</div>
+        <div class="penalty-box" id="ai-penalties"></div>
+    </div>
+
+    <div class="ui-widget-right" style="top: 20%; right: 20px;">
+        <span class="stat-label">YOU</span>
+        <div class="stat-value text-green" id="score-player">26</div>
+        <div class="penalty-box" id="player-penalties"></div>
+    </div>
+
+    <div id="countdown-overlay" class="hidden">3</div>
+    
+    <div id="game-message" class="message-modal hidden">
+        <div class="msg-content">
+            <h1 id="msg-title">ROUND WON!</h1>
+            <p id="msg-subtitle">You have 12 cards for the next round.</p>
+            <button class="btn-start" id="msg-btn">CONTINUE</button>
+        </div>
+    </div>
+
+    <div id="slap-overlay" class="slap-modal hidden">
+        <h1 id="slap-text">PLAYER SLAPS WON!</h1>
+    </div>
+
+    <div class="game-board">
+        <div class="foundation-box opponent-box" id="ai-foundation-area"></div>
+        
+        <div class="center-zone">
+            <div class="deck-wrapper">
+                <div class="deck-area" id="ai-draw-deck">
+                    <img src="assets/cards/back_of_card.png" class="card-back" draggable="false">
+                </div>
+                <div id="borrowed-ai" class="borrowed-text hidden">BORROWED</div>
+            </div>
+            
+            <div class="battlefield">
+                <div class="center-pile" id="center-pile-left"></div>
+                <div class="center-pile" id="center-pile-right"></div>
+            </div>
+            
+            <div class="deck-wrapper">
+                <div class="deck-area" id="player-draw-deck">
+                    <img src="assets/cards/back_of_card.png" class="card-back" draggable="false">
+                </div>
+                <div id="borrowed-player" class="borrowed-text hidden">BORROWED</div>
+            </div>
+        </div>
+        
+        <div class="foundation-box player-box" id="player-foundation-area"></div>
+    </div>
+
+    <script src="tournament-online.js"></script>
+
+</body>
+</html>
