@@ -3,13 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ISF - Tournament Lobby</title>
+    <title>ISF - Tournament Arena</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700;900&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
-
+    
     <style>
+        /* --- DARK THEME BASE --- */
         body {
             background-color: #1a1a1a;
             background-image: radial-gradient(circle at center, #2a2a2a 0%, #000000 100%);
@@ -17,126 +18,223 @@
             font-family: 'Roboto', sans-serif;
             display: flex;
             flex-direction: column;
-            align-items: center;
             justify-content: center;
+            align-items: center;
             min-height: 100vh;
             margin: 0;
+            overflow: hidden; 
         }
 
-        .container { width: 90%; max-width: 900px; text-align: center; }
-        
-        /* CARDS */
-        .grid-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-        .card {
-            background: rgba(0,0,0,0.6); border: 1px solid #333; border-radius: 15px;
-            padding: 30px; display: flex; flex-direction: column; align-items: center;
-            box-shadow: 0 0 20px rgba(0,0,0,0.5); transition: 0.2s;
+        /* --- LAYOUT GRID --- */
+        .tournament-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr; /* Two equal columns */
+            gap: 20px;
+            width: 90%;
+            max-width: 900px;
+            height: auto;
+            transition: all 0.5s ease;
         }
-        .card.large { grid-row: span 2; justify-content: center; }
-        
-        /* INPUTS & BUTTONS */
-        input {
-            background: rgba(255,255,255,0.1); border: 1px solid #444; color: white;
-            padding: 12px; border-radius: 8px; text-align: center; font-size: 1rem;
-            width: 80%; text-transform: uppercase; font-weight: bold; margin-bottom: 15px;
-        }
-        .btn {
-            padding: 15px 30px; font-weight: 900; border-radius: 50px; border: none;
-            cursor: pointer; text-transform: uppercase; width: 80%; margin-top: 10px;
-            transition: 0.2s;
-        }
-        .btn-blue { background: linear-gradient(135deg, #00c6ff, #0072ff); color: white; box-shadow: 0 0 15px rgba(0,114,255,0.4); }
-        .btn-blue:hover { transform: scale(1.05); }
-        .btn-outline { background: transparent; border: 2px solid #00ccff; color: white; }
-        .btn:disabled { background: #333; color: #555; cursor: not-allowed; transform: none; box-shadow: none; }
 
-        /* LOBBY SPECIFIC */
-        .lobby-code { font-size: 3rem; color: #00ff00; letter-spacing: 3px; margin: 10px 0; font-weight: 900; }
-        .player-list { width: 100%; text-align: left; margin: 20px 0; min-height: 100px; }
-        .player-item { padding: 10px; border-bottom: 1px solid #333; font-weight: bold; color: #ccc; }
-        .player-item i { color: #00ccff; margin-right: 10px; }
+        .right-column {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            transition: opacity 0.5s ease;
+        }
 
+        /* --- CARD STYLE --- */
+        .t-card {
+            background: rgba(0, 0, 0, 0.6);
+            border: 1px solid #333;
+            border-radius: 15px;
+            padding: 30px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            transition: transform 0.2s, width 0.5s, height 0.5s;
+        }
+
+        .t-card:hover { border-color: #555; transform: translateY(-2px); }
+
+        .t-card.large {
+            height: 100%; 
+            justify-content: space-around;
+        }
+
+        /* --- TYPOGRAPHY --- */
+        h2 {
+            font-weight: 900; font-size: 1.5rem; margin: 15px 0 20px 0;
+            text-transform: uppercase; font-style: italic; letter-spacing: 1px;
+        }
+        .icon-large { font-size: 3rem; color: #00ccff; margin-bottom: 10px; }
+
+        /* --- INPUTS --- */
+        .modern-input {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid #444; border-radius: 8px; padding: 12px;
+            font-size: 1rem; color: white; text-align: center; width: 80%;
+            outline: none; font-weight: bold; text-transform: uppercase;
+            margin-bottom: 15px; transition: 0.3s;
+        }
+        .modern-input:focus { border-color: #00ccff; background: rgba(0, 0, 0, 0.6); }
+
+        /* --- BUTTONS --- */
+        .btn-blue {
+            background: linear-gradient(135deg, #00c6ff, #0072ff);
+            border: none; color: white; padding: 15px 0; font-size: 1.1rem;
+            font-weight: 900; border-radius: 50px; cursor: pointer;
+            text-transform: uppercase; width: 90%;
+            box-shadow: 0 0 15px rgba(0, 114, 255, 0.3); transition: 0.2s;
+        }
+        .btn-blue:hover { transform: scale(1.02); box-shadow: 0 0 25px rgba(0, 114, 255, 0.6); }
+        .btn-blue:disabled { background: #333; color: #777; cursor: not-allowed; box-shadow: none; transform: none; }
+
+        .btn-outline {
+            background: transparent; border: 2px solid #00ccff; color: white;
+            padding: 12px 0; font-size: 1rem; font-weight: 900;
+            border-radius: 50px; cursor: pointer; text-transform: uppercase;
+            width: 90%; transition: 0.2s;
+        }
+        .btn-outline:hover { background: rgba(0, 204, 255, 0.1); color: #00ccff; }
+
+        /* --- BACK BUTTON --- */
+        .bottom-nav { margin-top: 30px; }
+        .btn-text {
+            background: none; border: none; color: #888; font-size: 1rem;
+            font-weight: 900; cursor: pointer; text-transform: uppercase; letter-spacing: 1px;
+        }
+        .btn-text:hover { color: white; }
+
+        /* --- LOBBY SPECIFIC STYLES --- */
         .hidden { display: none !important; }
+        .lobby-code { font-size: 2.5rem; color: #00ff00; font-weight: 900; letter-spacing: 3px; margin: 10px 0; text-shadow: 0 0 10px #00ff00; }
+        .player-list { width: 100%; text-align: left; margin: 20px 0; max-height: 200px; overflow-y: auto; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 10px; }
+        .player-item { padding: 8px; border-bottom: 1px solid #333; font-weight: bold; color: #ccc; display: flex; align-items: center; }
+        .player-item i { color: #00ccff; margin-right: 10px; }
+        
+        /* EXPANDED LOBBY VIEW */
+        .expanded-lobby {
+            grid-template-columns: 1fr; /* Single column */
+            max-width: 600px;
+        }
     </style>
 </head>
 <body>
 
-    <div class="container">
+    <div class="tournament-grid" id="main-grid">
         
-        <div id="view-menu" class="grid-layout">
+        <div class="t-card large" id="friends-card">
             
-            <div class="card large">
-                <i class="fa-solid fa-users" style="font-size: 3rem; color: #00ccff; margin-bottom: 15px;"></i>
-                <h2>PLAY FRIENDS</h2>
-                <input type="text" id="my-nick" placeholder="YOUR NICKNAME">
+            <div id="friends-menu" style="width:100%; display:flex; flex-direction:column; align-items:center;">
+                <i class="fa-solid fa-users icon-large"></i>
+                <h2>Play Friends</h2>
+                <input type="text" id="friend-nick" class="modern-input" placeholder="ENTER NICKNAME" maxlength="12">
                 
-                <button class="btn btn-blue" onclick="createLobby()">HOST TOURNAMENT</button>
-                <div style="margin:10px 0; color:#666; font-weight:bold;">- OR -</div>
-                <button class="btn btn-outline" onclick="showJoinInput()">JOIN TOURNAMENT</button>
-                
-                <div id="join-area" class="hidden" style="width:100%; margin-top:15px; display:flex; flex-direction:column; align-items:center;">
-                    <input type="text" id="join-code" placeholder="ENTER CODE (ISF-XXXX)">
-                    <button class="btn btn-blue" onclick="joinLobby()">CONNECT</button>
+                <div style="width: 100%; display: flex; flex-direction: column; align-items: center; gap: 15px;">
+                    <button class="btn-blue" onclick="initHost()">HOST TOURNAMENT</button>
+                    
+                    <div style="color:#666; font-weight:bold; font-size:0.8rem;">- OR -</div>
+                    
+                    <input type="text" id="join-code-input" class="modern-input hidden" placeholder="ENTER CODE (ISF-XXXX)" style="margin-bottom:5px;">
+                    <button id="btn-join-main" class="btn-outline" onclick="showJoinField()">
+                        <i class="fa-solid fa-plug"></i> JOIN TOURNAMENT
+                    </button>
+                    <button id="btn-connect" class="btn-blue hidden" onclick="initJoin()">CONNECT</button>
                 </div>
             </div>
 
-            <div class="card">
-                <i class="fa-solid fa-globe" style="font-size: 2rem; color: #00ccff;"></i>
-                <h3>ONLINE</h3>
-                <button class="btn btn-outline" style="font-size:0.9rem;" onclick="location.href='online-tournament.html'">FIND MATCH</button>
-            </div>
-            <div class="card">
-                <i class="fa-solid fa-robot" style="font-size: 2rem; color: #00ccff;"></i>
-                <h3>VS BOTS</h3>
-                <button class="btn btn-outline" style="font-size:0.9rem;" onclick="location.href='tournament-match.html'">START</button>
-            </div>
-        </div>
+            <div id="friends-lobby" class="hidden" style="width:100%; display:flex; flex-direction:column; align-items:center;">
+                <h2 style="margin-bottom:5px;">TOURNAMENT LOBBY</h2>
+                <div style="color:#888; font-size:0.9rem;">SHARE CODE WITH FRIENDS</div>
+                
+                <div id="lobby-code-display" class="lobby-code">---</div>
+                
+                <div class="player-list" id="player-list-container">
+                    </div>
 
-        <div id="view-lobby" class="card hidden" style="max-width: 600px; margin: 0 auto;">
-            <h2>TOURNAMENT LOBBY</h2>
-            <div style="color:#888;">SHARE THIS CODE:</div>
-            <div id="lobby-code-display" class="lobby-code">---</div>
-            
-            <div class="player-list" id="player-list-container">
+                <div id="host-controls" class="hidden" style="width:100%;">
+                    <button id="btn-start" class="btn-blue" onclick="startTournament()" disabled>
+                        WAITING FOR PLAYERS (1/4)
+                    </button>
                 </div>
 
-            <div id="host-controls">
-                <button id="btn-start" class="btn btn-blue" onclick="startTournament()" disabled>WAITING FOR PLAYERS...</button>
+                <div id="guest-controls" class="hidden" style="width:100%; text-align:center;">
+                    <div style="color:#00ff00; font-weight:bold; margin-bottom:10px;">CONNECTED!</div>
+                    <div style="color:#888; font-style:italic;">Waiting for host to start bracket...</div>
+                </div>
+
+                <button class="btn-text" style="margin-top:20px; font-size:0.8rem;" onclick="location.reload()">LEAVE LOBBY</button>
             </div>
-            <div id="guest-controls" class="hidden">
-                <div style="color:#00ff00; font-weight:bold;">CONNECTED! WAITING FOR HOST...</div>
-            </div>
-            
-            <button class="btn btn-outline" style="margin-top:20px; border-color:#444; color:#888;" onclick="location.reload()">LEAVE LOBBY</button>
+
         </div>
 
+        <div class="right-column" id="right-col">
+            
+            <div class="t-card">
+                <i class="fa-solid fa-globe icon-large" style="font-size: 2.5rem;"></i>
+                <h2>ONLINE</h2>
+                <input type="text" id="online-nick" class="modern-input" placeholder="ENTER NICKNAME">
+                <button class="btn-blue" onclick="goOnline()">Find Match</button>
+            </div>
+
+            <div class="t-card">
+                <i class="fa-solid fa-robot icon-large" style="font-size: 2.5rem;"></i>
+                <h2>VS BOTS</h2>
+                <button class="btn-blue" onclick="startBotTournament()">Play Solo</button>
+            </div>
+
+        </div>
+    </div>
+
+    <div class="bottom-nav">
+        <button class="btn-text" onclick="window.location.href='index.html'">Back Home</button>
     </div>
 
     <script>
-        // --- VARIABLES ---
+        // --- STATE VARIABLES ---
         let myName = "";
         let peer = null;
-        let connections = []; // Host keeps track of guests
-        let players = [];     // List of all players [{name, id, isHost}]
+        let connections = []; // For Host
+        let players = [];     // [{name, id, isHost}]
         let isHost = false;
-        let hostConn = null;  // Guest connection to host
+        let hostConn = null;  // For Guest
 
-        // --- NAVIGATION ---
-        function showJoinInput() {
-            document.getElementById('join-area').classList.remove('hidden');
+        // --- UI FUNCTIONS ---
+        
+        function showJoinField() {
+            document.getElementById('join-code-input').classList.remove('hidden');
+            document.getElementById('btn-join-main').classList.add('hidden');
+            document.getElementById('btn-connect').classList.remove('hidden');
         }
 
-        function switchScreen(screenId) {
-            document.getElementById('view-menu').classList.add('hidden');
-            document.getElementById('view-lobby').classList.add('hidden');
-            document.getElementById(screenId).classList.remove('hidden');
+        function enterLobbyMode() {
+            // 1. Hide Right Column
+            document.getElementById('right-col').style.opacity = '0';
+            setTimeout(() => {
+                document.getElementById('right-col').classList.add('hidden');
+                
+                // 2. Expand Left Card to Center
+                document.getElementById('main-grid').classList.add('expanded-lobby');
+                
+                // 3. Switch Content inside card
+                document.getElementById('friends-menu').classList.add('hidden');
+                document.getElementById('friends-lobby').classList.remove('hidden');
+            }, 300);
         }
 
         // --- HOST LOGIC ---
-        function createLobby() {
-            myName = document.getElementById('my-nick').value.trim() || "Host";
-            const code = "ISF-" + Math.floor(1000 + Math.random() * 9000); // Generate ISF-1234
+        
+        function initHost() {
+            myName = document.getElementById('friend-nick').value.trim();
+            if (!myName) return alert("Please enter a nickname to host!");
 
+            // Generate Code
+            const code = "ISF-" + Math.floor(1000 + Math.random() * 9000);
+            
             isHost = true;
             players = [{ name: myName, id: code, isHost: true }];
             
@@ -145,74 +243,104 @@
             
             peer.on('open', (id) => {
                 document.getElementById('lobby-code-display').innerText = id;
+                document.getElementById('host-controls').classList.remove('hidden');
+                enterLobbyMode();
                 updatePlayerList();
-                switchScreen('view-lobby');
             });
 
             peer.on('connection', (conn) => {
                 conn.on('data', (data) => {
-                    // Guest wants to join
                     if (data.type === 'JOIN') {
                         const newPlayer = { name: data.name, id: data.id, isHost: false };
                         players.push(newPlayer);
                         connections.push(conn);
-                        broadcastLobby(); // Tell everyone the new list
+                        
+                        // Broadcast new list to everyone
+                        broadcastLobby();
                     }
                 });
+            });
+
+            peer.on('error', (err) => {
+                alert("Error: Code taken or network issue. Try again.");
+                location.reload();
             });
         }
 
         // --- GUEST LOGIC ---
-        function joinLobby() {
-            myName = document.getElementById('my-nick').value.trim() || "Guest";
-            const code = document.getElementById('join-code').value.trim().toUpperCase();
-            
-            if(!code) return alert("Enter a code!");
+
+        function initJoin() {
+            myName = document.getElementById('friend-nick').value.trim();
+            if (!myName) return alert("Please enter a nickname to join!");
+
+            const code = document.getElementById('join-code-input').value.trim().toUpperCase();
+            if (!code) return alert("Please enter the Host Code!");
 
             isHost = false;
-            peer = new Peer(); // Random ID for me
+            peer = new Peer(); // Random ID for guest
 
             peer.on('open', (id) => {
-                hostConn = peer.connect(code);
+                const conn = peer.connect(code);
+                hostConn = conn;
 
-                hostConn.on('open', () => {
-                    // Send my name to host
-                    hostConn.send({ type: 'JOIN', name: myName, id: id });
+                conn.on('open', () => {
+                    // Request to Join
+                    conn.send({ type: 'JOIN', name: myName, id: id });
                 });
 
-                hostConn.on('data', (data) => {
+                conn.on('data', (data) => {
                     if (data.type === 'LOBBY_UPDATE') {
                         players = data.players;
-                        updatePlayerList();
-                        switchScreen('view-lobby');
-                        document.getElementById('lobby-code-display').innerText = code;
-                        document.getElementById('host-controls').classList.add('hidden');
+                        document.getElementById('lobby-code-display').innerText = code; // Show room code
                         document.getElementById('guest-controls').classList.remove('hidden');
+                        enterLobbyMode();
+                        updatePlayerList();
                     }
                     if (data.type === 'START_GAME') {
-                        // SAVE DATA AND GO!
                         saveAndGo(data.players);
                     }
                 });
+
+                conn.on('close', () => {
+                    alert("Host disconnected.");
+                    location.reload();
+                });
+                
+                // Timeout check if code is wrong
+                setTimeout(() => {
+                    if(players.length === 0) {
+                        alert("Could not connect. Check the code.");
+                        location.reload();
+                    }
+                }, 3000);
             });
         }
 
-        // --- COMMON LOGIC ---
+        // --- SHARED LOGIC ---
+
         function updatePlayerList() {
             const list = document.getElementById('player-list-container');
             list.innerHTML = '';
+            
             players.forEach(p => {
-                list.innerHTML += `<div class="player-item"><i class="fa-solid fa-user"></i> ${p.name} ${p.isHost ? '(HOST)' : ''}</div>`;
+                list.innerHTML += `
+                    <div class="player-item">
+                        <i class="fa-solid fa-user"></i> ${p.name} 
+                        ${p.isHost ? '<span style="color:#00ccff; margin-left:10px; font-size:0.8rem;">(HOST)</span>' : ''}
+                    </div>`;
             });
 
-            if(isHost) {
+            // Update Start Button Text
+            if (isHost) {
                 const btn = document.getElementById('btn-start');
-                // You requested 4 players minimum, change to 2 for testing if needed
-                if(players.length >= 2) { 
+                // REQUIRE 4 PLAYERS
+                if (players.length >= 4) {
                     btn.disabled = false;
                     btn.innerText = "START TOURNAMENT";
+                    btn.style.background = "linear-gradient(90deg, #00ff00, #00aa00)";
                 } else {
                     btn.disabled = true;
+                    btn.style.background = "#333";
                     btn.innerText = `WAITING FOR PLAYERS (${players.length}/4)`;
                 }
             }
@@ -225,25 +353,38 @@
 
         function startTournament() {
             if(!isHost) return;
-            // 1. Shuffle
+            // 1. Shuffle Players
             const shuffled = players.sort(() => 0.5 - Math.random());
             
-            // 2. Tell Guests
+            // 2. Tell Guests to Start
             connections.forEach(conn => conn.send({ type: 'START_GAME', players: shuffled }));
             
-            // 3. Go
+            // 3. Host Starts
             saveAndGo(shuffled);
         }
 
-        function saveAndGo(playerList) {
-            localStorage.setItem('isf_bracket_players', JSON.stringify(playerList));
+        function saveAndGo(finalPlayerList) {
+            localStorage.setItem('isf_bracket_players', JSON.stringify(finalPlayerList));
             localStorage.setItem('isf_my_name', myName);
-            // We use this to return to the correct bracket logic later
             localStorage.setItem('isf_is_host', isHost);
-            
+            // Redirect to Part 2
             window.location.href = 'friend-tournament.html';
         }
 
+        // --- OTHER MODES ---
+        function goOnline() {
+            const nick = document.getElementById('online-nick').value.trim();
+            if(!nick) return alert("Enter nickname!");
+            localStorage.setItem('isf_my_name', nick);
+            window.location.href = 'online-tournament.html';
+        }
+
+        function startBotTournament() {
+            localStorage.setItem('isf_tourney_round', 0);
+            window.location.href = 'tournament-match.html';
+        }
+
     </script>
+
 </body>
 </html>
