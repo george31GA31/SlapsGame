@@ -273,8 +273,31 @@ function handleNet(msg) {
         return;
     }
     if (msg.type === 'OPPONENT_LEFT') {
-        alert("Opponent has left the match.");
-        window.location.href = 'index.html';
+        const name = gameState.opponentName || "Opponent";
+        
+        // Show the Game Message Modal
+        const modal = document.getElementById('game-message');
+        if (modal) {
+            modal.querySelector('h1').innerText = "VICTORY";
+            modal.querySelector('h1').style.color = '#66ff66'; // Green for win
+            
+            // Inject specific text + Main Menu button directly
+            const p = modal.querySelector('p');
+            p.innerHTML = `
+                You won because <strong>${name}</strong> conceded the match.
+                <div style="display:flex; gap:10px; justify-content:center; margin-top:20px;">
+                    <button class="btn-action-small" onclick="window.location.href='index.html'" style="background:#ff4444; width:auto;">
+                        MAIN MENU
+                    </button>
+                </div>
+            `;
+
+            // Hide the standard "Continue" button
+            const oldBtn = document.getElementById('msg-btn');
+            if (oldBtn) oldBtn.classList.add('hidden');
+
+            modal.classList.remove('hidden');
+        }
         return;
     }
 }
@@ -1504,10 +1527,10 @@ function applyRoundOver(data) {
         gameState.aiRounds = data.aiRounds;
     } else {
         // Guest Perspective Swap
-        gameState.playerTotal = data.aTotal; // My total is AI's total
-        gameState.aiTotal = data.pTotal;     // Opponent total is Player's total
-        gameState.p1Rounds = data.aiRounds;  // My rounds won
-        gameState.aiRounds = data.p1Rounds;  // Opponent rounds won
+        gameState.playerTotal = data.aTotal; 
+        gameState.aiTotal = data.pTotal;     
+        gameState.p1Rounds = data.aiRounds;  
+        gameState.aiRounds = data.p1Rounds;  
     }
 
     updateScoreboard();
@@ -1518,10 +1541,14 @@ function applyRoundOver(data) {
     const hostWon = (data.winner === 'player');
     const iWon = (iAmHost && hostWon) || (!iAmHost && !hostWon);
 
+    // --- FIX: USE OPPONENT NAME IN TEXT ---
+    const oppName = (gameState.opponentName || "OPPONENT").toUpperCase();
+
     const title = iWon ? "ROUND WON!" : "ROUND LOST!";
     const sub = iWon 
         ? `You start next round with ${gameState.playerTotal} cards.` 
-        : `Opponent starts next round with ${gameState.aiTotal} cards.`;
+        : `${oppName} starts next round with ${gameState.aiTotal} cards.`;
+    // --------------------------------------
 
     // 3. Show Modal
     const modal = document.getElementById('game-message');
