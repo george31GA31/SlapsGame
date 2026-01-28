@@ -1162,27 +1162,39 @@ function applyMoveFromHost(a) {
         }
     });
 
-    // --- FIX: SWAP SCORES FOR GUEST ---
-    // Host sent 'playerTotal' (Host) and 'aiTotal' (Guest).
-    // I am Guest, so:
-    // My Total = Incoming 'aiTotal'
-    // Opponent Total = Incoming 'playerTotal'
+    // Score Sync
     gameState.playerTotal = a.aiTotal;
     gameState.aiTotal = a.playerTotal;
-    // ----------------------------------
 
     const hand = (localMover === 'player') ? gameState.playerHand : gameState.aiHand;
-    const idx = hand.findIndex(c => c.id === a.card.id);
+    
+    // --- FIX: ROBUST CARD FINDING ---
+    // 1. Try finding by Exact ID
+    let idx = hand.findIndex(c => c.id === a.card.id);
+    
+    // 2. If ID not found, find by Content (Suit/Rank/Value)
+    // This catches the glitch where the ID didn't sync but the card is visibly there.
+    if (idx === -1) {
+        idx = hand.findIndex(c => c.suit === a.card.suit && c.rank === a.card.rank && c.value === a.card.value);
+    }
+
     let cardObj = null;
 
     if (idx !== -1) {
         cardObj = hand[idx];
-        hand.splice(idx, 1);
+        hand.splice(idx, 1); // Remove from memory array
     } else {
+        // Only create a fresh one if it truly doesn't exist in our hand
         cardObj = unpackCard(a.card);
     }
 
-    if (cardObj.element) cardObj.element.remove();
+    // 3. Remove the DOM Element (The visual card in the hand)
+    if (cardObj.element) {
+        cardObj.element.remove();
+        cardObj.element = null; 
+    }
+    // --------------------------------
+
     const pile = (localSide === 'left') ? gameState.centerPileLeft : gameState.centerPileRight;
     pile.push(cardObj);
     renderCenterPile(localSide, cardObj);
@@ -1190,22 +1202,21 @@ function applyMoveFromHost(a) {
     updateScoreboard();
     checkSlapCondition();
 
+    // 4. Handle Flip
     if (a.newTopCard && localMover === 'ai') {
-        const newCardId = a.newTopCard.id;
-        const newCardObj = gameState.aiHand.find(c => c.id === newCardId);
+        // Try exact match first
+        let newCardObj = gameState.aiHand.find(c => c.id === a.newTopCard.id);
+        
+        // Fallback: Fuzzy match if ID fails
+        if (!newCardObj) {
+            newCardObj = gameState.aiHand.find(c => c.suit === a.newTopCard.suit && c.rank === a.newTopCard.rank);
+        }
+
         if (newCardObj && newCardObj.element) {
             setCardFaceUp(newCardObj.element, newCardObj, 'ai');
         }
     }
 }
-function rejectMoveFromHost(j) {
-    const c = gameState.lastDraggedCard;
-    const el = gameState.lastDraggedEl;
-    if (!c || !el) return;
-    if (c.originalLeft != null) el.style.left = c.originalLeft;
-    if (c.originalTop != null) el.style.top = c.originalTop;
-}
-
 /* ================================
    DECK READY / COUNTDOWN
    ================================ */
