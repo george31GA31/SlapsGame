@@ -150,16 +150,15 @@ function bindConnection(conn) {
 
     conn.on('data', (msg) => handleNet(msg));
 
-    // --- FIX: USE CONCEDED MESSAGE ON DISCONNECT TOO ---
     conn.on('close', () => {
-        // We reuse the logic: if connection dies, you win by concession.
+        // If match already ended normally, ignore disconnect
+        if (gameState.matchEnded) return;
         handleNet({ type: 'OPPONENT_LEFT' }); 
     });
 
     conn.on('error', (err) => {
-        console.error(err);
-        // Optional: Treat error as disconnect/concession too
-        handleNet({ type: 'OPPONENT_LEFT' });
+        console.error("Connection quirk:", err);
+        // We do nothing here. 'close' will handle actual drops.
     });
 }
 function sendNet(obj) {
@@ -192,9 +191,7 @@ function handleNet(msg) {
     }
 
     if (msg.type === 'ROUND_START') {
-        if (!gameState.isHost) {
-            startRoundJoinerFromState(msg.state);
-        }
+        if (!gameState.isHost) startRoundJoinerFromState(msg.state);
         return;
     }
 
@@ -222,7 +219,6 @@ function handleNet(msg) {
     }
 
     if (msg.type === 'MOVE_REQ') {
-        // Network requests always come from the Opponent (AI from host's POV)
         if (gameState.isHost) adjudicateMove(msg.move, 'ai');
         return;
     }
@@ -244,15 +240,13 @@ function handleNet(msg) {
 
     if (msg.type === 'OPPONENT_FLIP') {
         const card = gameState.aiHand.find(c => c.id === msg.cardId);
-        if (card && card.element) {
-            setCardFaceUp(card.element, card, 'ai');
-        }
+        if (card && card.element) setCardFaceUp(card.element, card, 'ai');
         return;
     }
-    // --- SLAP & PENALTY HANDLERS ---
     
+    // --- SLAP & PENALTY HANDLERS ---
     if (msg.type === 'SLAP_REQ') {
-        if (gameState.isHost) adjudicateSlap('ai'); // 'ai' means the Guest/Opponent
+        if (gameState.isHost) adjudicateSlap('ai');
         return;
     }
 
@@ -265,7 +259,7 @@ function handleNet(msg) {
         applyPenaltyUpdate(msg);
         return;
     }
-   if (msg.type === 'ROUND_OVER') {
+    if (msg.type === 'ROUND_OVER') {
         applyRoundOver(msg);
         return;
     }
@@ -274,16 +268,17 @@ function handleNet(msg) {
         applyMatchOver(msg);
         return;
     }
+    
+    // --- DISCONNECT HANDLER ---
     if (msg.type === 'OPPONENT_LEFT') {
+        // Only show if the match hasn't naturally ended yet
+        if (gameState.matchEnded) return;
+
         const name = (gameState.opponentName || "OPPONENT").toUpperCase();
-        
         const modal = document.getElementById('game-message');
         if (modal) {
-            // 1. Set Title
             modal.querySelector('h1').innerText = "VICTORY";
             modal.querySelector('h1').style.color = '#66ff66';
-
-            // 2. Set Specific Text & Button
             const contentArea = modal.querySelector('p');
             contentArea.innerHTML = `
                 YOU WON. ${name} HAS CONCEDED THE MATCH.
@@ -293,13 +288,38 @@ function handleNet(msg) {
                     </button>
                 </div>
             `;
-
-            // 3. Hide the old "Continue" button so they can't click it
             const oldBtn = document.getElementById('msg-btn');
             if (oldBtn) oldBtn.classList.add('hidden');
-
             modal.classList.remove('hidden');
         }
+        return;
+    }
+
+    // --- REMATCH HANDLERS ---
+    if (msg.type === 'REMATCH_REQ') {
+        const modal = document.getElementById('rematch-modal');
+        if (modal) modal.classList.remove('hidden');
+        return;
+    }
+
+    if (msg.type === 'REMATCH_YES') {
+        // Opponent accepted -> Restart
+        const modal = document.getElementById('game-message');
+        if(modal) modal.classList.add('hidden');
+        
+        // Reset Logic
+        gameState.p1Rounds = 0; gameState.aiRounds = 0;
+        gameState.p1Slaps = 0; gameState.aiSlaps = 0;
+        gameState.playerTotal = 26; gameState.aiTotal = 26;
+        gameState.matchEnded = false;
+        
+        if (gameState.isHost) startRoundHostAuthoritative();
+        return;
+    }
+
+    if (msg.type === 'REMATCH_NO') {
+        alert("Opponent declined the rematch.");
+        window.location.href = 'index.html';
         return;
     }
 } 
@@ -374,13 +394,14 @@ function adjudicateSlap(who) {
 
         const pilesTotal = gameState.centerPileLeft.length + gameState.centerPileRight.length;
 
-        // Update Host Card Totals
-        if (who === 'player') { // Host Won
-            gameState.playerTotal += pilesTotal;
-            // REMOVED: gameState.p1Slaps++; (This caused the double count)
-        } else { // Guest ('ai') Won
-            gameState.aiTotal += pilesTotal;
-            // REMOVED: gameState.aiSlaps++; (This caused the double count)
+        // --- FIX: GIVE CARDS TO THE LOSER ---
+        // If Host ('player') won the slap -> Guest ('ai') takes the cards.
+        // If Guest ('ai') won the slap -> Host ('player') takes the cards.
+        
+        if (who === 'player') { 
+            gameState.aiTotal += pilesTotal; // Host Won, Guest takes cards
+        } else { 
+            gameState.playerTotal += pilesTotal; // Guest Won, Host takes cards
         }
 
         // Clear Host Piles logic
@@ -391,13 +412,13 @@ function adjudicateSlap(who) {
         // Broadcast Valid Win
         const update = {
             type: 'SLAP_UPDATE',
-            winner: who, // 'player' (Host) or 'ai' (Guest)
+            winner: who, // 'player' (Host) or 'ai' (Guest) - Use this for the "Who Won" text
             pTotal: gameState.playerTotal,
             aTotal: gameState.aiTotal
         };
         
         sendNet(update);
-        applySlapUpdate(update); // This function will handle the +1 increment now
+        applySlapUpdate(update); 
 
     } else {
         // --- INVALID SLAP (PENALTY) ---
@@ -1452,23 +1473,30 @@ function showRoundMessage(title, sub) {
 }
 
 function showEndGame(title, isWin) {
+    gameState.matchEnded = true; // Prevents disconnect popup
+
     const modal = document.getElementById('game-message');
     if (!modal) return;
+    
     modal.querySelector('h1').innerText = title;
     modal.querySelector('h1').style.color = isWin ? '#66ff66' : '#ff7575';
+    
     const contentArea = modal.querySelector('p');
     contentArea.innerHTML = `
         <div style="display:flex; gap:10px; justify-content:center; margin-top:20px;">
-            <button class="btn-action-small" onclick="window.location.href='index.html'" style="background:#ff4444; width:auto;">
+            <button class="btn-action-small" onclick="sendRematchRequest()" style="background:#444; width:auto;">
+                <i class="fa-solid fa-rotate-right"></i> REMATCH
+            </button>
+            <button class="btn-action-small" onclick="quitMatch()" style="background:#ff4444; width:auto;">
                 MAIN MENU
             </button>
         </div>
     `;
+    
     const oldBtn = document.getElementById('msg-btn');
     if (oldBtn) oldBtn.classList.add('hidden');
     modal.classList.remove('hidden');
 }
-
 async function preloadCardImages(cards) {
     const urls = new Set();
     urls.add(CARD_BACK_SRC);
@@ -1614,4 +1642,37 @@ function quitMatch() {
         }
         window.location.href = 'index.html';
     }, 100); 
+}
+/* ================================
+   REMATCH LOGIC
+   ================================ */
+
+function sendRematchRequest() {
+    const btn = document.querySelector('.btn-action-small[onclick="sendRematchRequest()"]');
+    if(btn) {
+        btn.innerText = "WAITING...";
+        btn.disabled = true;
+    }
+    sendNet({ type: 'REMATCH_REQ' });
+}
+
+function acceptRematch() {
+    document.getElementById('rematch-modal').classList.add('hidden');
+    sendNet({ type: 'REMATCH_YES' });
+    
+    // Reset Local Stats
+    gameState.p1Rounds = 0; gameState.aiRounds = 0;
+    gameState.p1Slaps = 0; gameState.aiSlaps = 0;
+    gameState.playerTotal = 26; gameState.aiTotal = 26;
+    gameState.matchEnded = false;
+    
+    const modal = document.getElementById('game-message');
+    if(modal) modal.classList.add('hidden');
+    
+    // Host will trigger the actual restart
+}
+
+function declineRematch() {
+    sendNet({ type: 'REMATCH_NO' });
+    window.location.href = 'index.html';
 }
