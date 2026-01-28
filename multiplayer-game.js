@@ -435,20 +435,21 @@ function applySlapUpdate(data) {
     gameState.gameActive = false;
     gameState.slapActive = false;
 
-    // 1. Determine Perspective for "Winner" Text
+    // 1. Determine Perspective
     let winnerText = "";
     let color = "";
     
-    // Check if I am the one who won
+    // Compare data.winner to OUR role
     const iAmHost = gameState.isHost;
     const hostWon = (data.winner === 'player');
+    
+    // If (I am Host AND Host Won) OR (I am Guest AND Guest Won) -> I WON
     const iWon = (iAmHost && hostWon) || (!iAmHost && !hostWon);
 
     if (iWon) {
         winnerText = "YOU WON THE SLAPS!";
         color = "rgba(0, 200, 0, 0.9)";
     } else {
-        // FIX: Use the stored Opponent Name
         const name = gameState.opponentName || "OPPONENT";
         winnerText = `${name.toUpperCase()} WON THE SLAPS!`;
         color = "rgba(200, 0, 0, 0.9)";
@@ -477,8 +478,12 @@ function applySlapUpdate(data) {
     gameState.aiTotal = data.aTotal;
     updateScoreboard();
     
-    if (hostWon) gameState.p1Slaps++; 
-    else gameState.aiSlaps++;
+    // --- FIX: UPDATE THE CORRECT SLAP COUNTER ---
+    if (iWon) {
+        gameState.p1Slaps++; // I won (whether Host or Guest) -> Update My Counter
+    } else {
+        gameState.aiSlaps++; // They won -> Update Opponent Counter
+    }
     updateScoreboardWidget();
 
     // 6. Reset Round after delay
