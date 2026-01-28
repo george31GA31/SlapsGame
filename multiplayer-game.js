@@ -93,89 +93,51 @@ class Card {
    BOOTSTRAP
    ================================ */
 
-window.onload = function() {
-    // 1. Standard Event Listeners
-    const pDeck = document.getElementById('player-draw-deck');
-    if(pDeck) pDeck.onclick = handlePlayerDeckClick;
+window.onload = function () {
     document.addEventListener('keydown', handleInput);
-    
-    // 2. Load Nickname and Data
-    gameState.myName = localStorage.getItem('isf_my_name') || "Player";
 
-    // 3. Initialize Networking
-    // This function handles both Tournament Auto-connect and manual Matchmaking
+    const pDeck = document.getElementById('player-draw-deck');
+    if (pDeck) pDeck.onclick = handlePlayerDeckClick;
+
+    updateScoreboardWidget();
     initMultiplayer();
 };
-    
-    // --- NEW: TOURNAMENT AUTO-CONNECT ---
-    const tRole = localStorage.getItem('isf_role'); // 'host' or 'guest'
-    const tCode = localStorage.getItem('isf_code'); // e.g. 'MATCH-LQF-1'
 
-    if (tRole && tCode) {
-        console.log(`Tournament Mode Active: ${tRole} in Room ${tCode}`);
-        
-        // Hide standard menus if they exist (optional)
-        // Auto-start networking
-        if (tRole === 'host') {
-            // Force Host Mode with specific ID
-            gameState.isHost = true;
-            initializeNetwork(tCode); 
-        } else {
-            // Force Guest Mode and connect to ID
-            gameState.isHost = false;
-            joinGame(tCode);
-        }
-    } else {
-        // Normal Mode (Wait for user input or random generation)
-        // ... your existing code ...
-        updateScoreboardWidget();
-        startRound(); 
-    }
-};
 /* ================================
    MULTIPLAYER INIT
    ================================ */
 
 function initMultiplayer() {
-    // Read roles from local storage
     const role = (localStorage.getItem('isf_role') || '').toLowerCase();
     const hostId = (localStorage.getItem('isf_code') || '').trim();
-    
-    gameState.myName = localStorage.getItem('isf_my_name') || "Player";
+    const myName = (localStorage.getItem('isf_my_name') || 'Player').trim();
+
+    gameState.myName = myName;
+    gameState.opponentName = 'OPPONENT';
+
     gameState.isHost = (role === 'host');
     gameState.roomCode = hostId;
 
     if (!hostId) {
-        console.error("No Room Code found in LocalStorage");
-        showRoundMessage("NO MATCH DATA", "Please return to the menu and join a match.");
+        showRoundMessage("NO MATCH DATA", "Return to matchmaking and create or join a match.");
         return;
     }
 
-    // Initialize PeerJS
-    // If Host: Use the Room Code as the Peer ID. If Guest: Get a random ID.
     gameState.peer = gameState.isHost ? new Peer(hostId) : new Peer();
 
     gameState.peer.on('open', (id) => {
         gameState.myId = id;
-        console.log("Peer Connection Open. My ID:", id);
-
         if (gameState.isHost) {
-            // Host waits for the Guest to connect
             gameState.peer.on('connection', (conn) => bindConnection(conn));
         } else {
-            // Guest actively connects to the Host's Room Code
             const conn = gameState.peer.connect(hostId, { reliable: true });
             bindConnection(conn);
         }
     });
 
     gameState.peer.on('error', (err) => {
-        console.error("PeerJS Error:", err);
-        if (err.type === 'unavailable-id') {
-            showRoundMessage("ID TAKEN", "That room code is already in use.");
-        } else {
-            showRoundMessage("CONNECTION ERROR", "Could not reach the server.");
-        }
+        console.error(err);
+        showRoundMessage("CONNECTION ERROR", "Return to matchmaking and try again.");
     });
 }
 
@@ -1598,54 +1560,31 @@ function showRoundMessage(title, sub) {
 }
 
 function showEndGame(title, isWin) {
-    gameState.matchEnded = true; 
+    gameState.matchEnded = true; // Prevents disconnect popup
 
     const modal = document.getElementById('game-message');
     if (!modal) return;
     
     modal.querySelector('h1').innerText = title;
     modal.querySelector('h1').style.color = isWin ? '#66ff66' : '#ff7575';
-
-    const contentArea = modal.querySelector('p');
     
-    // Check if we are in tournament mode (using the presence of a parent window)
-    const isTournament = (window.self !== window.top);
-
-    if (isTournament) {
-        contentArea.innerHTML = `
-            <div style="display:flex; gap:10px; justify-content:center; margin-top:20px;">
-                <button class="btn-action-small" onclick="returnToTournament(${isWin})" style="background:#00ccff; width:auto;">
-                    ${isWin ? "CONTINUE TO BRACKET" : "RETURN TO LOBBY"}
-                </button>
-            </div>
-        `;
-    } else {
-        contentArea.innerHTML = `
-            <div style="display:flex; gap:10px; justify-content:center; margin-top:20px;">
-                <button class="btn-action-small" onclick="sendRematchRequest()" style="background:#444; width:auto;">
-                    REMATCH
-                </button>
-                <button class="btn-action-small" onclick="window.location.href='index.html'" style="background:#ff4444; width:auto;">
-                    MAIN MENU
-                </button>
-            </div>
-        `;
-    }
+    const contentArea = modal.querySelector('p');
+    contentArea.innerHTML = `
+        <div style="display:flex; gap:10px; justify-content:center; margin-top:20px;">
+            <button class="btn-action-small" onclick="sendRematchRequest()" style="background:#444; width:auto;">
+                <i class="fa-solid fa-rotate-right"></i> REMATCH
+            </button>
+            <button class="btn-action-small" onclick="quitMatch()" style="background:#ff4444; width:auto;">
+                MAIN MENU
+            </button>
+        </div>
+    `;
     
     const oldBtn = document.getElementById('msg-btn');
     if (oldBtn) oldBtn.classList.add('hidden');
-    
     modal.classList.remove('hidden');
 }
-// Add this new function to handle the return logic
-function returnToTournament(didWin) {
-    // Send message to the Parent Window (Tournament Bracket)
-    const result = didWin ? 'win' : 'loss';
-    
-    // Post message to parent
-    window.parent.postMessage({ type: 'GAME_OVER', result: result }, '*');
-}
-   async function preloadCardImages(cards) {
+async function preloadCardImages(cards) {
     const urls = new Set();
     urls.add(CARD_BACK_SRC);
     (cards || []).forEach(c => { if (c && c.imgSrc) urls.add(c.imgSrc); });
@@ -1933,20 +1872,4 @@ function cleanupGhost(cardData) {
     if (realCard && realCard.element) {
         realCard.element.style.opacity = '1'; 
     }
-}
-// --- TOURNAMENT RETURN LOGIC ---
-function returnToTournament(didWin) {
-    // 1. Clean up local storage for the next match
-    localStorage.removeItem('isf_role');
-    localStorage.removeItem('isf_code');
-    localStorage.removeItem('isf_tourney_opponent');
-
-    // 2. Send the result to the Parent Window (friend-tournament.html)
-    // We are inside an iframe, so we yell at 'window.parent'
-    const msg = {
-        type: 'GAME_OVER',
-        result: didWin ? 'win' : 'loss'
-    };
-    
-    window.parent.postMessage(msg, '*');
 }
