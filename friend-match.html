@@ -175,16 +175,13 @@
         }
 
         function enterGame() {
-            // Destroy this peer instance so the REAL game can bind to the same ID/Logic
-            // Actually, multiplayer-game.js creates a NEW Peer connection. 
-            // So we just need to disconnect cleanly here.
-            
-            if(peer) peer.destroy();
-            
-            // Redirect to the actual gameplay
-            // multiplayer-game.js will read 'isf_role' and 'isf_code' and reconnect automatically.
-            window.location.href = 'multiplayer-game.html';
-        }
+    // 1. Destroy the temporary handshake connection
+    if(peer) peer.destroy();
+    
+    // 2. Redirect to the DEDICATED Tournament Game Page
+    // This page loads 'tournament-online.js' which will auto-connect using the ID.
+    window.location.href = 'tournament-game.html';
+}
 
     </script>
 </body>
