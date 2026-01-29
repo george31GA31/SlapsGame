@@ -252,7 +252,7 @@ function resolveSlap(winner) {
     }, 2000);
 }
 // --- STANDARD GAME ENGINE ---
-unction startRound(oddCard = null) {
+function startRound(oddCard = null) {
     let fullDeck = createDeck();
     shuffle(fullDeck);
     
