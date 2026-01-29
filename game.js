@@ -172,31 +172,73 @@ function triggerAISlap() {
 function resolveSlap(winner) {
     gameState.slapActive = false;
     gameState.gameActive = false; 
+
+    // --- SCENARIO 1 CHECK: Slap during Sudden Death? ---
+    const isSuddenDeath = !document.getElementById('borrowed-player').classList.contains('hidden');
     
+    // Calculate Pot Size
+    const pilesTotal = gameState.centerPileLeft.length + gameState.centerPileRight.length;
+
+    // Award Cards
+    if (winner === 'player') {
+        gameState.aiTotal += pilesTotal; // Give pot to AI (Wait, standard rule is Winner takes?)
+        // Standard Slap Rule: Winner TAKES the pile.
+        // If Player Slaps, Player gets the cards added to their count?
+        // Your code previously said: gameState.aiTotal += pilesTotal (for Player Win??)
+        // CHECKING YOUR PREVIOUS CODE: 
+        // "if (winner === 'player') { ... gameState.aiTotal += pilesTotal ... }"
+        // This implies the LOSER picks up the cards?
+        // Standard Slapjack: Winner keeps pile? Or Winner makes loser pick up?
+        // Assuming your previous logic was "Loser picks up":
+        
+        gameState.aiTotal += pilesTotal; 
+        gameState.p1Slaps++; 
+    } else {
+        gameState.playerTotal += pilesTotal;
+        gameState.aiSlaps++; 
+    }
+    
+    // Clear Visuals
+    gameState.centerPileLeft = []; gameState.centerPileRight = [];
+    document.getElementById('center-pile-left').innerHTML = '';
+    document.getElementById('center-pile-right').innerHTML = '';
+
+    // --- IF SUDDEN DEATH -> FORCE RESTART ---
+    if (isSuddenDeath) {
+        console.log("Slap during Sudden Death. Forcing Round Restart.");
+        
+        // We do NOT award a round point. We just restart with new totals.
+        // The totals were updated above (Loser picked up cards).
+        
+        // Brief delay to see the slap color, then restart
+        const overlay = document.getElementById('slap-overlay');
+        const txt = document.getElementById('slap-text');
+        overlay.classList.remove('hidden');
+        txt.innerText = (winner === 'player') ? "PLAYER SLAPS! ROUND RESET" : "AI SLAPS! ROUND RESET";
+        overlay.style.backgroundColor = (winner === 'player') ? "rgba(0, 200, 0, 0.9)" : "rgba(200, 0, 0, 0.9)";
+
+        setTimeout(() => {
+            overlay.classList.add('hidden');
+            startRound(); // Restart immediately with new totals
+        }, 1500);
+        return; 
+    }
+
+    // --- NORMAL GAME CONTINUATION ---
+    updateScoreboard();
+    updateScoreboardWidget();
+
     const overlay = document.getElementById('slap-overlay');
     const txt = document.getElementById('slap-text');
     overlay.classList.remove('hidden');
-    
-    const pilesTotal = gameState.centerPileLeft.length + gameState.centerPileRight.length;
 
     if (winner === 'player') {
         txt.innerText = "PLAYER SLAPS WON!";
         overlay.style.backgroundColor = "rgba(0, 200, 0, 0.9)"; 
-        gameState.aiTotal += pilesTotal;
-        gameState.p1Slaps++; 
     } else {
         txt.innerText = "AI SLAPS WON!";
         overlay.style.backgroundColor = "rgba(200, 0, 0, 0.9)"; 
-        gameState.playerTotal += pilesTotal;
-        gameState.aiSlaps++; 
     }
-
-    gameState.centerPileLeft = []; gameState.centerPileRight = [];
-    document.getElementById('center-pile-left').innerHTML = '';
-    document.getElementById('center-pile-right').innerHTML = '';
-    
-    updateScoreboard();
-    updateScoreboardWidget();
 
     setTimeout(() => {
         overlay.classList.add('hidden');
@@ -209,9 +251,8 @@ function resolveSlap(winner) {
         
     }, 2000);
 }
-
 // --- STANDARD GAME ENGINE ---
-function startRound() {
+unction startRound(oddCard = null) {
     let fullDeck = createDeck();
     shuffle(fullDeck);
     
@@ -231,10 +272,15 @@ function startRound() {
     const aHandCards = aAllCards.splice(0, aHandSize);
     gameState.aiDeck = aAllCards;
 
-    // RESET BORROW TAGS ON NEW ROUND
-    document.getElementById('borrowed-player').classList.add('hidden');
-    document.getElementById('borrowed-ai').classList.add('hidden');
-
+   gameState.centerPileLeft = []; gameState.centerPileRight = [];
+    document.getElementById('center-pile-left').innerHTML = '';
+    document.getElementById('center-pile-right').innerHTML = '';
+   if (oddCard) {
+        // Place in Left or Right? Let's assume Left for simplicity
+        gameState.centerPileLeft.push(oddCard);
+        renderCenterPile('left', oddCard);
+    }
+   
     // CHECK SHORTAGE AT START
     if (gameState.playerDeck.length === 0 && gameState.aiDeck.length > 1) {
         const steal = Math.floor(gameState.aiDeck.length / 2);
@@ -737,18 +783,61 @@ function playCardToCenter(card, imgElement, dropSide) {
     document.getElementById('ai-draw-deck').classList.remove('deck-ready');
 
     target.push(card);
+// ... inside playCardToCenter ...
+
+    target.push(card);
+    
+    // --- UPDATE HANDS ---
     if (card.owner === 'player') {
         gameState.playerHand = gameState.playerHand.filter(c => c !== card); 
         gameState.playerTotal--; 
-        if (gameState.playerTotal <= 0) { showEndGame("YOU WIN THE MATCH!", true); return true; }
-        if (gameState.playerHand.length === 0) endRound('player');
     } else {
         gameState.aiHand = gameState.aiHand.filter(c => c !== card); 
         gameState.aiTotal--; 
-        if (gameState.aiTotal <= 0) { showEndGame("AI WINS THE MATCH!", false); return true; }
-        if (gameState.aiHand.length === 0) endRound('ai');
     }
 
+    // --- CHECK FOR SUDDEN DEATH TRIGGER (Rule G.7.4) ---
+    // If both decks are empty, but the round is still going (hands not empty), split the center.
+    if (gameState.playerDeck.length === 0 && gameState.aiDeck.length === 0) {
+        // Only trigger if there are actually cards to scavenge
+        if (gameState.centerPileLeft.length > 0 || gameState.centerPileRight.length > 0) {
+            triggerSuddenDeathSplit();
+        }
+    }
+
+    // --- CHECK FOR WIN / END ROUND ---
+    const playerWin = (gameState.playerHand.length === 0 && gameState.playerDeck.length === 0);
+    const aiWin = (gameState.aiHand.length === 0 && gameState.aiDeck.length === 0);
+
+    if (playerWin) {
+        // Are we in Sudden Death (Both Borrowing)?
+        const isSuddenDeath = !document.getElementById('borrowed-player').classList.contains('hidden') 
+                           && !document.getElementById('borrowed-ai').classList.contains('hidden');
+        
+        if (isSuddenDeath) {
+            handleSuddenDeathWin('player');
+        } else {
+            // Normal Round Win logic or Match Win logic
+            if (gameState.playerTotal <= 0) showEndGame("YOU WIN THE MATCH!", true);
+            else endRound('player');
+        }
+        return true;
+    }
+
+    if (aiWin) {
+        const isSuddenDeath = !document.getElementById('borrowed-player').classList.contains('hidden') 
+                           && !document.getElementById('borrowed-ai').classList.contains('hidden');
+
+        if (isSuddenDeath) {
+            handleSuddenDeathWin('ai');
+        } else {
+            if (gameState.aiTotal <= 0) showEndGame("AI WINS THE MATCH!", false);
+            else endRound('ai');
+        }
+        return true;
+    }
+
+    // Standard UI Updates
     checkDeckVisibility(); 
     imgElement.remove(); 
     renderCenterPile(side, card); 
@@ -798,4 +887,127 @@ function updateScoreboardWidget() {
     if(p2R) p2R.innerText = gameState.aiRounds;
     if(p1S) p1S.innerText = gameState.p1Slaps;
     if(p2S) p2S.innerText = gameState.aiSlaps;
+}
+/* =========================================
+   RULE G.7.4: SIMULTANEOUS SHORTAGE LOGIC
+   ========================================= */
+
+function triggerSuddenDeathSplit() {
+    // SCENARIO 2 CHECK: Are we ALREADY in Sudden Death?
+    // If yes, this is the "Second Loop" (Stalemate).
+    const isAlreadySuddenDeath = !document.getElementById('borrowed-player').classList.contains('hidden');
+
+    if (isAlreadySuddenDeath) {
+        console.log("Stalemate Detected (Double Shortage). Resetting Round...");
+        triggerStalemateReset();
+        return;
+    }
+
+    // --- NORMAL SUDDEN DEATH START (First Time) ---
+    
+    // 1. Collect all center cards
+    const salvage = [...gameState.centerPileLeft, ...gameState.centerPileRight];
+    
+    // 2. Clear Center Piles
+    gameState.centerPileLeft = [];
+    gameState.centerPileRight = [];
+    document.getElementById('center-pile-left').innerHTML = '';
+    document.getElementById('center-pile-right').innerHTML = '';
+    
+    // 3. Shuffle & Split
+    shuffle(salvage);
+    const mid = Math.ceil(salvage.length / 2);
+    gameState.playerDeck = salvage.slice(0, mid);
+    gameState.aiDeck = salvage.slice(mid);
+    
+    // 4. Mark as BORROWED
+    const bp = document.getElementById('borrowed-player');
+    const ba = document.getElementById('borrowed-ai');
+    
+    bp.classList.remove('hidden');
+    ba.classList.remove('hidden');
+    
+    checkDeckVisibility();
+    
+    // Flash message
+    const modal = document.getElementById('slap-overlay');
+    const txt = document.getElementById('slap-text');
+    if (modal && txt) {
+        txt.innerText = "SUDDEN DEATH!";
+        modal.style.backgroundColor = "rgba(255, 165, 0, 0.9)";
+        modal.classList.remove('hidden');
+        setTimeout(() => modal.classList.add('hidden'), 1500);
+    }
+}
+function triggerStalemateReset() {
+    // 1. Collect the Pot (Center Piles)
+    const pot = [...gameState.centerPileLeft, ...gameState.centerPileRight];
+    
+    // 2. Handle Odd Card (Discard to Center for NEXT round)
+    let oddCard = null;
+    if (pot.length % 2 !== 0) {
+        oddCard = pot.pop(); // Remove 1 card to make it even
+    }
+
+    // 3. Split Evenly
+    const half = pot.length / 2;
+    
+    // 4. Add to Totals (Foundation + Half Pot)
+    // Note: We use the 'Total' variables because startRound() uses them to deal.
+    // 'playerTotal' currently tracks hand size because decks are empty/borrowed.
+    
+    // We must ensure we are counting the PHYSICAL cards in hand + the split pot
+    // The gameState.playerTotal should technically already reflect the hand size 
+    // because we decrement it when playing, but let's be safe:
+    
+    const currentPHandSize = gameState.playerHand.length;
+    const currentAHandSize = gameState.aiHand.length;
+    
+    gameState.playerTotal = currentPHandSize + half;
+    gameState.aiTotal = currentAHandSize + half;
+
+    // 5. Restart Round Immediately (No Points Awarded)
+    // We pass the oddCard so startRound knows to place it
+    startRound(oddCard);
+}
+function handleSuddenDeathWin(winner) {
+    // Check for "Scenario 2" Penalties
+    // A penalty exists if they have a Red Card pending OR Yellows (Bad Slap history)
+    let hasPenalty = false;
+    if (winner === 'player') {
+        if (gameState.playerReds > 0 || gameState.playerYellows > 0) hasPenalty = true;
+    } else {
+        if (gameState.aiReds > 0 || gameState.aiYellows > 0) hasPenalty = true;
+    }
+
+    if (!hasPenalty) {
+        // SCENARIO 1: CLEAN WIN -> MATCH OVER
+        if (winner === 'player') showEndGame("YOU WIN THE MATCH!", true);
+        else showEndGame("AI WINS THE MATCH!", false);
+    } else {
+        // SCENARIO 2: PENALTY CARRY-OVER
+        // Winner survived, but starts next round with debt (3 cards)
+        // Loser starts with the rest (49 cards)
+        
+        const PENALTY_COST = 3;
+        
+        if (winner === 'player') {
+            gameState.playerTotal = PENALTY_COST;
+            gameState.aiTotal = 52 - PENALTY_COST;
+            showRoundMessage("SURVIVED!", `You cleared your hand but had penalties. You start with ${PENALTY_COST} cards.`);
+        } else {
+            gameState.aiTotal = PENALTY_COST;
+            gameState.playerTotal = 52 - PENALTY_COST;
+            showRoundMessage("OPPONENT SURVIVED", `Opponent cleared hand with penalties. They start with ${PENALTY_COST} cards.`);
+        }
+        
+        // Reset Penalty Flags for next round
+        gameState.playerReds = 0; gameState.playerYellows = 0;
+        gameState.aiReds = 0; gameState.aiYellows = 0;
+        updatePenaltyUI();
+        
+        // Stats update
+        if (winner === 'player') gameState.p1Rounds++; else gameState.aiRounds++;
+        updateScoreboardWidget();
+    }
 }
