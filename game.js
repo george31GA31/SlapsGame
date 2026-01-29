@@ -153,15 +153,22 @@ function checkSlapCondition() {
 
 function triggerAISlap() {
     const diff = gameState.difficulty;
-    const minTime = 3000 - ((diff - 1) * 280); 
-    const maxTime = 5000 - ((diff - 1) * 450);
-    const reaction = Math.random() * (maxTime - minTime) + minTime;
+
+    const minTime = 1200 - ((diff - 1) * 100); 
+    const maxTime = 1800 - ((diff - 1) * 150);
+    
+    // Ensure we never go below human limit (approx 200ms)
+    const safeMin = Math.max(200, minTime);
+    const safeMax = Math.max(300, maxTime);
+
+    const reaction = Math.random() * (safeMax - safeMin) + safeMin;
     
     setTimeout(() => {
-        if (gameState.slapActive && gameState.gameActive) resolveSlap('ai');
+        if (gameState.slapActive && gameState.gameActive) {
+            resolveSlap('ai');
+        }
     }, reaction);
 }
-
 function resolveSlap(winner) {
     gameState.slapActive = false;
     gameState.gameActive = false; 
@@ -474,11 +481,20 @@ function startAILoop() { gameState.aiLoopRunning = true; setInterval(() => { if 
 
 function attemptAIMove() {
     const diff = gameState.difficulty;
-    const minTime = 5000 + (diff - 1) * -500;
-    const maxTime = 7000 + (diff - 1) * -600;
-    let reactionDelay = Math.random() * (maxTime - minTime) + minTime;
     
-    if (gameState.aiInChain) reactionDelay *= 0.5;
+    // --- PLAY SPEED (Must be slower than Slap) ---
+    // Level 1: ~3.0s
+    // Level 10: ~1.0s
+    
+    const minTime = 3000 - ((diff - 1) * 200); 
+    const maxTime = 4000 - ((diff - 1) * 250);
+    
+    const safeMin = Math.max(800, minTime);
+    const safeMax = Math.max(1200, maxTime);
+
+    let reactionDelay = Math.random() * (safeMax - safeMin) + safeMin;
+    
+    if (gameState.aiInChain) reactionDelay *= 0.5; // Fast combo play
     
     const activeCards = gameState.aiHand.filter(c => c.isFaceUp);
     let bestMove = null;
