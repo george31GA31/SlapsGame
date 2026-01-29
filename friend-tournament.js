@@ -1,314 +1,291 @@
 /* =========================================
    FRIEND TOURNAMENT LOGIC
-   - Renders the Bracket
-   - Re-establishes Connection (Host/Guest)
-   - Syncs Wins to all players
+   - Maps players to bracket slots
+   - Handles Auto-Advancement (Byes)
+   - Syncs results between Host and Guests
    ========================================= */
 
 const state = {
     players: [],
     myName: '',
-    myId: '',     // My Peer ID
-    hostId: '',   // The Tournament Host's Peer ID
+    myId: '',
+    hostId: '',
     isHost: false,
     peer: null,
-    conn: null,       // Guest's connection to Host
-    connections: [],  // Host's list of connected Guests
+    conn: null,
+    connections: []
 };
 
-// --- 1. INITIALIZATION ---
+// --- 1. BOOTSTRAP ---
 window.onload = function() {
-    // Load Data passed from the Setup Page
+    // Load Data from Lobby
     const pData = localStorage.getItem('isf_bracket_players');
     state.myName = localStorage.getItem('isf_my_name');
     state.isHost = (localStorage.getItem('isf_is_host') === 'true');
     
-    // We need the original Lobby Code to reconnect (e.g. ISF-1234)
-    // The Setup page saved the full list. We can find the Host's ID from that list.
-    if (!pData || !state.myName) {
-        alert("Missing tournament data. Returning to menu.");
+    // Find Host ID for reconnection
+    if (pData) {
+        state.players = JSON.parse(pData);
+        const hostObj = state.players.find(p => p.isHost);
+        if (hostObj) state.hostId = hostObj.id;
+    } else {
+        // Fallback for testing without lobby
+        alert("No tournament data found. Redirecting to setup.");
         window.location.href = 'tournament-setup.html';
         return;
     }
 
-    state.players = JSON.parse(pData);
-    
-    // Find the Host ID from the player list
-    const hostPlayer = state.players.find(p => p.isHost);
-    if (hostPlayer) state.hostId = hostPlayer.id;
+    // Initialize Network to keep bracket synced
+    initBracketNetwork();
 
-    // Draw the Visuals
-    renderInitialBracket();
-
-    // Start the Network Mesh (Crucial for Bracket Updates)
-    initBracketNetworking();
+    // Render the Bracket
+    renderBracket();
 };
 
-// --- 2. NETWORKING (RE-CONNECT) ---
-function initBracketNetworking() {
-    // If I am Host, I try to reclaim the SAME ID (ISF-XXXX) so guests can find me.
-    // If I am Guest, I get a random ID and connect to ISF-XXXX.
+// --- 2. NETWORKING (SYNC) ---
+function initBracketNetwork() {
+    // Host re-opens their ID if possible, Guest connects to Host
+    // Note: Since PeerJS IDs might not persist if tab closed, we rely on game signaling largely.
+    // This is a "Best Effort" sync for the bracket page itself.
     
-    const peerOptions = state.isHost ? state.hostId : undefined;
-    state.peer = new Peer(peerOptions);
+    state.peer = new Peer(state.isHost ? state.hostId : undefined);
 
     state.peer.on('open', (id) => {
-        state.myId = id;
-        console.log("Bracket Network Active. ID:", id);
-
-        if (!state.isHost) {
-            // GUEST: Connect to Host immediately
-            connectToHost();
+        console.log("Bracket Link Active:", id);
+        if (!state.isHost && state.hostId) {
+            const conn = state.peer.connect(state.hostId);
+            state.conn = conn;
+            conn.on('data', handleNetworkMsg);
         }
     });
 
-    // HOST LOGIC: Listen for connections & results
     if (state.isHost) {
         state.peer.on('connection', (conn) => {
             state.connections.push(conn);
-            
-            conn.on('data', (data) => {
-                if (data.type === 'MATCH_WIN') {
-                    // A guest won their match!
-                    handleWin(data.winnerName, data.nextBoxId);
-                    // Broadcast this news to everyone else
-                    broadcastUpdate(data.winnerName, data.nextBoxId);
-                }
+            conn.on('data', (msg) => {
+                // Relay messages (like "Player X Won") to everyone else
+                handleNetworkMsg(msg);
+                broadcastMsg(msg);
             });
-        });
-        
-        state.peer.on('error', (err) => {
-            console.log("Host ID might be taken (refresh issue).", err);
         });
     }
 }
 
-// GUEST LOGIC: Connect to Host
-function connectToHost() {
-    if (!state.hostId) return;
-    const conn = state.peer.connect(state.hostId);
-    state.conn = conn;
-
-    conn.on('open', () => {
-        console.log("Connected to Tournament Host.");
-    });
-
-    conn.on('data', (data) => {
-        if (data.type === 'BRACKET_UPDATE') {
-            // Host told us someone advanced!
-            handleWin(data.winnerName, data.nextBoxId);
-        }
-    });
+function broadcastMsg(msg) {
+    state.connections.forEach(c => c.send(msg));
 }
 
-// HOST HELPER: Tell everyone about a change
-function broadcastUpdate(winnerName, nextBoxId) {
-    state.connections.forEach(c => {
-        if (c.open) {
-            c.send({ type: 'BRACKET_UPDATE', winnerName, nextBoxId });
-        }
-    });
+function handleNetworkMsg(msg) {
+    if (msg.type === 'UPDATE_BRACKET') {
+        updateBox(msg.boxId, msg.name);
+    }
 }
 
 // --- 3. BRACKET RENDERING ---
-function renderInitialBracket() {
-    const total = state.players.length;
-    
-    // Clear all boxes first
+function renderBracket() {
+    // Clear board
     document.querySelectorAll('.match-box').forEach(b => {
         b.innerText = "";
         b.classList.remove('occupied', 'my-match', 'opponent-match');
     });
 
-    // Distribute Players (Same logic as before)
-    // 4 Players = Semi Finals (LSF-1 vs LSF-1 ?? No, standard mapping)
-    // We map players into the outermost available slots.
+    // --- PLACEMENT STRATEGY ---
+    // We fill the Round of 16 slots (L16-1 to L16-8, R16-1 to R16-8).
+    // If we have fewer players, we space them out so they don't play immediately if possible.
     
-    if (total <= 4) {
-        // Map to Quarter Finals (LQF-1, LQF-2, RQF-1, RQF-2)
-        // Note: Your HTML has LQF-1/2 and RQF-1/2.
-        if(state.players[0]) assignSlot('LQF-1', state.players[0]);
-        if(state.players[1]) assignSlot('LQF-2', state.players[1]);
-        if(state.players[2]) assignSlot('RQF-1', state.players[2]);
-        if(state.players[3]) assignSlot('RQF-2', state.players[3]);
-    } 
-    else {
-        // 8 Players (Round of 16 slots)
-        state.players.forEach((p, i) => {
-            // Left Side: 0-3 -> L16-1 to L16-4
-            if (i < 4) assignSlot(`L16-${i+1}`, p);
-            // Right Side: 4-7 -> R16-1 to R16-4
-            else assignSlot(`R16-${(i-4)+1}`, p);
-        });
-    }
+    // Simple Fill: Just put them in order. 
+    // "Auto-Advance" logic will handle moving them forward if they have no opponent.
     
-    checkMyNextMatch();
+    const leftSlots = ['L16-1','L16-2','L16-3','L16-4','L16-5','L16-6','L16-7','L16-8'];
+    const rightSlots = ['R16-1','R16-2','R16-3','R16-4','R16-5','R16-6','R16-7','R16-8'];
+    const allSlots = [...leftSlots, ...rightSlots];
+
+    // Place players
+    state.players.forEach((p, i) => {
+        if (allSlots[i]) {
+            updateBox(allSlots[i], p.name);
+        }
+    });
+
+    // Run Logic to see where I stand
+    checkGameState();
 }
 
-function assignSlot(boxId, player) {
-    const box = document.getElementById(boxId);
+function updateBox(id, name) {
+    const box = document.getElementById(id);
     if (box) {
-        box.innerText = player.name;
+        box.innerText = name;
         box.classList.add('occupied');
     }
 }
 
-// --- 4. MATCH LOGIC (Who do I play?) ---
-function checkMyNextMatch() {
-    const myName = state.myName;
-    let myBox = null;
+// --- 4. GAME STATE ENGINE (The Brain) ---
+function checkGameState() {
+    // 1. Find My Box (Deepest one)
+    const myBoxes = Array.from(document.querySelectorAll('.match-box.occupied'))
+        .filter(b => b.innerText === state.myName);
     
-    // 1. Find my current position (The deepest occupied box with my name)
-    // We iterate backwards/deepest first to ensure we get the latest round
-    const allBoxes = Array.from(document.querySelectorAll('.match-box.occupied'));
-    myBox = allBoxes.find(b => b.innerText === myName); // Simplification
-
-    if (!myBox) {
-        // Maybe I lost?
-        // setButtonState("ELIMINATED", false, "#555");
-        // Actually, if I'm not on board, something is wrong or I haven't started.
-        return;
+    // Sort by "Round Depth" logic if needed, but usually the last one found is correct 
+    // provided we clear old ones? No, usually we keep history. 
+    // We need the box that is "Waiting for a result".
+    
+    // Simplest approach: Find the box that DOES NOT have a winner connection yet?
+    // Actually, let's just grab the one in the latest round.
+    
+    let myCurrentBox = null;
+    // Priority: FINAL > SF > QF > 16
+    const rounds = ['FINAL', 'SF', 'QF', '16'];
+    for (let r of rounds) {
+        const found = myBoxes.find(b => b.id.includes(r));
+        if (found) { myCurrentBox = found; break; }
     }
 
-    // 2. Calculate Opponent Box ID
-    // Logic: If I am L16-1, Opponent is L16-2.
-    // If I am L16-2, Opponent is L16-1.
-    const idParts = myBox.id.split('-'); // ["L16", "1"]
-    const prefix = idParts[0];           // "L16"
-    const num = parseInt(idParts[1]);    // 1
-    
-    // Opponent Logic: (1vs2), (3vs4), etc.
-    const oppNum = (num % 2 !== 0) ? num + 1 : num - 1;
-    const oppId = `${prefix}-${oppNum}`;
+    if (!myCurrentBox) return setStatus("ELIMINATED", false);
+
+    // 2. Identify Opponent Slot
+    const { oppId, nextId } = getBracketLogic(myCurrentBox.id);
     const oppBox = document.getElementById(oppId);
-
-    // 3. Status Check
-    const btn = document.getElementById('play-btn');
     
-    // Clear old highlights
-    document.querySelectorAll('.my-match, .opponent-match').forEach(el => 
-        el.classList.remove('my-match', 'opponent-match')
-    );
+    // Highlight Me
+    myCurrentBox.classList.add('my-match');
 
+    // 3. LOGIC: Do I have an opponent?
     if (oppBox && oppBox.classList.contains('occupied')) {
-        // --- OPPONENT FOUND ---
-        const oppName = oppBox.innerText;
-        
-        myBox.classList.add('my-match');
+        // Yes -> Match Ready
         oppBox.classList.add('opponent-match');
-
-        btn.disabled = false;
-        btn.classList.add('ready');
-        btn.innerText = `PLAY VS ${oppName}`;
-        btn.onclick = () => launchGame(myBox.id, oppBox.id, oppName);
-        
+        const oppName = oppBox.innerText;
+        setStatus(`PLAY VS ${oppName}`, true, () => launchGame(myCurrentBox.id, oppBox.id, oppName));
     } else {
-        // --- WAITING ---
-        myBox.classList.add('my-match'); // Highlight me so I know where I am
-        btn.disabled = true;
-        btn.classList.remove('ready');
-        btn.innerText = "WAITING FOR OPPONENT...";
-        btn.onclick = null;
+        // No -> Do I have a Bye? 
+        // If the opponent box represents a "Real" slot (like L16-2) and it's empty, 
+        // implies nobody was seeded there. AUTO-ADVANCE.
+        
+        // However, if we are in QF/SF, an empty box means "Waiting for winner of previous round".
+        // We only Auto-Advance in Round 16 (the starting round).
+        
+        if (myCurrentBox.id.includes('16')) {
+            // Check if we already advanced (prevent loop)
+            const nextBox = document.getElementById(nextId);
+            if (nextBox && !nextBox.classList.contains('occupied')) {
+                console.log("No opponent in R16. Auto-advancing...");
+                advancePlayer(state.myName, myCurrentBox.id);
+                return; // Re-run check after advancing
+            }
+        }
+        
+        setStatus("WAITING FOR OPPONENT...", false);
     }
+}
+
+function getBracketLogic(currentId) {
+    // Parsing ID: L16-1
+    const parts = currentId.split('-'); // [L16, 1]
+    const round = parts[0];
+    const num = parseInt(parts[1]);
+
+    // Opponent Logic: 1vs2, 3vs4... (If odd, opp is +1. If even, opp is -1)
+    const oppNum = (num % 2 !== 0) ? num + 1 : num - 1;
+    const oppId = `${round}-${oppNum}`;
+
+    // Next Round Logic
+    // L16 -> LQF.  (1,2 -> 1), (3,4 -> 2)
+    let nextRound = "";
+    if (round.includes('16')) nextRound = round.replace('16', 'QF');
+    else if (round.includes('QF')) nextRound = round.replace('QF', 'SF');
+    else if (round.includes('SF')) {
+        // Special: LSF -> FINAL-L
+        const side = round.charAt(0);
+        return { oppId, nextId: `FINAL-${side}` };
+    }
+    else if (round.includes('FINAL')) {
+        // Final Winner? Usually ends here.
+        return { oppId, nextId: 'CHAMPION' };
+    }
+
+    const nextNum = Math.ceil(num / 2);
+    const nextId = `${nextRound}-${nextNum}`;
+
+    return { oppId, nextId };
 }
 
 // --- 5. GAME LAUNCHER ---
 function launchGame(myBoxId, oppBoxId, oppName) {
-    // 1. Generate Consistent Match ID
-    // We sort the box IDs so both players generate "MATCH-L16-1-vs-L16-2"
-    // Actually, simpler: Use the lower number. "MATCH-L16-1"
-    const parts = myBoxId.split('-'); // L16, 1
-    const n1 = parseInt(parts[1]);
-    const n2 = parseInt(oppBoxId.split('-')[1]);
-    const matchNum = Math.min(n1, n2);
-    const matchCode = `MATCH-${parts[0]}-${matchNum}`;
+    // Generate Match Code (Low ID first to ensure both gen same code)
+    // e.g. MATCH-L16-1
+    const baseId = (myBoxId < oppBoxId) ? myBoxId : oppBoxId;
+    const matchCode = `MATCH-${baseId}`;
 
-    // 2. Determine Host/Guest
-    // We can't compare PeerIDs easily here because we might not have the opponent's ID.
-    // Fallback: Compare Names Alphabetically.
-    // "Alice" < "Bob" -> Alice is Host.
-    // This is safe because names are unique in our lobby.
+    // Determine Host (Alphabetical Name Check)
     const role = (state.myName < oppName) ? 'host' : 'guest';
 
-    // 3. Save & Launch
+    // Save & Go
     localStorage.setItem('isf_role', role);
     localStorage.setItem('isf_code', matchCode);
     localStorage.setItem('isf_tourney_opponent', oppName);
 
-    // Show Overlay
-    document.getElementById('game-overlay').style.display = 'block';
-    document.getElementById('game-frame').src = 'friend-match.html';
+    // Open Overlay
+    const overlay = document.getElementById('game-overlay');
+    const frame = document.getElementById('game-frame');
+    overlay.style.display = 'block';
+    frame.src = 'friend-match.html';
 }
 
-// --- 6. RESULT HANDLING ---
+function setStatus(text, ready, action) {
+    const btn = document.getElementById('play-btn');
+    btn.innerText = text;
+    btn.disabled = !ready;
+    if (ready) {
+        btn.classList.add('ready');
+        btn.onclick = action;
+        btn.style.background = ""; // Default gradient
+    } else {
+        btn.classList.remove('ready');
+        btn.onclick = null;
+        btn.style.background = "#333";
+    }
+}
+
+// --- 6. RESULT LISTENER ---
 window.addEventListener('message', (event) => {
     if (event.data.type === 'GAME_OVER') {
+        const result = event.data.result; 
+        
         // Close Game
         document.getElementById('game-overlay').style.display = 'none';
         document.getElementById('game-frame').src = '';
 
-        if (event.data.result === 'win') {
-            advanceSelf();
+        if (result === 'win') {
+            // Find my current box again to calculate next
+            const myBoxes = Array.from(document.querySelectorAll('.match-box.occupied'))
+                .filter(b => b.innerText === state.myName);
+            // Get the "deepest" one logic manually or re-run state check
+            // Simpler: Just run advance logic on the 'my-match' box
+            const currentBox = document.querySelector('.my-match');
+            if(currentBox) advancePlayer(state.myName, currentBox.id);
         } else {
-            const btn = document.getElementById('play-btn');
-            btn.innerText = "ELIMINATED";
-            btn.disabled = true;
-            btn.style.background = "#555";
+            setStatus("ELIMINATED", false);
+            document.querySelectorAll('.my-match').forEach(e => e.classList.remove('my-match'));
         }
     }
 });
 
-function advanceSelf() {
-    // Move my name to the next slot
-    const myName = state.myName;
-    
-    // Find current box
-    const allBoxes = Array.from(document.querySelectorAll('.match-box.occupied'));
-    const currentBox = allBoxes.find(b => b.innerText === myName);
-    
-    if(!currentBox) return;
+function advancePlayer(name, currentId) {
+    const logic = getBracketLogic(currentId);
+    if (!logic.nextId) return; // Champion?
 
-    // Calculate Next ID
-    // Logic: L16-1 -> LQF-1.
-    const idParts = currentBox.id.split('-'); 
-    const round = idParts[0]; // "L16"
-    const num = parseInt(idParts[1]); // 1
-
-    let nextRound = "";
-    if (round.includes("16")) nextRound = round.replace("16", "QF");
-    else if (round.includes("QF")) nextRound = round.replace("QF", "SF");
-    else if (round.includes("SF")) nextRound = "FINAL";
-
-    let nextNum = Math.ceil(num / 2);
-    let nextId = `${nextRound}-${nextNum}`;
-    
-    // Handle Final
-    if (nextRound === "FINAL") {
-        const side = round.charAt(0); // L or R
-        nextId = `FINAL-${side}`;
+    if (logic.nextId === 'CHAMPION') {
+        alert(`${name} IS THE CHAMPION!`);
+        return;
     }
 
-    // UPDATE VISUALS
-    handleWin(myName, nextId);
+    // Visual Update
+    updateBox(logic.nextId, name);
 
-    // BROADCAST UPDATE
-    if (state.isHost) {
-        // I am host, I tell guests
-        broadcastUpdate(myName, nextId);
-    } else if (state.conn) {
-        // I am guest, I tell Host
-        state.conn.send({ type: 'MATCH_WIN', winnerName: myName, nextBoxId: nextId });
-    }
-}
+    // Network Update (Tell everyone)
+    const msg = { type: 'UPDATE_BRACKET', boxId: logic.nextId, name: name };
+    if (state.isHost) broadcastMsg(msg);
+    else if (state.conn) state.conn.send(msg);
 
-// --- 7. SHARED UPDATE LOGIC ---
-function handleWin(winnerName, nextBoxId) {
-    const nextBox = document.getElementById(nextBoxId);
-    if (nextBox) {
-        nextBox.innerText = winnerName;
-        nextBox.classList.add('occupied');
-        
-        // If this update affects me (either I won, or my new opponent arrived)
-        checkMyNextMatch();
-    }
+    // Re-check state (Maybe I play again immediately?)
+    setTimeout(checkGameState, 500); 
 }
