@@ -1177,13 +1177,11 @@ function applyMoveAuthoritative(mover, cardObj, side, reqId) {
     targetPile.push(cardObj);
 
     // 3. Remove from Hand and Decrement Score
-    let hand = null;
+    // FIX: We update the global state, then grab a fresh reference to check length later.
     if (mover === 'player') {
-        hand = gameState.playerHand;
         gameState.playerHand = gameState.playerHand.filter(c => c !== cardObj);
         gameState.playerTotal--;
     } else {
-        hand = gameState.aiHand;
         gameState.aiHand = gameState.aiHand.filter(c => c !== cardObj);
         gameState.aiTotal--;
     }
@@ -1195,25 +1193,28 @@ function applyMoveAuthoritative(mover, cardObj, side, reqId) {
     checkSlapCondition();
 
     // 5. Handle Reveal
+    // We need the *updated* hand to check for reveals
+    const currentHand = (mover === 'player') ? gameState.playerHand : gameState.aiHand;
+    
     let newTopCardPayload = null;
-    const laneCards = hand.filter(c => c.laneIndex === cardObj.laneIndex);
+    const laneCards = currentHand.filter(c => c.laneIndex === cardObj.laneIndex);
     if (laneCards.length > 0) {
         const newTop = laneCards[laneCards.length - 1];
         if (mover === 'player') newTopCardPayload = packCardWithMeta(newTop);
         if (mover === 'ai' && !newTop.isFaceUp && newTop.element) setCardFaceUp(newTop.element, newTop, 'ai');
     }
 
-    // --- 6. CHECK FOR SIMULTANEOUS SHORTAGE TRIGGER ---
+    // 6. CHECK FOR SIMULTANEOUS SHORTAGE TRIGGER
     if (gameState.playerDeck.length === 0 && gameState.aiDeck.length === 0) {
         if (gameState.centerPileLeft.length > 0 || gameState.centerPileRight.length > 0) {
-            triggerSuddenDeathSplit(); // Fills decks immediately
+            triggerSuddenDeathSplit(); 
         }
     }
 
-    // --- 7. WIN / END ROUND LOGIC ---
-    const handEmpty = (hand.length === 0);
+    // 7. WIN / END ROUND LOGIC
+    // FIX: Use the 'currentHand' reference we grabbed after the update
+    const handEmpty = (currentHand.length === 0);
     
-    // CRITICAL FIX: Only use special rules if BOTH are borrowing (Simultaneous)
     const bpHidden = document.getElementById('borrowed-player').classList.contains('hidden');
     const baHidden = document.getElementById('borrowed-ai').classList.contains('hidden');
     const isSimultaneousPhase = (!bpHidden && !baHidden);
@@ -1221,18 +1222,17 @@ function applyMoveAuthoritative(mover, cardObj, side, reqId) {
     if (handEmpty) {
         if (isSimultaneousPhase) {
             // === RARE SCENARIO (Simultaneous Shortage Phase) ===
-            // Check Penalties
             let hasPenalty = false;
             if (mover === 'player') hasPenalty = (gameState.playerReds > 0 || gameState.playerYellows > 0);
             else hasPenalty = (gameState.aiReds > 0 || gameState.aiYellows > 0);
 
             if (!hasPenalty) {
-                // Scenario 1: Clean Win -> Match Over
+                // Scenario 1: Clean Win
                 const payload = { type: 'MATCH_OVER', winner: mover };
                 sendNet(payload);
                 applyMatchOver(payload);
             } else {
-                // Scenario 2: Penalty Survival -> Round Over with Debt
+                // Scenario 2: Penalty Survival
                 const DEBT = 3; 
                 let nextPTotal = (mover === 'player') ? DEBT : (52 - DEBT);
                 let nextATotal = (mover === 'ai') ? DEBT : (52 - DEBT);
@@ -1248,20 +1248,13 @@ function applyMoveAuthoritative(mover, cardObj, side, reqId) {
                 applyRoundOver(payload);
             }
         } else {
-            // === STANDARD GAMEPLAY (99% of the time) ===
-            // Includes normal play OR single-player shortage.
-            // Rule: Winner starts next round with their current count.
-            
-            // Check for Match Win (Total Cards = 0)
+            // === STANDARD GAMEPLAY ===
             if ((mover === 'player' && gameState.playerTotal <= 0) || (mover === 'ai' && gameState.aiTotal <= 0)) {
                 const payload = { type: 'MATCH_OVER', winner: mover };
                 sendNet(payload);
                 applyMatchOver(payload);
             } else {
                 // Standard Round Win
-                // handleRoundOver calculates: 
-                // Winner = gameState.playerTotal
-                // Loser = 52 - gameState.playerTotal
                 handleRoundOver(mover);
             }
         }
@@ -1697,22 +1690,20 @@ async function preloadCardImages(cards) {
 
 function handleRoundOver(winner) {
     // STANDARD RULE:
-    // Winner starts with the amount of cards they finish on.
+    // Winner starts with the amount of cards they currently have (gameState total).
     // Loser starts with 52 minus that amount.
     
     if (winner === 'player') {
-        // Player keeps their current total (e.g., 40 cards)
-        // AI gets the rest (12 cards)
+        // Player wins: Player keeps current count. AI gets the remainder.
         gameState.aiTotal = 52 - gameState.playerTotal;
         gameState.p1Rounds++; 
     } else {
-        // AI keeps their current total
-        // Player gets the rest
+        // AI wins: AI keeps current count. Player gets the remainder.
         gameState.playerTotal = 52 - gameState.aiTotal;
         gameState.aiRounds++; 
     }
 
-    // Match Win Safety Check
+    // Safety Check for Match Win
     if (gameState.playerTotal <= 0 || gameState.aiTotal >= 52) {
         const payload = { type: 'MATCH_OVER', winner: 'player' };
         sendNet(payload);
@@ -1722,6 +1713,7 @@ function handleRoundOver(winner) {
         sendNet(payload);
         applyMatchOver(payload);
     } else {
+        // Send Round Over
         const payload = {
             type: 'ROUND_OVER',
             winner: winner,
