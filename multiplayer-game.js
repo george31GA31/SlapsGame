@@ -1163,6 +1163,7 @@ function adjudicateMove(m, moverOverride) {
     sendNet({ type: 'MOVE_APPLY', apply: applyPayload });
 }
 function applyMoveAuthoritative(mover, cardObj, side, reqId) {
+    // 1. Ghost cleanup
     gameState.opponentDragGhosts.forEach((ghostEl, key) => {
         const parts = key.split(':'); 
         if (parts[0] === cardObj.suit && parts[1] === cardObj.rank && parseInt(parts[2]) === cardObj.value) {
@@ -1171,9 +1172,14 @@ function applyMoveAuthoritative(mover, cardObj, side, reqId) {
         }
     });
 
+    // 2. Update piles
     const targetPile = (side === 'left') ? gameState.centerPileLeft : gameState.centerPileRight;
     targetPile.push(cardObj);
 
+    // 3. Remove from Hand and Decrement Score
+    // IMPORTANT: We ALWAYS decrement score here because 'playerTotal' tracks how close you are to 0 (Winning).
+    // Even in Borrowed Phase, playing from HAND gets you closer to winning.
+    
     let hand = null;
     if (mover === 'player') {
         hand = gameState.playerHand;
@@ -1185,43 +1191,43 @@ function applyMoveAuthoritative(mover, cardObj, side, reqId) {
         gameState.aiTotal--;
     }
 
+    // 4. Update UI
     if (cardObj.element) cardObj.element.remove();
     renderCenterPile(side, cardObj);
     updateScoreboard();
     checkSlapCondition();
 
+    // 5. Handle Reveal
     let newTopCardPayload = null;
     const laneCards = hand.filter(c => c.laneIndex === cardObj.laneIndex);
-    
     if (laneCards.length > 0) {
         const newTop = laneCards[laneCards.length - 1];
-        if (mover === 'player') {
-            newTopCardPayload = packCardWithMeta(newTop);
-        }
-        if (mover === 'ai' && !newTop.isFaceUp && newTop.element) {
-            setCardFaceUp(newTop.element, newTop, 'ai');
-        }
+        if (mover === 'player') newTopCardPayload = packCardWithMeta(newTop);
+        if (mover === 'ai' && !newTop.isFaceUp && newTop.element) setCardFaceUp(newTop.element, newTop, 'ai');
     }
 
-    // --- CHECK FOR WIN / END ROUND ---
+    // --- WINNING LOGIC ---
+    
+    // We check if the HAND is empty.
     const handEmpty = (hand.length === 0);
     const isBorrowed = !document.getElementById('borrowed-player').classList.contains('hidden');
 
     if (handEmpty) {
         if (isBorrowed) {
-            // --- BORROWED PHASE ENDING ---
-            // Check Penalties
+            // BORROWED PHASE WIN LOGIC
+            // "Scenario 1: lays final foundation pile... win match... if no penalties"
+            
             let hasPenalty = false;
             if (mover === 'player') hasPenalty = (gameState.playerReds > 0 || gameState.playerYellows > 0);
             else hasPenalty = (gameState.aiReds > 0 || gameState.aiYellows > 0);
 
             if (!hasPenalty) {
-                // Scenario 1: Clean Win -> Match Over
+                // CLEAN WIN
                 const payload = { type: 'MATCH_OVER', winner: mover };
                 sendNet(payload);
                 applyMatchOver(payload);
             } else {
-                // Scenario 2: Penalty Survival -> Round Over
+                // PENALTY SURVIVAL (Scenario 2)
                 const DEBT = 3; 
                 let nextPTotal = (mover === 'player') ? DEBT : (52 - DEBT);
                 let nextATotal = (mover === 'ai') ? DEBT : (52 - DEBT);
@@ -1230,13 +1236,14 @@ function applyMoveAuthoritative(mover, cardObj, side, reqId) {
                     type: 'ROUND_OVER',
                     winner: mover,
                     pTotal: nextPTotal,
-                    aTotal: nextATotal
+                    aTotal: nextATotal,
+                    reason: 'penalty_survival'
                 };
                 sendNet(payload);
                 applyRoundOver(payload);
             }
         } else {
-            // --- NORMAL PHASE ENDING ---
+            // STANDARD PHASE WIN LOGIC
             if ((mover === 'player' && gameState.playerTotal <= 0) || (mover === 'ai' && gameState.aiTotal <= 0)) {
                 const payload = { type: 'MATCH_OVER', winner: mover };
                 sendNet(payload);
@@ -1420,27 +1427,43 @@ function performRevealHostOnly() {
     const bpEl = document.getElementById('borrowed-player');
     const baEl = document.getElementById('borrowed-ai');
 
-    if (gameState.playerDeck.length === 0 && gameState.aiDeck.length > 0) {
-        const steal = Math.floor(gameState.aiDeck.length / 2);
-        if (steal > 0) {
-            gameState.playerDeck = gameState.playerDeck.concat(gameState.aiDeck.splice(0, steal));
-            if (bpEl) bpEl.classList.remove('hidden');
+    // 1. Handle "Standard" Shortages (Stealing if one is empty)
+    // We only do this if NOT in Simultaneous mode yet
+    const isSimultaneous = bpEl && !bpEl.classList.contains('hidden') && baEl && !baEl.classList.contains('hidden');
+
+    if (!isSimultaneous) {
+        if (gameState.playerDeck.length === 0 && gameState.aiDeck.length > 0) {
+            const steal = Math.floor(gameState.aiDeck.length / 2);
+            if (steal > 0) {
+                gameState.playerDeck = gameState.playerDeck.concat(gameState.aiDeck.splice(0, steal));
+                if (bpEl) bpEl.classList.remove('hidden');
+            }
         }
-    }
-    if (gameState.aiDeck.length === 0 && gameState.playerDeck.length > 0) {
-        const steal = Math.floor(gameState.playerDeck.length / 2);
-        if (steal > 0) {
-            gameState.aiDeck = gameState.aiDeck.concat(gameState.playerDeck.splice(0, steal));
-            if (baEl) baEl.classList.remove('hidden');
+        if (gameState.aiDeck.length === 0 && gameState.playerDeck.length > 0) {
+            const steal = Math.floor(gameState.playerDeck.length / 2);
+            if (steal > 0) {
+                gameState.aiDeck = gameState.aiDeck.concat(gameState.playerDeck.splice(0, steal));
+                if (baEl) baEl.classList.remove('hidden');
+            }
         }
     }
 
+    // 2. Scoring Deduction
+    // LOGIC FIX: If Simultaneous (Borrowed Phase), DO NOT decrement scores.
+    // Cards in the deck are neutral.
+    
     const playerBorrowing = bpEl ? !bpEl.classList.contains('hidden') : false;
     const aiBorrowing = baEl ? !baEl.classList.contains('hidden') : false;
+    const nowSimultaneous = (playerBorrowing && aiBorrowing);
 
-    if (playerBorrowing) gameState.aiTotal--; else gameState.playerTotal--;
-    if (aiBorrowing) gameState.playerTotal--; else gameState.aiTotal--;
+    if (!nowSimultaneous) {
+        // Normal Play or Single Shortage
+        if (playerBorrowing) gameState.aiTotal--; else gameState.playerTotal--;
+        if (aiBorrowing) gameState.playerTotal--; else gameState.aiTotal--;
+    } 
+    // Else: It is Simultaneous Borrowed Phase. We reveal cards but NO ONE loses points.
 
+    // 3. Perform Reveal
     let rightCard = null;
     let leftCard = null;
 
@@ -1456,6 +1479,20 @@ function performRevealHostOnly() {
         leftCard = packCard(aCard);
     }
 
+    // 4. Trigger Check
+    let suddenDeathTriggered = false;
+    if (gameState.playerDeck.length === 0 && gameState.aiDeck.length === 0) {
+        if (gameState.centerPileLeft.length > 0 || gameState.centerPileRight.length > 0) {
+            // Determine if this is Cycle 1 or Cycle 2
+            if (nowSimultaneous) {
+                triggerSecondCycleReset();
+            } else {
+                triggerBorrowedSplit();
+                suddenDeathTriggered = true;
+            }
+        }
+    }
+
     gameState.playerReady = false;
     gameState.aiReady = false;
     gameState.drawLock = false;
@@ -1463,13 +1500,13 @@ function performRevealHostOnly() {
     return {
         playerTotal: gameState.playerTotal,
         aiTotal: gameState.aiTotal,
-        borrowedPlayer: playerBorrowing,
-        borrowedAi: aiBorrowing,
+        borrowedPlayer: playerBorrowing || suddenDeathTriggered,
+        borrowedAi: aiBorrowing || suddenDeathTriggered,
         right: rightCard,
-        left: leftCard
+        left: leftCard,
+        suddenDeath: suddenDeathTriggered
     };
 }
-
 function applyRevealFromHost(payload) {
     const bpEl = document.getElementById('borrowed-player');
     const baEl = document.getElementById('borrowed-ai');
