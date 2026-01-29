@@ -2,6 +2,7 @@
    MULTIPLAYER GAME.JS (Human vs Human)
    - Host Authoritative Logic
    - Guest Visual Mirroring
+   - Phase 1 & 2 Stalemate Logic Implemented
    ========================================= */
 
 const gameState = {
@@ -151,14 +152,12 @@ function bindConnection(conn) {
     conn.on('data', (msg) => handleNet(msg));
 
     conn.on('close', () => {
-        // If match already ended normally, ignore disconnect
         if (gameState.matchEnded) return;
         handleNet({ type: 'OPPONENT_LEFT' }); 
     });
 
     conn.on('error', (err) => {
         console.error("Connection quirk:", err);
-        // We do nothing here. 'close' will handle actual drops.
     });
 }
 function sendNet(obj) {
@@ -239,7 +238,6 @@ function handleNet(msg) {
     }
    
    if (msg.type === 'OPPONENT_REJECT') {
-        // The Host tried to play but failed. Delete their ghost.
         cleanupGhost(msg.card);
         return;
     }
@@ -278,40 +276,33 @@ function handleNet(msg) {
     if (msg.type === 'MATCH_OVER') {
         applyMatchOver(msg);
         return;
-       if (msg.type === 'SUDDEN_DEATH_START') {
-        // Guest receives new deck data
-        gameState.playerDeck = msg.aDeck.map(unpackCard); // Swap perspective!
+    } // <--- FIXED MISSING BRACE HERE
+
+    // --- PHASE 1 & 2 MESSAGE HANDLERS ---
+    if (msg.type === 'BORROWED_START') {
+        gameState.playerDeck = msg.aDeck.map(unpackCard); // Swap
         gameState.aiDeck = msg.pDeck.map(unpackCard);
-        
-        // Clear local piles
         gameState.centerPileLeft = [];
         gameState.centerPileRight = [];
-        
-        applySuddenDeathUI();
+        gameState.playerReady = false; 
+        gameState.aiReady = false;
+        applyBorrowedUI();
         return;
     }
 
-    if (msg.type === 'STALEMATE_RESET') {
-        // Update totals (perspective swap)
+    if (msg.type === 'CYCLE_RESET') {
         gameState.playerTotal = msg.aTotal;
         gameState.aiTotal = msg.pTotal;
+        // Don't need to handle odd card here, the round restart follows
         
-        // Handle odd card
-        const odd = msg.oddCard ? unpackCard(msg.oddCard) : null;
-        
-        // Guest just waits for the standard ROUND_START message which follows
-        // But we can show a message
         const modal = document.getElementById('slap-overlay');
         modal.classList.remove('hidden');
         document.getElementById('slap-text').innerText = "STALEMATE RESET";
         return;
     }
-    }
     
     // --- DISCONNECT HANDLER ---
-// --- DISCONNECT HANDLER ---
     if (msg.type === 'OPPONENT_LEFT') {
-        // FIX 2: If the match is already over (someone won), ignore the disconnect.
         if (gameState.matchEnded) return;
 
         const name = (gameState.opponentName || "OPPONENT").toUpperCase();
@@ -343,26 +334,17 @@ function handleNet(msg) {
     }
 
     if (msg.type === 'REMATCH_YES') {
-        // FIX 1: FULL RESET
-        // Opponent accepted -> We must reset everything to start fresh
-        
         const modal = document.getElementById('game-message');
         if(modal) modal.classList.add('hidden');
         
-        // Reset Logic
         gameState.p1Rounds = 0; gameState.aiRounds = 0;
         gameState.p1Slaps = 0; gameState.aiSlaps = 0;
-        
-        // CRITICAL: Reset totals to 26 so startRound doesn't think the game is over
         gameState.playerTotal = 26; 
         gameState.aiTotal = 26;
+        gameState.matchEnded = false;
         
-        gameState.matchEnded = false; // Allow disconnects to count again
-        
-        // Reset Visuals
         updateScoreboardWidget();
-        
-        // Host triggers the deal
+
         if (gameState.isHost) {
             startRoundHostAuthoritative();
         }
@@ -381,16 +363,13 @@ function handleInput(e) {
         e.preventDefault();
         if (!gameState.gameActive) return;
 
-        // Debounce to prevent double-spam
         const now = Date.now();
         if (now - gameState.lastSpacebarTime < 400) { return; }
         gameState.lastSpacebarTime = now;
 
         if (gameState.isHost) {
-            // Host decides immediately (as 'player')
             adjudicateSlap('player'); 
         } else {
-            // Guest asks Host to decide
             sendNet({ type: 'SLAP_REQ' }); 
         }
     }
@@ -437,76 +416,100 @@ function checkSlapCondition() {
    ================================ */
 
 function adjudicateSlap(who) {
-    // Only Host runs this
     if (!gameState.gameActive) return;
 
     if (gameState.slapActive) {
-        // --- CHECK SUDDEN DEATH (New Rule) ---
-        const isSuddenDeath = !document.getElementById('borrowed-player').classList.contains('hidden');
-        
-        if (isAlreadySuddenDeath) {
-            // FORCE RESET (Scenario 1)
-            // No points awarded. We just restart the round.
-            const pot = gameState.centerPileLeft.length + gameState.centerPileRight.length;
-            
-            // Calculate new totals (Winner takes pot into foundation for next round)
-            if (who === 'player') gameState.aiTotal += pot; 
-            else gameState.playerTotal += pot;
-            
-            // Broadcast Reset
-            const resetMsg = {
-                type: 'STALEMATE_RESET', // Guest will see "Slap Reset"
-                pTotal: gameState.playerTotal,
-                aTotal: gameState.aiTotal
-            };
-            sendNet(resetMsg);
-            
-            // Host Reset Locally
-            const modal = document.getElementById('slap-overlay');
-            modal.classList.remove('hidden');
-            document.getElementById('slap-text').innerText = "SUDDEN DEATH RESET!";
-            setTimeout(() => {
-                modal.classList.add('hidden');
-                startRoundHostAuthoritative();
-            }, 1500);
-            return;
-        }
-
-        // --- STANDARD SLAP LOGIC ---
-        gameState.gameActive = false; 
-
-        const pilesTotal = gameState.centerPileLeft.length + gameState.centerPileRight.length;
-
-        // Give cards to the loser (standard logic we established)
-        if (who === 'player') { 
-            gameState.aiTotal += pilesTotal; 
-        } else { 
-            gameState.playerTotal += pilesTotal; 
-        }
-
-        gameState.centerPileLeft = [];
-        gameState.centerPileRight = [];
-        gameState.slapActive = false;
-
-        const update = {
-            type: 'SLAP_UPDATE',
-            winner: who,
-            pTotal: gameState.playerTotal,
-            aTotal: gameState.aiTotal
-        };
-        
-        sendNet(update);
-        applySlapUpdate(update); 
-
+        // CALL THE LOGIC FUNCTION
+        resolveSlap(who);
     } else {
-        // --- INVALID SLAP (PENALTY) ---
+        // INVALID SLAP (PENALTY)
         issuePenaltyHostAuth(who);
     }
 }
+
+// --- MISSING FUNCTION ADDED HERE ---
+function resolveSlap(winner) {
+    gameState.slapActive = false;
+    gameState.gameActive = false;
+
+    // --- PHASE 2, SCENARIO 1 CHECK ---
+    // Condition: Slap occurs when Decks are Empty (or near empty) BUT 'Borrowed' hasn't started yet.
+    // This effectively catches the "Last 2 cards before simultaneous shortage" scenario.
+    
+    const isBorrowed = !document.getElementById('borrowed-player').classList.contains('hidden');
+    const bothDecksEmpty = (gameState.playerDeck.length === 0 && gameState.aiDeck.length === 0);
+
+    if (!isBorrowed && bothDecksEmpty) {
+        console.log("Slap on last cards before Borrowed Phase. Ending Round.");
+        
+        const pilesTotal = gameState.centerPileLeft.length + gameState.centerPileRight.length;
+        
+        if (winner === 'player') {
+            // Host Won Slap -> Host starts next round with just Hand.
+            // Guest (Loser) takes the pile.
+            gameState.playerTotal = gameState.playerHand.length; 
+            gameState.aiTotal = gameState.aiHand.length + pilesTotal;
+        } else {
+            // Guest Won Slap -> Guest starts next round with just Hand.
+            // Host (Loser) takes the pile.
+            gameState.aiTotal = gameState.aiHand.length;
+            gameState.playerTotal = gameState.playerHand.length + pilesTotal;
+        }
+
+        // Broadcast End
+        const resetMsg = {
+            type: 'CYCLE_RESET', // Reuse message for visual reset
+            pTotal: gameState.playerTotal,
+            aTotal: gameState.aiTotal
+        };
+        sendNet(resetMsg);
+
+        // Visuals
+        const overlay = document.getElementById('slap-overlay');
+        overlay.classList.remove('hidden');
+        document.getElementById('slap-text').innerText = (winner === 'player') ? "PLAYER SLAPS! ROUND RESET" : "OPPONENT SLAPS! ROUND RESET";
+        overlay.style.backgroundColor = (winner === 'player') ? "rgba(0, 200, 0, 0.9)" : "rgba(200, 0, 0, 0.9)";
+
+        setTimeout(() => {
+            overlay.classList.add('hidden');
+            startRoundHostAuthoritative();
+        }, 2000);
+        return;
+    }
+
+    // --- NORMAL SLAP (Including during Borrowed Phase) ---
+    // "If there is a slap after a simultaneous draw deck shortage then normal slap rules apply"
+    // "The amount of cards that were in the middle get awarded to the LOSER"
+    
+    const pilesTotal = gameState.centerPileLeft.length + gameState.centerPileRight.length;
+
+    if (winner === 'player') {
+        gameState.aiTotal += pilesTotal; // Give to Loser (Guest)
+        gameState.p1Slaps++;
+    } else {
+        gameState.playerTotal += pilesTotal; // Give to Loser (Host)
+        gameState.aiSlaps++;
+    }
+
+    // Standard Cleanup
+    gameState.centerPileLeft = [];
+    gameState.centerPileRight = [];
+    document.getElementById('center-pile-left').innerHTML = '';
+    document.getElementById('center-pile-right').innerHTML = '';
+
+    const update = {
+        type: 'SLAP_UPDATE',
+        winner: winner,
+        pTotal: gameState.playerTotal,
+        aTotal: gameState.aiTotal
+    };
+    sendNet(update);
+    applySlapUpdate(update);
+}
+
 function issuePenaltyHostAuth(who) {
     let currentY, currentR;
 
-    // Update flags locally on Host
     if (who === 'player') {
         gameState.playerYellows++;
         currentY = gameState.playerYellows;
@@ -550,7 +553,7 @@ function issuePenaltyHostAuth(who) {
         yellows: currentY,
         reds: currentR,
         isRed: isRed,
-        pTotal: gameState.playerTotal, // Sync scores
+        pTotal: gameState.playerTotal, 
         aTotal: gameState.aiTotal
     };
     
@@ -591,19 +594,14 @@ function applySlapUpdate(data) {
     }
 
     // --- FIX: DO NOT CLEAR PILES YET ---
-    // We want the cards to "stay where they are" so players see the result.
-    // We only clean up the "Ghosts" (moving cards) immediately.
-    
     if (gameState.opponentDragGhosts) {
         gameState.opponentDragGhosts.forEach(el => el.remove()); 
         gameState.opponentDragGhosts.clear(); 
     }
 
-    // Restore opacity of any cards that were being dragged so they don't look invisible
     gameState.aiHand.forEach(c => { if (c.element) c.element.style.opacity = '1'; });
     gameState.playerHand.forEach(c => { if (c.element) c.element.style.opacity = '1'; });
 
-    // 3. Update Stats & Scores (Data only, visual piles stay)
     if (gameState.isHost) {
         gameState.playerTotal = data.pTotal;
         gameState.aiTotal = data.aTotal;
@@ -621,7 +619,6 @@ function applySlapUpdate(data) {
 
     // 4. RESET EVERYTHING AFTER 2 SECONDS
     setTimeout(() => {
-        // NOW we clear the visual piles
         gameState.centerPileLeft = [];
         gameState.centerPileRight = [];
         document.getElementById('center-pile-left').innerHTML = '';
@@ -639,24 +636,18 @@ function applySlapUpdate(data) {
     }, 2000);
 }
 function applyPenaltyUpdate(data) {
-    // 1. Sync Scores
-    // --- FIX: PERSPECTIVE SWAP ---
     if (gameState.isHost) {
         gameState.playerTotal = data.pTotal;
         gameState.aiTotal = data.aTotal;
     } else {
-        // I am Guest: My total is the 'AI' total from the message
         gameState.playerTotal = data.aTotal;
         gameState.aiTotal = data.pTotal;
     }
-    // -----------------------------
     updateScoreboard();
 
-    // 2. Determine whose badges to update locally
     let localTarget = data.target; 
     
     if (!gameState.isHost) {
-        // Perspective Swap for Guest
         localTarget = (data.target === 'player') ? 'ai' : 'player';
     }
 
@@ -671,7 +662,7 @@ function applyPenaltyUpdate(data) {
     }
 }
 
-async function startRoundHostAuthoritative() {
+async function startRoundHostAuthoritative(oddCard = null) {
     gameState.matchEnded = false;
 
     let fullDeck = createDeck();
@@ -717,6 +708,10 @@ async function startRoundHostAuthoritative() {
     dealSmartHand(aHandCards, 'ai');
 
     resetCenterPiles();
+    if (oddCard) {
+        gameState.centerPileLeft.push(oddCard);
+        renderCenterPile('left', oddCard);
+    }
     checkDeckVisibility();
 
     gameState.gameActive = false;
@@ -754,10 +749,17 @@ async function startRoundJoinerFromState(state) {
     dealSmartHand(gameState.playerHand, 'player');
     dealSmartHand(gameState.aiHand, 'ai');
     resetCenterPiles();
+    
+    // Handle odd card sync (it will be in the center piles from state import)
+    if (state.centerPileLeft && state.centerPileLeft.length > 0) {
+        state.centerPileLeft.forEach(c => renderCenterPile('left', c));
+    }
+    
     const bp = document.getElementById('borrowed-player');
     const ba = document.getElementById('borrowed-ai');
     if (bp) state.borrowedPlayer ? bp.classList.remove('hidden') : bp.classList.add('hidden');
     if (ba) state.borrowedAi ? ba.classList.remove('hidden') : ba.classList.add('hidden');
+    
     checkDeckVisibility();
     gameState.gameActive = false;
     gameState.playerReady = false;
@@ -770,7 +772,6 @@ function resetCenterPiles() {
     gameState.centerPileLeft = [];
     gameState.centerPileRight = [];
 
-    // Cleanup ghosts on round reset
     if (gameState.opponentDragGhosts) {
         gameState.opponentDragGhosts.forEach(el => el.remove());
         gameState.opponentDragGhosts.clear();
@@ -1096,7 +1097,6 @@ function requestMoveToHost(cardData, dropSide) {
         return;
     }
 
-    // --- FIX: CAPTURE TARGET ID (What are we trying to cover?) ---
     let targetId = null;
     if (dropSide === 'left') {
         const p = gameState.centerPileLeft;
@@ -1105,9 +1105,7 @@ function requestMoveToHost(cardData, dropSide) {
         const p = gameState.centerPileRight;
         if (p.length > 0) targetId = p[p.length - 1].id;
     }
-    // -------------------------------------------------------------
 
-    // MIRROR LOGIC: Guest's Left is Host's Right.
     let targetSideForHost = dropSide;
     if (!gameState.isHost) {
         if (dropSide === 'left') targetSideForHost = 'right';
@@ -1117,7 +1115,7 @@ function requestMoveToHost(cardData, dropSide) {
     const req = {
         reqId: `${gameState.myId}:${Date.now()}:${(++gameState.moveSeq)}`,
         dropSide: targetSideForHost, 
-        targetId: targetId, // Send the ID we are aiming at
+        targetId: targetId,
         card: packCardWithMeta(cardData)
     };
 
@@ -1132,7 +1130,6 @@ function adjudicateMove(m, moverOverride) {
     const moverHand = (mover === 'player') ? gameState.playerHand : gameState.aiHand;
     const idx = moverHand.findIndex(c => c.id === m.card.id);
 
-    // 1. Basic Validity Check
     if (idx === -1) {
         if (mover === 'ai') sendNet({ type: 'MOVE_REJECT', reject: { reqId: m.reqId, cardId: m.card.id } });
         return;
@@ -1140,12 +1137,10 @@ function adjudicateMove(m, moverOverride) {
 
     const cardObj = moverHand[idx];
     
-    // Determine which pile is being targeted
     let pile = null;
     if (m.dropSide === 'left') pile = gameState.centerPileLeft;
     else if (m.dropSide === 'right') pile = gameState.centerPileRight;
 
-    // 2. Strict Race Condition Check
     const currentTop = (pile && pile.length > 0) ? pile[pile.length - 1] : null;
     const currentTopId = currentTop ? currentTop.id : null;
 
@@ -1154,18 +1149,11 @@ function adjudicateMove(m, moverOverride) {
     else if (!checkPileLogic(cardObj, pile)) rejectionReason = "invalid_math";
 
     if (rejectionReason) {
-        // --- FIX: REJECTION HANDLING ---
         if (mover === 'ai') {
-            // 1. Tell Guest to snap back
             sendNet({ type: 'MOVE_REJECT', reject: { reqId: m.reqId, cardId: m.card.id } });
-            
-            // 2. Host cleans up the Guest's ghost immediately
             cleanupGhost(m.card);
         } else {
-            // 1. Host snaps back locally
             rejectMoveFromHost({ cardId: cardObj.id });
-            
-            // 2. Tell Guest to delete Host's ghost
             sendNet({ type: 'OPPONENT_REJECT', card: m.card });
         }
         return;
@@ -1175,7 +1163,6 @@ function adjudicateMove(m, moverOverride) {
     sendNet({ type: 'MOVE_APPLY', apply: applyPayload });
 }
 function applyMoveAuthoritative(mover, cardObj, side, reqId) {
-    // 1. Ghost cleanup (Type-Safe)
     gameState.opponentDragGhosts.forEach((ghostEl, key) => {
         const parts = key.split(':'); 
         if (parts[0] === cardObj.suit && parts[1] === cardObj.rank && parseInt(parts[2]) === cardObj.value) {
@@ -1184,11 +1171,9 @@ function applyMoveAuthoritative(mover, cardObj, side, reqId) {
         }
     });
 
-    // 2. Update piles
     const targetPile = (side === 'left') ? gameState.centerPileLeft : gameState.centerPileRight;
     targetPile.push(cardObj);
 
-    // 3. Remove from mover hand
     let hand = null;
     if (mover === 'player') {
         hand = gameState.playerHand;
@@ -1200,13 +1185,11 @@ function applyMoveAuthoritative(mover, cardObj, side, reqId) {
         gameState.aiTotal--;
     }
 
-    // 4. Update UI on host
     if (cardObj.element) cardObj.element.remove();
     renderCenterPile(side, cardObj);
     updateScoreboard();
     checkSlapCondition();
 
-    // 5. Handle Reveal (Host Side)
     let newTopCardPayload = null;
     const laneCards = hand.filter(c => c.laneIndex === cardObj.laneIndex);
     
@@ -1220,64 +1203,50 @@ function applyMoveAuthoritative(mover, cardObj, side, reqId) {
         }
     }
 
-    // --- NEW LOGIC STARTS HERE ---
-
-    // 6. CHECK FOR SUDDEN DEATH TRIGGER (Rule G.7.4)
-    // If both decks are empty, split the center immediately
-    if (gameState.playerDeck.length === 0 && gameState.aiDeck.length === 0) {
-        if (gameState.centerPileLeft.length > 0 || gameState.centerPileRight.length > 0) {
-            triggerSuddenDeathSplit();
-        }
-    }
-
-    // 7. CHECK FOR WIN / END ROUND
-    // We check if the HAND is empty (not the deck)
+    // --- CHECK FOR WIN / END ROUND ---
     const handEmpty = (hand.length === 0);
-    const isSuddenDeath = !document.getElementById('borrowed-player').classList.contains('hidden');
+    const isBorrowed = !document.getElementById('borrowed-player').classList.contains('hidden');
 
     if (handEmpty) {
-        if (isSuddenDeath) {
-            // SCENARIO 2 CHECK: Do they have penalties?
+        if (isBorrowed) {
+            // --- BORROWED PHASE ENDING ---
+            // Check Penalties
             let hasPenalty = false;
             if (mover === 'player') hasPenalty = (gameState.playerReds > 0 || gameState.playerYellows > 0);
             else hasPenalty = (gameState.aiReds > 0 || gameState.aiYellows > 0);
 
             if (!hasPenalty) {
-                // CLEAN WIN -> Match Over
+                // Scenario 1: Clean Win -> Match Over
                 const payload = { type: 'MATCH_OVER', winner: mover };
                 sendNet(payload);
                 applyMatchOver(payload);
             } else {
-                // SURVIVED -> Next Round with Debt
-                const PENALTY = 3;
-                // Determine new totals for next round
-                let nextPTotal = (mover === 'player') ? PENALTY : (52 - PENALTY);
-                let nextATotal = (mover === 'ai') ? PENALTY : (52 - PENALTY);
-                
+                // Scenario 2: Penalty Survival -> Round Over
+                const DEBT = 3; 
+                let nextPTotal = (mover === 'player') ? DEBT : (52 - DEBT);
+                let nextATotal = (mover === 'ai') ? DEBT : (52 - DEBT);
+
                 const payload = {
                     type: 'ROUND_OVER',
                     winner: mover,
                     pTotal: nextPTotal,
-                    aTotal: nextATotal,
-                    reason: 'penalty_survival'
+                    aTotal: nextATotal
                 };
                 sendNet(payload);
                 applyRoundOver(payload);
             }
         } else {
-            // NORMAL GAME WIN/ROUND OVER
-            // If total is 0 or less, they win match. Otherwise round over.
+            // --- NORMAL PHASE ENDING ---
             if ((mover === 'player' && gameState.playerTotal <= 0) || (mover === 'ai' && gameState.aiTotal <= 0)) {
                 const payload = { type: 'MATCH_OVER', winner: mover };
                 sendNet(payload);
                 applyMatchOver(payload);
             } else {
-                handleRoundOver(mover); // Standard round end logic
+                handleRoundOver(mover);
             }
         }
     }
 
-    // 8. Return Payload for Guest Sync
     return {
         reqId,
         mover,
@@ -1292,27 +1261,20 @@ function applyMoveFromHost(a) {
     const localMover = (a.mover === 'player') ? 'ai' : 'player';
     const localSide = (a.side === 'left') ? 'right' : 'left';
 
-    // 1. Ghost cleanup (Type-Safe)
     gameState.opponentDragGhosts.forEach((ghostEl, key) => {
         const parts = key.split(':'); 
-        // Use loose equality (==) for value to handle string/number mismatch
         if (parts[0] === a.card.suit && parts[1] === a.card.rank && parts[2] == a.card.value) {
             ghostEl.remove();
             gameState.opponentDragGhosts.delete(key);
         }
     });
 
-    // Score Sync
     gameState.playerTotal = a.aiTotal;
     gameState.aiTotal = a.playerTotal;
 
     const hand = (localMover === 'player') ? gameState.playerHand : gameState.aiHand;
     
-    // --- FIX: AGGRESSIVE CARD FINDING ---
-    // 1. Try finding by Exact ID
     let idx = hand.findIndex(c => c.id === a.card.id);
-    
-    // 2. If ID not found, find by Suit/Rank (Ignore value type issues)
     if (idx === -1) {
         idx = hand.findIndex(c => c.suit === a.card.suit && c.rank === a.card.rank);
     }
@@ -1321,29 +1283,24 @@ function applyMoveFromHost(a) {
 
     if (idx !== -1) {
         cardObj = hand[idx];
-        hand.splice(idx, 1); // Remove from memory array
+        hand.splice(idx, 1); 
     } else {
         cardObj = unpackCard(a.card);
     }
 
-    // 3. FORCE REMOVE DOM ELEMENT
     if (cardObj.element) {
         cardObj.element.remove();
         cardObj.element = null; 
     }
     
-    // 4. SAFETY SWEEP: Check for visual duplicates in the hand and kill them
-    // This handles cases where a "Ghost" or stale DOM element was left behind
     if (localMover === 'ai') {
         const container = document.getElementById('ai-foundation-area');
         if (container) {
-            // Find any img inside this container with matching suit/rank source
             const querySrc = `assets/cards/${a.card.rank}_of_${a.card.suit}.png`;
             const duplicates = Array.from(container.querySelectorAll('img')).filter(img => img.src.includes(querySrc));
             duplicates.forEach(d => d.remove());
         }
     }
-    // --------------------------------
 
     const pile = (localSide === 'left') ? gameState.centerPileLeft : gameState.centerPileRight;
     pile.push(cardObj);
@@ -1352,7 +1309,6 @@ function applyMoveFromHost(a) {
     updateScoreboard();
     checkSlapCondition();
 
-    // 5. Handle Flip
     if (a.newTopCard && localMover === 'ai') {
         let newCardObj = gameState.aiHand.find(c => c.id === a.newTopCard.id);
         if (!newCardObj) {
@@ -1376,7 +1332,6 @@ function handlePlayerDeckClick() {
         checkDrawConditionMultiplayer();
         return;
     }
-    // Re-ready check during game pauses (e.g. after slap)
     if (gameState.gameActive && !gameState.playerReady) {
         gameState.playerReady = true;
         document.getElementById('player-draw-deck')?.classList.add('deck-ready');
@@ -1387,8 +1342,28 @@ function handlePlayerDeckClick() {
 
 function checkDrawConditionMultiplayer() {
     if (gameState.drawLock || gameState.countdownRunning) return;
+    
     if (gameState.playerReady && gameState.aiReady) {
         if (!gameState.isHost) return;
+
+        // --- NEW TRIGGER LOGIC (Phase 1) ---
+        // If both players want to draw, but both decks are EMPTY...
+        if (gameState.playerDeck.length === 0 && gameState.aiDeck.length === 0) {
+            // Check if we are already in Borrowed Mode (Cycle 2 Trigger)
+            const isBorrowed = !document.getElementById('borrowed-player').classList.contains('hidden');
+            
+            if (isBorrowed) {
+                // We ran out of borrowed cards too. This is "Cycle 2".
+                // Trigger the Loop End Reset (Phase 2, Scenario 2).
+                triggerSecondCycleReset();
+            } else {
+                // This is the first time running out.
+                // Trigger "Borrowed" Phase (Phase 1).
+                triggerBorrowedSplit();
+            }
+            return;
+        }
+
         gameState.drawLock = true;
         sendNet({ type: 'HOST_COUNTDOWN' });
         setTimeout(() => startCountdownFromHost(), 50);
@@ -1415,34 +1390,25 @@ function startCountdownFromHost() {
             overlay.offsetHeight;
             overlay.style.animation = 'popIn 0.5s ease';
 
-            // --- NEW: PRE-LOAD AT COUNT 1 ---
             if (count === 1 && gameState.isHost) {
-                // 1. Calculate the result early
                 const result = performRevealHostOnly();
-                
-                // 2. Send "Preload" command to Guest
                 sendNet({ type: 'REVEAL_PRELOAD', result });
 
-                // 3. Render Locally (Hidden)
                 if (result.right) renderCenterPile('right', unpackCard(result.right), true);
                 if (result.left) renderCenterPile('left', unpackCard(result.left), true);
                 
-                // Update UI data (scores/borrowed tags) immediately
                 updateScoreboard(); 
             }
-            // --------------------------------
 
         } else {
             clearInterval(timer);
             overlay.classList.add('hidden');
             gameState.countdownRunning = false;
 
-            // --- NEW: SHOW TIME AT COUNT 0 ---
             if (gameState.isHost) {
                 sendNet({ type: 'REVEAL_SHOW' });
-                applyRevealShow(); // Trigger local show
+                applyRevealShow(); 
             }
-            // --------------------------------
         }
     }, 800);
 }
@@ -1455,18 +1421,16 @@ function performRevealHostOnly() {
     const baEl = document.getElementById('borrowed-ai');
 
     if (gameState.playerDeck.length === 0 && gameState.aiDeck.length > 0) {
-        const stealAmount = Math.floor(gameState.aiDeck.length / 2);
-        if (stealAmount > 0) {
-            const stolen = gameState.aiDeck.splice(0, stealAmount);
-            gameState.playerDeck = gameState.playerDeck.concat(stolen);
+        const steal = Math.floor(gameState.aiDeck.length / 2);
+        if (steal > 0) {
+            gameState.playerDeck = gameState.playerDeck.concat(gameState.aiDeck.splice(0, steal));
             if (bpEl) bpEl.classList.remove('hidden');
         }
     }
     if (gameState.aiDeck.length === 0 && gameState.playerDeck.length > 0) {
-        const stealAmount = Math.floor(gameState.playerDeck.length / 2);
-        if (stealAmount > 0) {
-            const stolen = gameState.playerDeck.splice(0, stealAmount);
-            gameState.aiDeck = gameState.aiDeck.concat(stolen);
+        const steal = Math.floor(gameState.playerDeck.length / 2);
+        if (steal > 0) {
+            gameState.aiDeck = gameState.aiDeck.concat(gameState.playerDeck.splice(0, steal));
             if (baEl) baEl.classList.remove('hidden');
         }
     }
@@ -1510,21 +1474,14 @@ function applyRevealFromHost(payload) {
     const bpEl = document.getElementById('borrowed-player');
     const baEl = document.getElementById('borrowed-ai');
 
-    // --- FIX: SWAP BORROWED TAGS ---
-    // payload.borrowedPlayer means "Host is borrowing". 
-    // As Guest, Host is my Opponent ('ai'), so we update baEl (Opponent).
     if (baEl) {
         payload.borrowedPlayer ? baEl.classList.remove('hidden') : baEl.classList.add('hidden');
     }
 
-    // payload.borrowedAi means "Guest is borrowing". 
-    // As Guest, that is Me ('player'), so we update bpEl (Player).
     if (bpEl) {
         payload.borrowedAi ? bpEl.classList.remove('hidden') : bpEl.classList.add('hidden');
     }
-    // -------------------------------
 
-    // --- FIX: SWAP SCORES FOR GUEST ---
     gameState.playerTotal = payload.aiTotal;
     gameState.aiTotal = payload.playerTotal;
 
@@ -1560,13 +1517,11 @@ function renderCenterPile(side, card, hidden = false) {
     img.style.left = '50%';
     img.style.top = '50%';
 
-    // --- NEW: Handle Pre-loading ---
     if (hidden) {
         img.style.opacity = '0';
-        img.classList.add('pending-reveal'); // Tag them so we can find them later
-        img.style.transition = 'opacity 0.1s ease-out'; // Fast pop-in
+        img.classList.add('pending-reveal'); 
+        img.style.transition = 'opacity 0.1s ease-out'; 
     }
-    // -------------------------------
 
     const rot = Math.random() * 20 - 10;
     img.style.transform = `translate(-50%, -50%) rotate(${rot}deg)`;
@@ -1621,10 +1576,8 @@ function updateScoreboardWidget() {
     if (p1S) p1S.innerText = gameState.p1Slaps;
     if (p2S) p2S.innerText = gameState.aiSlaps;
 
-    // --- CHECK IF YOU ARE MISSING THIS PART BELOW ---
     const oppLabel = document.getElementById('opponent-display-name');
     if (oppLabel) {
-        // This takes the opponent's name and puts it in the top left label
         const name = gameState.opponentName || "OPPONENT";
         oppLabel.innerText = name.toUpperCase();
     }
@@ -1644,7 +1597,7 @@ function showRoundMessage(title, sub) {
 }
 
 function showEndGame(title, isWin) {
-    gameState.matchEnded = true; // Prevents disconnect popup
+    gameState.matchEnded = true; 
 
     const modal = document.getElementById('game-message');
     if (!modal) return;
@@ -1693,20 +1646,14 @@ async function preloadCardImages(cards) {
    ================================ */
 
 function handleRoundOver(winner) {
-    // Logic transferred from game.js:
-    // Winner keeps their current count. Loser takes the rest (52 - winner).
-    
     if (winner === 'player') {
-        // Host Won
         gameState.aiTotal = 52 - gameState.playerTotal;
         gameState.p1Rounds++; 
     } else {
-        // Guest Won
         gameState.playerTotal = 52 - gameState.aiTotal;
         gameState.aiRounds++; 
     }
 
-    // Check for TRUE Match Win (If a player enters next round with 0 or 52)
     if (gameState.playerTotal <= 0 || gameState.aiTotal >= 52) {
         const payload = { type: 'MATCH_OVER', winner: 'player' };
         sendNet(payload);
@@ -1716,7 +1663,6 @@ function handleRoundOver(winner) {
         sendNet(payload);
         applyMatchOver(payload);
     } else {
-        // Just a Round Win -> Continue Game
         const payload = {
             type: 'ROUND_OVER',
             winner: winner,
@@ -1733,16 +1679,14 @@ function handleRoundOver(winner) {
 function applyRoundOver(data) {
     gameState.gameActive = false;
     
-    // 1. Sync Totals & Stats
     if (gameState.isHost) {
         gameState.playerTotal = data.pTotal;
         gameState.aiTotal = data.aTotal;
         gameState.p1Rounds = data.p1Rounds;
         gameState.aiRounds = data.aiRounds;
     } else {
-        // Guest Perspective Swap
         gameState.playerTotal = data.aTotal; 
-        gameState.aiTotal = data.pTotal;     
+        gameState.aiTotal = data.pTotal;      
         gameState.p1Rounds = data.aiRounds;  
         gameState.aiRounds = data.p1Rounds;  
     }
@@ -1750,21 +1694,17 @@ function applyRoundOver(data) {
     updateScoreboard();
     updateScoreboardWidget(); 
 
-    // 2. Determine Message
     const iAmHost = gameState.isHost;
     const hostWon = (data.winner === 'player');
     const iWon = (iAmHost && hostWon) || (!iAmHost && !hostWon);
 
-    // --- FIX: USE OPPONENT NAME IN TEXT ---
     const oppName = (gameState.opponentName || "OPPONENT").toUpperCase();
 
     const title = iWon ? "ROUND WON!" : "ROUND LOST!";
     const sub = iWon 
         ? `You start next round with ${gameState.playerTotal} cards.` 
         : `${oppName} starts next round with ${gameState.aiTotal} cards.`;
-    // --------------------------------------
 
-    // 3. Show Modal
     const modal = document.getElementById('game-message');
     if (modal) {
         modal.querySelector('h1').innerText = title;
@@ -1778,11 +1718,11 @@ function applyRoundOver(data) {
                 btn.innerText = "START NEXT ROUND";
                 btn.onclick = () => {
                     modal.classList.add('hidden');
-                    startRoundHostAuthoritative(); // Reshuffle and deal
+                    startRoundHostAuthoritative(); 
                 };
             } else {
                 btn.innerText = "WAITING FOR HOST...";
-                btn.onclick = null; // Guest waits
+                btn.onclick = null; 
             }
         }
         modal.classList.remove('hidden');
@@ -1791,7 +1731,7 @@ function applyRoundOver(data) {
 
 function applyMatchOver(data) {
     gameState.gameActive = false;
-    gameState.matchEnded = true; // FIX: Mark match as done so disconnects are ignored
+    gameState.matchEnded = true; 
     
     const iAmHost = gameState.isHost;
     const hostWon = (data.winner === 'player');
@@ -1832,24 +1772,19 @@ function acceptRematch() {
     document.getElementById('rematch-modal').classList.add('hidden');
     sendNet({ type: 'REMATCH_YES' });
     
-    // Reset Local Stats immediately
     gameState.p1Rounds = 0; gameState.aiRounds = 0;
     gameState.p1Slaps = 0; gameState.aiSlaps = 0;
     
-    // CRITICAL: Reset totals locally too
     gameState.playerTotal = 26; 
     gameState.aiTotal = 26;
     
     gameState.matchEnded = false;
     
-    // Hide the "Game Over" modal if it's open
     const modal = document.getElementById('game-message');
     if(modal) modal.classList.add('hidden');
     
     updateScoreboardWidget();
 
-    // If I am the Host, I need to start the game now that I've accepted
-    // If I am the Guest, I wait for the Host to send ROUND_START
     if (gameState.isHost) {
         startRoundHostAuthoritative();
     }
@@ -1859,51 +1794,42 @@ function declineRematch() {
     window.location.href = 'index.html';
 }
 function applyRevealPreload(payload) {
-    // 1. Update UI Tags (Borrowed)
     const bpEl = document.getElementById('borrowed-player');
     const baEl = document.getElementById('borrowed-ai');
 
-    // Swap logic (Guest Perspective)
     if (baEl) payload.borrowedPlayer ? baEl.classList.remove('hidden') : baEl.classList.add('hidden');
     if (bpEl) payload.borrowedAi ? bpEl.classList.remove('hidden') : bpEl.classList.add('hidden');
 
-    // 2. Update Scores (Guest Perspective)
     gameState.playerTotal = payload.aiTotal;
     gameState.aiTotal = payload.playerTotal;
     updateScoreboard();
 
-    // 3. Update Deck Graphics
     document.getElementById('player-draw-deck')?.classList.remove('deck-ready');
     document.getElementById('ai-draw-deck')?.classList.remove('deck-ready');
 
-    // 4. RENDER HIDDEN CARDS
-    // These will sit in the DOM waiting for the 'SHOW' signal
     if (payload.right) {
         const c = unpackCard(payload.right);
         gameState.centerPileLeft.push(c);
-        renderCenterPile('left', c, true); // true = hidden
+        renderCenterPile('left', c, true); 
     }
     if (payload.left) {
         const c = unpackCard(payload.left);
         gameState.centerPileRight.push(c);
-        renderCenterPile('right', c, true); // true = hidden
+        renderCenterPile('right', c, true); 
     }
 }
 
 function applyRevealShow() {
-    // 1. Reveal the Pre-loaded cards
     const hiddenCards = document.querySelectorAll('.pending-reveal');
     hiddenCards.forEach(img => {
         img.style.opacity = '1';
         img.classList.remove('pending-reveal');
     });
 
-    // 2. Activate Game
     gameState.gameActive = true;
     gameState.playerReady = false;
     gameState.aiReady = false;
     
-    // 3. Check Slaps (Now that cards are "Visible")
     checkSlapCondition();
 }
 /* ================================
@@ -1911,21 +1837,17 @@ function applyRevealShow() {
    ================================ */
 
 function rejectMoveFromHost(j) {
-    // 1. Try to find the card specifically by ID
     let card = null;
     if (j.cardId) {
         card = gameState.playerHand.find(c => c.id === j.cardId);
     }
-    // Fallback to last dragged if ID missing
     if (!card) card = gameState.lastDraggedCard;
 
     if (card && card.element) {
-        // SNAP BACK ANIMATION
         card.element.style.transition = 'all 0.3s ease-out';
         card.element.style.left = card.originalLeft;
         card.element.style.top = card.originalTop;
         
-        // Ensure z-index resets after animation
         setTimeout(() => {
             card.element.style.zIndex = card.laneIndex + 10;
         }, 300);
@@ -1933,10 +1855,8 @@ function rejectMoveFromHost(j) {
 }
 
 function cleanupGhost(cardData) {
-    // 1. Remove the Ghost
     gameState.opponentDragGhosts.forEach((ghostEl, key) => {
         const parts = key.split(':'); 
-        // FIX: Use loose equality (==) for value
         if (parts[0] === cardData.suit && parts[1] === cardData.rank && parts[2] == cardData.value) {
             ghostEl.style.transition = 'opacity 0.2s';
             ghostEl.style.opacity = '0';
@@ -1947,7 +1867,6 @@ function cleanupGhost(cardData) {
         }
     });
 
-    // 2. RESTORE THE REAL CARD
     const realCard = gameState.aiHand.find(c => 
         c.suit === cardData.suit && 
         c.rank === cardData.rank
@@ -1958,76 +1877,71 @@ function cleanupGhost(cardData) {
     }
 }
 /* =========================================
-   RULE G.7.4: MULTIPLAYER SUDDEN DEATH
+   PHASE 1 & 2: BORROWED PHASE LOGIC
    ========================================= */
 
-function triggerSuddenDeathSplit() {
-    // 1. Check for Stalemate (Double Shortage)
-    const isAlreadySuddenDeath = !document.getElementById('borrowed-player').classList.contains('hidden');
+function triggerBorrowedSplit() {
+    console.log("Both decks empty. Triggering Borrowed Phase (Cycle 1).");
 
-    if (isAlreadySuddenDeath) {
-        console.log("Stalemate Detected. Resetting Round...");
-        triggerStalemateReset();
-        return;
-    }
-
-    // 2. Logic (Host Authoritative)
-    // Collect Pot
     const salvage = [...gameState.centerPileLeft, ...gameState.centerPileRight];
-    
-    // Clear Visuals
     gameState.centerPileLeft = [];
     gameState.centerPileRight = [];
-    
-    // Shuffle & Split
+
     shuffle(salvage);
     const mid = Math.ceil(salvage.length / 2);
     
-    // Host gets first half, Guest gets second half
     gameState.playerDeck = salvage.slice(0, mid);
-    gameState.aiDeck = salvage.slice(mid); // 'aiDeck' represents Guest's deck here
-    
-    // 3. Send Sync Message
-    // We send the new decks to the guest so they can update their local state
+    gameState.aiDeck = salvage.slice(mid);
+
+    gameState.playerReady = false;
+    gameState.aiReady = false;
+    document.getElementById('player-draw-deck')?.classList.remove('deck-ready');
+    document.getElementById('ai-draw-deck')?.classList.remove('deck-ready');
+
     const syncData = {
-        type: 'SUDDEN_DEATH_START',
+        type: 'BORROWED_START',
         pDeck: gameState.playerDeck.map(packCard),
         aDeck: gameState.aiDeck.map(packCard)
     };
     sendNet(syncData);
-    
-    // 4. Local UI Update
-    applySuddenDeathUI();
+
+    applyBorrowedUI();
 }
 
-function triggerStalemateReset() {
+function triggerSecondCycleReset() {
+    console.log("Borrowed decks empty again. Triggering Cycle 2 Reset.");
+
     const pot = [...gameState.centerPileLeft, ...gameState.centerPileRight];
     
     let oddCard = null;
-    if (pot.length % 2 !== 0) oddCard = pot.pop();
+    if (pot.length % 2 !== 0) {
+        oddCard = pot.pop(); 
+    }
 
     const half = pot.length / 2;
-    
-    // Add to Totals
-    const currentPHand = gameState.playerHand.length;
-    const currentAHand = gameState.aiHand.length;
-    
-    gameState.playerTotal = currentPHand + half;
-    gameState.aiTotal = currentAHand + half;
-    
-    // Restart
+
+    gameState.playerTotal = gameState.playerHand.length + half;
+    gameState.aiTotal = gameState.aiHand.length + half;
+
     const payload = {
-        type: 'STALEMATE_RESET',
+        type: 'CYCLE_RESET',
         pTotal: gameState.playerTotal,
         aTotal: gameState.aiTotal,
         oddCard: oddCard ? packCard(oddCard) : null
     };
     sendNet(payload);
-    startRoundHostAuthoritative(oddCard); // Host starts fresh
+
+    const modal = document.getElementById('slap-overlay');
+    modal.classList.remove('hidden');
+    document.getElementById('slap-text').innerText = "STALEMATE! DECK SPLIT";
+    
+    setTimeout(() => {
+        modal.classList.add('hidden');
+        startRoundHostAuthoritative(oddCard); 
+    }, 2000);
 }
 
-// UI Function called by both Host and Guest
-function applySuddenDeathUI() {
+function applyBorrowedUI() {
     document.getElementById('borrowed-player').classList.remove('hidden');
     document.getElementById('borrowed-ai').classList.remove('hidden');
     
@@ -2035,11 +1949,5 @@ function applySuddenDeathUI() {
     document.getElementById('center-pile-right').innerHTML = '';
     
     checkDeckVisibility();
-    
-    const modal = document.getElementById('slap-overlay');
-    const txt = document.getElementById('slap-text');
-    txt.innerText = "SUDDEN DEATH!";
-    modal.style.backgroundColor = "rgba(255, 165, 0, 0.9)";
-    modal.classList.remove('hidden');
-    setTimeout(() => modal.classList.add('hidden'), 1500);
+    updateScoreboard();
 }
