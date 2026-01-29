@@ -278,6 +278,34 @@ function handleNet(msg) {
     if (msg.type === 'MATCH_OVER') {
         applyMatchOver(msg);
         return;
+       if (msg.type === 'SUDDEN_DEATH_START') {
+        // Guest receives new deck data
+        gameState.playerDeck = msg.aDeck.map(unpackCard); // Swap perspective!
+        gameState.aiDeck = msg.pDeck.map(unpackCard);
+        
+        // Clear local piles
+        gameState.centerPileLeft = [];
+        gameState.centerPileRight = [];
+        
+        applySuddenDeathUI();
+        return;
+    }
+
+    if (msg.type === 'STALEMATE_RESET') {
+        // Update totals (perspective swap)
+        gameState.playerTotal = msg.aTotal;
+        gameState.aiTotal = msg.pTotal;
+        
+        // Handle odd card
+        const odd = msg.oddCard ? unpackCard(msg.oddCard) : null;
+        
+        // Guest just waits for the standard ROUND_START message which follows
+        // But we can show a message
+        const modal = document.getElementById('slap-overlay');
+        modal.classList.remove('hidden');
+        document.getElementById('slap-text').innerText = "STALEMATE RESET";
+        return;
+    }
     }
     
     // --- DISCONNECT HANDLER ---
@@ -413,30 +441,56 @@ function adjudicateSlap(who) {
     if (!gameState.gameActive) return;
 
     if (gameState.slapActive) {
-        // --- VALID SLAP ---
-        gameState.gameActive = false; // Stop game immediately
+        // --- CHECK SUDDEN DEATH (New Rule) ---
+        const isSuddenDeath = !document.getElementById('borrowed-player').classList.contains('hidden');
+        
+        if (isAlreadySuddenDeath) {
+            // FORCE RESET (Scenario 1)
+            // No points awarded. We just restart the round.
+            const pot = gameState.centerPileLeft.length + gameState.centerPileRight.length;
+            
+            // Calculate new totals (Winner takes pot into foundation for next round)
+            if (who === 'player') gameState.aiTotal += pot; 
+            else gameState.playerTotal += pot;
+            
+            // Broadcast Reset
+            const resetMsg = {
+                type: 'STALEMATE_RESET', // Guest will see "Slap Reset"
+                pTotal: gameState.playerTotal,
+                aTotal: gameState.aiTotal
+            };
+            sendNet(resetMsg);
+            
+            // Host Reset Locally
+            const modal = document.getElementById('slap-overlay');
+            modal.classList.remove('hidden');
+            document.getElementById('slap-text').innerText = "SUDDEN DEATH RESET!";
+            setTimeout(() => {
+                modal.classList.add('hidden');
+                startRoundHostAuthoritative();
+            }, 1500);
+            return;
+        }
+
+        // --- STANDARD SLAP LOGIC ---
+        gameState.gameActive = false; 
 
         const pilesTotal = gameState.centerPileLeft.length + gameState.centerPileRight.length;
 
-        // --- FIX: GIVE CARDS TO THE LOSER ---
-        // If Host ('player') won the slap -> Guest ('ai') takes the cards.
-        // If Guest ('ai') won the slap -> Host ('player') takes the cards.
-        
+        // Give cards to the loser (standard logic we established)
         if (who === 'player') { 
-            gameState.aiTotal += pilesTotal; // Host Won, Guest takes cards
+            gameState.aiTotal += pilesTotal; 
         } else { 
-            gameState.playerTotal += pilesTotal; // Guest Won, Host takes cards
+            gameState.playerTotal += pilesTotal; 
         }
 
-        // Clear Host Piles logic
         gameState.centerPileLeft = [];
         gameState.centerPileRight = [];
         gameState.slapActive = false;
 
-        // Broadcast Valid Win
         const update = {
             type: 'SLAP_UPDATE',
-            winner: who, // 'player' (Host) or 'ai' (Guest) - Use this for the "Who Won" text
+            winner: who,
             pTotal: gameState.playerTotal,
             aTotal: gameState.aiTotal
         };
@@ -1121,25 +1175,20 @@ function adjudicateMove(m, moverOverride) {
     sendNet({ type: 'MOVE_APPLY', apply: applyPayload });
 }
 function applyMoveAuthoritative(mover, cardObj, side, reqId) {
-    // --- FIX: KILL THE ZOMBIE GHOST (FUZZY MATCH) ---
-    // Iterate through all active ghosts.
-    // If a ghost matches the card being played (by suit/rank/value), destroy it.
-    // This fixes the issue where Guest sends ID as 'player' but Host looks for 'ai'.
+    // 1. Ghost cleanup (Type-Safe)
     gameState.opponentDragGhosts.forEach((ghostEl, key) => {
-        const parts = key.split(':'); // "suit:rank:value:owner:lane"
-        // Check if suit, rank, and value match the card being played
+        const parts = key.split(':'); 
         if (parts[0] === cardObj.suit && parts[1] === cardObj.rank && parseInt(parts[2]) === cardObj.value) {
             ghostEl.remove();
             gameState.opponentDragGhosts.delete(key);
         }
     });
-    // ------------------------------------------------
 
-    // 1. Update piles
+    // 2. Update piles
     const targetPile = (side === 'left') ? gameState.centerPileLeft : gameState.centerPileRight;
     targetPile.push(cardObj);
 
-    // 2. Remove from mover hand
+    // 3. Remove from mover hand
     let hand = null;
     if (mover === 'player') {
         hand = gameState.playerHand;
@@ -1151,19 +1200,13 @@ function applyMoveAuthoritative(mover, cardObj, side, reqId) {
         gameState.aiTotal--;
     }
 
-    // 3. Update UI on host (Remove the card from the lane)
+    // 4. Update UI on host
     if (cardObj.element) cardObj.element.remove();
-    
-    // Render the real card in the center
     renderCenterPile(side, cardObj);
-
     updateScoreboard();
     checkSlapCondition();
 
-    // 4. Handle Reveal (Host Side)
-    // ... (keep the top part of the function) ...
-
-    // 4. Handle Reveal (Host Side)
+    // 5. Handle Reveal (Host Side)
     let newTopCardPayload = null;
     const laneCards = hand.filter(c => c.laneIndex === cardObj.laneIndex);
     
@@ -1177,23 +1220,64 @@ function applyMoveAuthoritative(mover, cardObj, side, reqId) {
         }
     }
 
-    // --- FIX: CHECK FOR ROUND END (EMPTY HAND) ---
-    // Instead of ending match at 0 cards, we trigger Round End when hand is empty.
-    
-    const moverHandRef = (mover === 'player') ? gameState.playerHand : gameState.aiHand;
-    
-    if (moverHandRef.length === 0) {
-        // Hand is empty -> Round Over!
-        handleRoundOver(mover);
-    } 
-    else if (gameState.playerTotal <= 0) {
-        // Safety: If total is 0 but hand isn't empty (rare), treat as win
-        handleRoundOver('player');
-    } else if (gameState.aiTotal <= 0) {
-        handleRoundOver('ai');
+    // --- NEW LOGIC STARTS HERE ---
+
+    // 6. CHECK FOR SUDDEN DEATH TRIGGER (Rule G.7.4)
+    // If both decks are empty, split the center immediately
+    if (gameState.playerDeck.length === 0 && gameState.aiDeck.length === 0) {
+        if (gameState.centerPileLeft.length > 0 || gameState.centerPileRight.length > 0) {
+            triggerSuddenDeathSplit();
+        }
     }
 
-    // 5. Send Payload
+    // 7. CHECK FOR WIN / END ROUND
+    // We check if the HAND is empty (not the deck)
+    const handEmpty = (hand.length === 0);
+    const isSuddenDeath = !document.getElementById('borrowed-player').classList.contains('hidden');
+
+    if (handEmpty) {
+        if (isSuddenDeath) {
+            // SCENARIO 2 CHECK: Do they have penalties?
+            let hasPenalty = false;
+            if (mover === 'player') hasPenalty = (gameState.playerReds > 0 || gameState.playerYellows > 0);
+            else hasPenalty = (gameState.aiReds > 0 || gameState.aiYellows > 0);
+
+            if (!hasPenalty) {
+                // CLEAN WIN -> Match Over
+                const payload = { type: 'MATCH_OVER', winner: mover };
+                sendNet(payload);
+                applyMatchOver(payload);
+            } else {
+                // SURVIVED -> Next Round with Debt
+                const PENALTY = 3;
+                // Determine new totals for next round
+                let nextPTotal = (mover === 'player') ? PENALTY : (52 - PENALTY);
+                let nextATotal = (mover === 'ai') ? PENALTY : (52 - PENALTY);
+                
+                const payload = {
+                    type: 'ROUND_OVER',
+                    winner: mover,
+                    pTotal: nextPTotal,
+                    aTotal: nextATotal,
+                    reason: 'penalty_survival'
+                };
+                sendNet(payload);
+                applyRoundOver(payload);
+            }
+        } else {
+            // NORMAL GAME WIN/ROUND OVER
+            // If total is 0 or less, they win match. Otherwise round over.
+            if ((mover === 'player' && gameState.playerTotal <= 0) || (mover === 'ai' && gameState.aiTotal <= 0)) {
+                const payload = { type: 'MATCH_OVER', winner: mover };
+                sendNet(payload);
+                applyMatchOver(payload);
+            } else {
+                handleRoundOver(mover); // Standard round end logic
+            }
+        }
+    }
+
+    // 8. Return Payload for Guest Sync
     return {
         reqId,
         mover,
@@ -1872,4 +1956,90 @@ function cleanupGhost(cardData) {
     if (realCard && realCard.element) {
         realCard.element.style.opacity = '1'; 
     }
+}
+/* =========================================
+   RULE G.7.4: MULTIPLAYER SUDDEN DEATH
+   ========================================= */
+
+function triggerSuddenDeathSplit() {
+    // 1. Check for Stalemate (Double Shortage)
+    const isAlreadySuddenDeath = !document.getElementById('borrowed-player').classList.contains('hidden');
+
+    if (isAlreadySuddenDeath) {
+        console.log("Stalemate Detected. Resetting Round...");
+        triggerStalemateReset();
+        return;
+    }
+
+    // 2. Logic (Host Authoritative)
+    // Collect Pot
+    const salvage = [...gameState.centerPileLeft, ...gameState.centerPileRight];
+    
+    // Clear Visuals
+    gameState.centerPileLeft = [];
+    gameState.centerPileRight = [];
+    
+    // Shuffle & Split
+    shuffle(salvage);
+    const mid = Math.ceil(salvage.length / 2);
+    
+    // Host gets first half, Guest gets second half
+    gameState.playerDeck = salvage.slice(0, mid);
+    gameState.aiDeck = salvage.slice(mid); // 'aiDeck' represents Guest's deck here
+    
+    // 3. Send Sync Message
+    // We send the new decks to the guest so they can update their local state
+    const syncData = {
+        type: 'SUDDEN_DEATH_START',
+        pDeck: gameState.playerDeck.map(packCard),
+        aDeck: gameState.aiDeck.map(packCard)
+    };
+    sendNet(syncData);
+    
+    // 4. Local UI Update
+    applySuddenDeathUI();
+}
+
+function triggerStalemateReset() {
+    const pot = [...gameState.centerPileLeft, ...gameState.centerPileRight];
+    
+    let oddCard = null;
+    if (pot.length % 2 !== 0) oddCard = pot.pop();
+
+    const half = pot.length / 2;
+    
+    // Add to Totals
+    const currentPHand = gameState.playerHand.length;
+    const currentAHand = gameState.aiHand.length;
+    
+    gameState.playerTotal = currentPHand + half;
+    gameState.aiTotal = currentAHand + half;
+    
+    // Restart
+    const payload = {
+        type: 'STALEMATE_RESET',
+        pTotal: gameState.playerTotal,
+        aTotal: gameState.aiTotal,
+        oddCard: oddCard ? packCard(oddCard) : null
+    };
+    sendNet(payload);
+    startRoundHostAuthoritative(oddCard); // Host starts fresh
+}
+
+// UI Function called by both Host and Guest
+function applySuddenDeathUI() {
+    document.getElementById('borrowed-player').classList.remove('hidden');
+    document.getElementById('borrowed-ai').classList.remove('hidden');
+    
+    document.getElementById('center-pile-left').innerHTML = '';
+    document.getElementById('center-pile-right').innerHTML = '';
+    
+    checkDeckVisibility();
+    
+    const modal = document.getElementById('slap-overlay');
+    const txt = document.getElementById('slap-text');
+    txt.innerText = "SUDDEN DEATH!";
+    modal.style.backgroundColor = "rgba(255, 165, 0, 0.9)";
+    modal.classList.remove('hidden');
+    setTimeout(() => modal.classList.add('hidden'), 1500);
 }
