@@ -672,11 +672,23 @@ async function startRoundHostAuthoritative(oddCard = null) {
     if (gameState.aiTotal <= 0) { showEndGame("OPPONENT WINS THE MATCH!", false); return; }
 
     const pTotal = gameState.playerTotal;
-    const pAllCards = fullDeck.slice(0, pTotal);
-    const aAllCards = fullDeck.slice(pTotal, 52);
+    const aTotal = gameState.aiTotal; // Use the specific AI total
 
+    // --- FIX: EXACT SLICING ---
+    // Player gets 0 to pTotal
+    const pAllCards = fullDeck.slice(0, pTotal);
+    
+    // AI gets pTotal to (pTotal + aTotal)
+    // If pTotal + aTotal = 51, this leaves 1 card remaining in fullDeck
+    const aAllCards = fullDeck.slice(pTotal, pTotal + aTotal);
+
+    // Identify the Odd Card (Leftover)
+    // If totals sum to 51, this will grab index 51.
+    const leftoverCard = (pTotal + aTotal < 52) ? fullDeck[pTotal + aTotal] : null;
+
+    // Hand/Deck splitting logic
     const pHandSize = Math.min(10, pTotal);
-    const aHandSize = Math.min(10, 52 - pTotal);
+    const aHandSize = Math.min(10, aTotal);
 
     const pHandCards = pAllCards.splice(0, pHandSize);
     gameState.playerDeck = pAllCards;
@@ -690,7 +702,7 @@ async function startRoundHostAuthoritative(oddCard = null) {
     if (bp) bp.classList.add('hidden');
     if (ba) ba.classList.add('hidden');
 
-    // Initial shortage borrow
+    // Initial shortage borrow logic (Standard Phase)
     if (gameState.playerDeck.length === 0 && gameState.aiDeck.length > 1) {
         const steal = Math.floor(gameState.aiDeck.length / 2);
         gameState.playerDeck = gameState.aiDeck.splice(0, steal);
@@ -708,10 +720,17 @@ async function startRoundHostAuthoritative(oddCard = null) {
     dealSmartHand(aHandCards, 'ai');
 
     resetCenterPiles();
-    if (oddCard) {
-        gameState.centerPileLeft.push(oddCard);
-        renderCenterPile('left', oddCard);
+
+    // --- FIX: PLACE ODD CARD IN CENTER ---
+    // If we have a leftover from the deal (fresh odd card), use it.
+    // Or if we passed a specific odd card from a reset (legacy), use that.
+    const centerCard = leftoverCard || oddCard;
+    
+    if (centerCard) {
+        gameState.centerPileLeft.push(centerCard);
+        renderCenterPile('left', centerCard);
     }
+    
     checkDeckVisibility();
 
     gameState.gameActive = false;
