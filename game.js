@@ -776,14 +776,13 @@ function playCardToCenter(card, imgElement, dropSide) {
     // No fallback to the other pile. If you dropped on the wrong one, it fails.
     if (!target) return false;
 
-    // --- everything below here stays exactly as you already have it ---
+    // --- VISUAL & STATE UPDATES ---
     gameState.playerReady = false; 
     gameState.aiReady = false;
-    document.getElementById('player-draw-deck').classList.remove('deck-ready');
-    document.getElementById('ai-draw-deck').classList.remove('deck-ready');
-
-    target.push(card);
-// ... inside playCardToCenter ...
+    const pDeckEl = document.getElementById('player-draw-deck');
+    const aDeckEl = document.getElementById('ai-draw-deck');
+    if(pDeckEl) pDeckEl.classList.remove('deck-ready');
+    if(aDeckEl) aDeckEl.classList.remove('deck-ready');
 
     target.push(card);
     
@@ -797,47 +796,48 @@ function playCardToCenter(card, imgElement, dropSide) {
     }
 
     // --- CHECK FOR SUDDEN DEATH TRIGGER (Rule G.7.4) ---
-    // If both decks are empty, but the round is still going (hands not empty), split the center.
+    // Trigger only if both DECKS are zero, but Hands still have cards
     if (gameState.playerDeck.length === 0 && gameState.aiDeck.length === 0) {
-        // Only trigger if there are actually cards to scavenge
         if (gameState.centerPileLeft.length > 0 || gameState.centerPileRight.length > 0) {
             triggerSuddenDeathSplit();
         }
     }
 
     // --- CHECK FOR WIN / END ROUND ---
-    const playerWin = (gameState.playerHand.length === 0 && gameState.playerDeck.length === 0);
-    const aiWin = (gameState.aiHand.length === 0 && gameState.aiDeck.length === 0);
+    // FIX: A Round ends when the HAND is empty. 
+    // The Deck is just "Score" reserve, unless we are in Sudden Death where Deck represents the borrowed pile.
+    
+    const playerHandEmpty = (gameState.playerHand.length === 0);
+    const aiHandEmpty = (gameState.aiHand.length === 0);
 
-    if (playerWin) {
-        // Are we in Sudden Death (Both Borrowing)?
-        const isSuddenDeath = !document.getElementById('borrowed-player').classList.contains('hidden') 
-                           && !document.getElementById('borrowed-ai').classList.contains('hidden');
+    if (playerHandEmpty) {
+        // Check if we are in Sudden Death Mode (Borrowed Tags Visible)
+        const isSuddenDeath = !document.getElementById('borrowed-player').classList.contains('hidden');
         
         if (isSuddenDeath) {
             handleSuddenDeathWin('player');
         } else {
-            // Normal Round Win logic or Match Win logic
+            // STANDARD MODE
             if (gameState.playerTotal <= 0) showEndGame("YOU WIN THE MATCH!", true);
             else endRound('player');
         }
         return true;
     }
 
-    if (aiWin) {
-        const isSuddenDeath = !document.getElementById('borrowed-player').classList.contains('hidden') 
-                           && !document.getElementById('borrowed-ai').classList.contains('hidden');
+    if (aiHandEmpty) {
+        const isSuddenDeath = !document.getElementById('borrowed-player').classList.contains('hidden');
 
         if (isSuddenDeath) {
             handleSuddenDeathWin('ai');
         } else {
+            // STANDARD MODE
             if (gameState.aiTotal <= 0) showEndGame("AI WINS THE MATCH!", false);
             else endRound('ai');
         }
         return true;
     }
 
-    // Standard UI Updates
+    // Standard UI Updates (Game Continues)
     checkDeckVisibility(); 
     imgElement.remove(); 
     renderCenterPile(side, card); 
