@@ -92,3 +92,22 @@ function hostMatch() {
         window.location.href = 'multiplayer-setup.html';
     }
 }
+/* --- 4. UNIVERSAL GAME BUTTON LOGIC --- */
+function handleGameMode(url) {
+    const name = localStorage.getItem('isf_username');
+    
+    if (!name) {
+        // NO NAME FOUND: Stop them, open sidebar input, and alert
+        showGuestInput();
+        // highlight the input box to make it obvious
+        const input = document.getElementById('guest-sidebar-name');
+        if(input) {
+            input.style.boxShadow = "0 0 15px #ff4444";
+            setTimeout(() => input.style.boxShadow = "none", 500);
+        }
+        alert("Please enter a Nickname in the sidebar to play!");
+    } else {
+        // NAME FOUND: Let them pass to the requested page
+        window.location.href = url;
+    }
+}
