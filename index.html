@@ -18,6 +18,7 @@
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
     <script src="firebase-init.js"></script>
+    <script src="elo-engine.js"></script>
 
     <style>
         /* Extra styles for the new User Panel in the sidebar */
@@ -173,6 +174,55 @@
                 window.location.href = 'login.html';
             });
         }
+        // --- MATCH REPORTER ---
+
+/**
+ * Call this function when a Ranked Game ends.
+ * @param {number} opponentElo - The rating of the person you fought.
+ * @param {number} opponentGameCount - How many games they have played (for the halving rule).
+ * @param {boolean} isWin - true if you won, false if you lost.
+ */
+function reportMatchResult(opponentElo, opponentGameCount, isWin) {
+    const user = auth.currentUser;
+    if (!user) return; // Safety check
+
+    console.log("Reporting Match... Win:", isWin);
+
+    const userRef = db.ref('users/' + user.uid);
+
+    // Use a transaction to safely update stats without glitches
+    userRef.transaction((userData) => {
+        if (userData) {
+            // 1. Get current stats (default to 1000/0/0 if missing)
+            const currentElo = userData.elo || 1000;
+            const wins = userData.wins || 0;
+            const losses = userData.losses || 0;
+            
+            // Calculate MY total games played so we know which K-Factor to use
+            const myGameCount = wins + losses;
+
+            // 2. Calculate New ELO using our engine file
+            const newElo = calculateNewElo(
+                currentElo, 
+                opponentElo, 
+                isWin, 
+                myGameCount, 
+                opponentGameCount 
+            );
+
+            // 3. Update the data to save to Firebase
+            userData.elo = newElo;
+            if (isWin) {
+                userData.wins = wins + 1;
+            } else {
+                userData.losses = losses + 1;
+            }
+            
+            return userData; // Saves the changes
+        }
+        return userData;
+    });
+}
     </script> 
 </body>
 </html>
