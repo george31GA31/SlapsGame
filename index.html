@@ -3,112 +3,112 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ISF Online - Home</title>
+    <title>ISF Online - Dashboard</title>
     <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&family=Cinzel:wght@700&display=swap" rel="stylesheet">
+    
+    <script>
+        if (!localStorage.getItem('isf_username')) {
+            window.location.href = 'login.html';
+        }
+    </script>
+
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+    <script src="firebase-init.js"></script>
+
+    <style>
+        /* DASHBOARD STYLES */
+        body { background-color: #050505; color: white; font-family: 'Roboto', sans-serif; margin: 0; padding: 20px; }
+        
+        .nav-bar { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 20px; margin-bottom: 30px; }
+        .logo-section img { height: 40px; vertical-align: middle; }
+        .logo-section span { font-weight: 900; font-size: 1.5rem; margin-left: 10px; font-style: italic; }
+        
+        .user-info { text-align: right; }
+        .user-name { color: #00ccff; font-weight: bold; font-size: 1.2rem; display: block; }
+        .btn-logout { background: transparent; border: 1px solid #333; color: #666; padding: 5px 10px; cursor: pointer; font-size: 0.8rem; margin-top: 5px; transition: 0.3s; }
+        .btn-logout:hover { border-color: #ff4444; color: #ff4444; }
+
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; }
+        .stat-card { background: #0a0a0a; border: 1px solid #333; padding: 20px; border-radius: 10px; text-align: center; }
+        .stat-value { font-size: 2.5rem; font-weight: 900; margin: 10px 0; }
+        .stat-label { color: #666; text-transform: uppercase; font-size: 0.8rem; letter-spacing: 1px; }
+        
+        .elo-card { border-color: #00ccff; box-shadow: 0 0 15px rgba(0, 204, 255, 0.1); }
+        .elo-card .stat-value { color: #00ccff; }
+    </style>
 </head>
 <body>
 
-    <div class="app-container">
-        
-        <nav class="sidebar-left">
-            <div class="logo-area-sidebar">
-                <img src="assets/ISF_ONLINE.png" alt="ISF Online" class="sidebar-logo">
-            </div>
+    <div class="nav-bar">
+        <div class="logo-section">
+            <img src="assets/ISF_ONLINE.png" alt="ISF">
+            <span>ISF ONLINE</span>
+        </div>
+        <div class="user-info">
+            <span class="user-name" id="display-name">LOADING...</span>
+            <button class="btn-logout" onclick="logout()">LOG OUT</button>
+        </div>
+    </div>
 
-            <ul class="nav-links">
-                <li class="active"><a href="#">Home</a></li>
-                <li><a href="how-to-play.html">How to Play</a></li>
-                <li><a href="https://sprucewilliams.github.io/Slaps-Online/matchtable.html">Game History</a></li>
-                <li><a href="https://sprucewilliams.github.io/Slaps-Online/ratingtable.html">Leaderboard</a></li>
-                <li><a href="assets/SLAPS rules and regs v1.2-compressed.pdf" target="_blank">Rules & Regs</a></li>
-            </ul>
+    <div class="stats-grid">
+        <div class="stat-card elo-card">
+            <div class="stat-label">Federation ELO</div>
+            <div class="stat-value" id="stat-elo">---</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Career Wins</div>
+            <div class="stat-value" id="stat-wins">---</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Career Losses</div>
+            <div class="stat-value" id="stat-losses">---</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Country</div>
+            <div class="stat-value" id="stat-country" style="font-size: 2rem;">---</div>
+        </div>
+    </div>
 
-            <div class="sidebar-footer">
-                <li><a href="#">Settings</a></li>
-                <li><a href="report-bug.html"><i class="fa-solid fa-bug"></i> Report a Bug</a></li>
-            </div>
-        </nav>
+    <script>
+        // 1. GET USERNAME FROM STORAGE
+        const storedName = localStorage.getItem('isf_username');
+        document.getElementById('display-name').innerText = storedName;
 
-        <main class="hero-area">
-            <div class="card-display">
-                <img src="assets/cards/ace_of_hearts.png" alt="Ace of Hearts" class="hero-card-img">
-            </div>
-        </main>
-
-        <aside class="sidebar-right">
-            
-            <div class="auth-wrapper" id="sidebar-auth-area">
-    
-                <div id="state-buttons" class="auth-row fade-in">
-                    <button class="btn-guest" onclick="showGuestInput()">PLAY AS<br>GUEST</button>
-                    <button class="btn-login-blue" onclick="window.location.href='login.html'">LOG IN</button>
-                    <button class="btn-signup-gray" onclick="window.location.href='signup.html'">SIGN UP</button>
-                </div>
-            
-                <div id="state-input" class="auth-row hidden">
-                    <input type="text" id="guest-sidebar-name" class="lobby-input" placeholder="NICKNAME" maxlength="10" 
-                           style="width: 100%; text-align: center; text-transform: uppercase; margin-bottom: 8px;">
-                    
-                    <div style="display: flex; gap: 5px; width: 100%;">
-                        <button class="btn-signup-gray" style="flex:1; padding: 8px;" onclick="cancelGuestInput()">
-                            <i class="fa-solid fa-xmark"></i>
-                        </button>
-                        <button class="btn-login-blue" style="flex:1; padding: 8px;" onclick="confirmGuestLogin()">
-                            <i class="fa-solid fa-check"></i>
-                        </button>
-                    </div>
-                </div>
-            
-                <div id="state-profile" class="auth-row hidden" style="flex-direction: column; align-items: center; gap: 5px;">
-                    <div style="color: #888; font-size: 0.8rem;">PLAYING AS</div>
-                    <div id="sidebar-display-name" style="color: #00BFFF; font-weight: 900; font-size: 1.2rem; text-transform: uppercase; margin-bottom: 5px;">GUEST</div>
-                    <button onclick="logoutGuest()" style="background: transparent; border: 1px solid #333; color: #ff4444; border-radius: 4px; padding: 5px 15px; cursor: pointer; font-size: 0.8rem;">
-                        LOG OUT
-                    </button>
-                </div>
-            
-            </div>
-            <div class="modes-grid">
+        // 2. FETCH REAL STATS FROM FIREBASE
+        auth.onAuthStateChanged((user) => {
+            if (user) {
+                // User is logged in, pull their data
+                const userRef = db.ref('users/' + user.uid);
                 
-                <div class="mode-box" onclick="handleGameMode('multiplayer-setup.html')">
-    <div class="mode-icon">
-        <i class="fa-solid fa-handshake"></i>
-    </div>
-    <h3>PLAY A<br>FRIEND</h3>
-    <button class="btn-mode-play">PLAY</button>
-</div>
+                userRef.on('value', (snapshot) => {
+                    const data = snapshot.val();
+                    if(data) {
+                        document.getElementById('stat-elo').innerText = data.elo || 1000;
+                        document.getElementById('stat-wins').innerText = data.wins || 0;
+                        document.getElementById('stat-losses').innerText = data.losses || 0;
+                        
+                        // Handle Country Flag (Assuming you saved the code like 'USA')
+                        if(data.country) {
+                            // You can make this an image later, for now just the text code
+                            document.getElementById('stat-country').innerText = data.country;
+                        }
+                    }
+                });
+            } else {
+                // If Firebase thinks they aren't logged in, kick them out
+                window.location.href = 'login.html';
+            }
+        });
 
-<div class="mode-box" onclick="handleGameMode('setup.html')">
-    <div class="mode-icon">
-        <i class="fa-solid fa-robot"></i>
-    </div>
-    <h3>PLAY AI<br>BOT</h3>
-    <button class="btn-mode-play">PLAY</button>
-</div>
-
-<div class="mode-box" onclick="handleGameMode('matchmaking.html')">
-    <div class="mode-icon">
-        <i class="fa-solid fa-globe"></i>
-    </div>
-    <h3>PLAY<br>ONLINE</h3>
-    <button class="btn-mode-play">PLAY</button>
-</div>
-
-<div class="mode-box" onclick="handleGameMode('tournament-setup.html')">
-    <div class="mode-icon">
-        <i class="fa-solid fa-trophy"></i>
-    </div>
-    <h3>PLAY<br>TOURNAMENT</h3>
-    <button class="btn-mode-play">PLAY</button>
-</div>
-
-            </div>
-        </aside>
-
-    </div>
-
-    <script src="script.js"></script> 
+        // 3. LOGOUT FUNCTION
+        function logout() {
+            auth.signOut().then(() => {
+                localStorage.clear();
+                window.location.href = 'login.html';
+            });
+        }
+    </script>
 </body>
 </html>
