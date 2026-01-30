@@ -670,17 +670,26 @@ function applySlapUpdate(data) {
         overlay.classList.remove('hidden');
     }
 
-    // 3. RESTORE CARDS BEFORE CLEARING GHOSTS (Fixes the "Reset" glitch)
-    // Make sure the real cards are visible again immediately
-    gameState.aiHand.forEach(c => { if (c.element) c.element.style.opacity = '1'; });
+    // 3. SMART VISIBILITY UPDATE (The Fix)
+    // We do NOT clear ghosts anymore. We want them to stay messy.
+    // We only ensure that if a ghost exists, the real card stays hidden (opacity 0).
+    // If no ghost exists, make sure the real card is visible (opacity 1).
+    
+    gameState.aiHand.forEach(c => {
+        if (c.element) {
+            // Reconstruct the key used for ghosts: suit:rank:value:owner:lane
+            const key = `${c.suit}:${c.rank}:${c.value}:${c.owner}:${c.laneIndex}`;
+            const hasGhost = gameState.opponentDragGhosts.has(key);
+            
+            // If there is a ghost, hide real card. If no ghost, show real card.
+            c.element.style.opacity = hasGhost ? '0' : '1';
+        }
+    });
+
+    // Player hand doesn't use ghosts for self, so always ensure visible
     gameState.playerHand.forEach(c => { if (c.element) c.element.style.opacity = '1'; });
 
-    // 4. NOW Clear Ghosts
-    if (gameState.opponentDragGhosts) {
-        gameState.opponentDragGhosts.forEach(el => el.remove()); 
-        gameState.opponentDragGhosts.clear(); 
-    }
-
+    // 4. Update Totals
     if (gameState.isHost) {
         gameState.playerTotal = data.pTotal;
         gameState.aiTotal = data.aTotal;
@@ -696,7 +705,7 @@ function applySlapUpdate(data) {
     
     updateScoreboardWidget();
 
-    // 5. RESET EVERYTHING AFTER 2 SECONDS
+    // 5. RESET CENTER PILES AFTER 2 SECONDS (But keep hands messy)
     setTimeout(() => {
         gameState.centerPileLeft = [];
         gameState.centerPileRight = [];
