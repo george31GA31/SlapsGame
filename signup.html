@@ -904,17 +904,11 @@
             }
         });
 
-        // --- DEBUG SIGN UP LOGIC ---
+        // --- SEAMLESS SIGN UP LOGIC ---
         document.getElementById('signup-form').addEventListener('submit', async function(e) {
             e.preventDefault();
-            console.log("Button Clicked"); // Check console if possible
 
-            // 1. Check if Firebase is loaded
-            if (typeof auth === 'undefined') {
-                alert("CRITICAL ERROR: Firebase is not connected! Check your firebase-init.js file.");
-                return;
-            }
-
+            // 1. Gather Data
             const fname = document.getElementById('su-fname').value.trim();
             const lname = document.getElementById('su-lname').value.trim();
             const username = document.getElementById('su-username').value.trim().toUpperCase();
@@ -922,27 +916,25 @@
             const email = document.getElementById('su-email').value.trim();
             const pass = document.getElementById('su-pass').value;
 
-            // 2. Validate Inputs
+            // 2. Validate Inputs (Show errors in red text, no popups)
             if(!country) {
-                alert("Please select a country from the dropdown.");
+                showError("Please select a country.");
                 return;
             }
             if(username.length < 3) {
-                alert("Username must be at least 3 characters.");
+                showError("Username must be at least 3 characters.");
                 return;
             }
 
-            alert("Data looks good... contacting Firebase...");
-
-            // 3. Create User
+            // 3. Create User in Firebase
             auth.createUserWithEmailAndPassword(email, pass)
                 .then((userCredential) => {
                     const user = userCredential.user;
-                    alert("Account Created! ID: " + user.uid + ". Now saving profile...");
-
+                    
+                    // Update Auth Profile
                     user.updateProfile({ displayName: username });
 
-                    // 4. Save to Database
+                    // 4. Save Data to Database
                     db.ref('users/' + user.uid).set({
                         username: username,
                         firstName: fname,
@@ -954,19 +946,29 @@
                         losses: 0,
                         joined: new Date().toISOString()
                     }).then(() => {
+                        // 5. SUCCESS: Save session and Redirect Instantly
                         localStorage.setItem('isf_username', username);
                         localStorage.setItem('isf_is_guest', 'false');
-                        alert("SUCCESS! Profile saved.");
                         window.location.href = 'index.html';
                     })
                     .catch((dbError) => {
-                        alert("DATABASE ERROR: " + dbError.message + "\nDid you enable the Database in 'Test Mode'?");
+                        showError("Database Error: " + dbError.message);
                     });
                 })
                 .catch((authError) => {
-                    alert("SIGN UP ERROR: " + authError.message);
+                    // Handle common errors (Email already in use, weak password)
+                    let msg = authError.message;
+                    if(authError.code === 'auth/email-already-in-use') msg = "That email is already registered.";
+                    if(authError.code === 'auth/weak-password') msg = "Password should be at least 6 characters.";
+                    showError(msg);
                 });
         });
+
+        function showError(msg) {
+            const el = document.getElementById('error-text');
+            el.innerText = msg;
+            el.style.display = "block";
+        }
     </script>
 </body>
 </html>
