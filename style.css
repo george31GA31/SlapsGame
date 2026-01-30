@@ -1328,3 +1328,12 @@ body:has(.setup-card) .top-bar {
     color: #fff !important;
     background: rgba(255, 255, 255, 0.05) !important;
 }
+/* --- UTILITY CLASSES --- */
+.hidden {
+    display: none !important;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(5px); }
+    to { opacity: 1; transform: translateY(0); }
+}
