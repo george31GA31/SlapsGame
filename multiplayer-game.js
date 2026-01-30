@@ -509,10 +509,7 @@ function resolveSlap(winner) {
     gameState.slapActive = false;
     gameState.gameActive = false;
 
-    // --- PHASE 2, SCENARIO 1 CHECK ---
-    // Condition: Slap occurs when Decks are Empty (or near empty) BUT 'Borrowed' hasn't started yet.
-    // This effectively catches the "Last 2 cards before simultaneous shortage" scenario.
-    
+    // --- PHASE 2 CHECK (Borrowed Phase) ---
     const isBorrowed = !document.getElementById('borrowed-player').classList.contains('hidden');
     const bothDecksEmpty = (gameState.playerDeck.length === 0 && gameState.aiDeck.length === 0);
 
@@ -522,26 +519,20 @@ function resolveSlap(winner) {
         const pilesTotal = gameState.centerPileLeft.length + gameState.centerPileRight.length;
         
         if (winner === 'player') {
-            // Host Won Slap -> Host starts next round with just Hand.
-            // Guest (Loser) takes the pile.
             gameState.playerTotal = gameState.playerHand.length; 
             gameState.aiTotal = gameState.aiHand.length + pilesTotal;
         } else {
-            // Guest Won Slap -> Guest starts next round with just Hand.
-            // Host (Loser) takes the pile.
             gameState.aiTotal = gameState.aiHand.length;
             gameState.playerTotal = gameState.playerHand.length + pilesTotal;
         }
 
-        // Broadcast End
         const resetMsg = {
-            type: 'CYCLE_RESET', // Reuse message for visual reset
+            type: 'CYCLE_RESET',
             pTotal: gameState.playerTotal,
             aTotal: gameState.aiTotal
         };
         sendNet(resetMsg);
 
-        // Visuals
         const overlay = document.getElementById('slap-overlay');
         overlay.classList.remove('hidden');
         document.getElementById('slap-text').innerText = (winner === 'player') ? "PLAYER SLAPS! ROUND RESET" : "OPPONENT SLAPS! ROUND RESET";
@@ -554,36 +545,38 @@ function resolveSlap(winner) {
         return;
     }
 
-    // --- NORMAL SLAP (Including during Borrowed Phase) ---
-    // "If there is a slap after a simultaneous draw deck shortage then normal slap rules apply"
-    // "The amount of cards that were in the middle get awarded to the LOSER"
-    
+    // --- NORMAL SLAP ---
     const pilesTotal = gameState.centerPileLeft.length + gameState.centerPileRight.length;
 
+    // Ensure stats are numbers (Fix for "undefined")
+    gameState.p1Slaps = gameState.p1Slaps || 0;
+    gameState.aiSlaps = gameState.aiSlaps || 0;
+
     if (winner === 'player') {
-        gameState.aiTotal += pilesTotal; // Give to Loser (Guest)
-        gameState.p1Slaps++;
+        gameState.aiTotal += pilesTotal; 
+        gameState.p1Slaps++; 
     } else {
-        gameState.playerTotal += pilesTotal; // Give to Loser (Host)
-        gameState.aiSlaps++;
+        gameState.playerTotal += pilesTotal; 
+        gameState.aiSlaps++; 
     }
 
-    // Standard Cleanup
     gameState.centerPileLeft = [];
     gameState.centerPileRight = [];
     document.getElementById('center-pile-left').innerHTML = '';
     document.getElementById('center-pile-right').innerHTML = '';
 
+    // Send payload
     const update = {
         type: 'SLAP_UPDATE',
         winner: winner,
         pTotal: gameState.playerTotal,
-        aTotal: gameState.aiTotal
+        aTotal: gameState.aiTotal,
+        p1Slaps: gameState.p1Slaps,
+        aiSlaps: gameState.aiSlaps
     };
     sendNet(update);
     applySlapUpdate(update);
 }
-
 function issuePenaltyHostAuth(who) {
     let currentY, currentR;
 
@@ -644,7 +637,7 @@ function applySlapUpdate(data) {
     gameState.gameActive = false;
     gameState.slapActive = false;
 
-    // 1. Determine Perspective for "Winner" Text
+    // 1. Winner Text
     let winnerText = "";
     let color = "";
     
@@ -661,7 +654,7 @@ function applySlapUpdate(data) {
         color = "rgba(200, 0, 0, 0.9)";
     }
 
-    // 2. Show Overlay
+    // 2. Overlay
     const overlay = document.getElementById('slap-overlay');
     const txt = document.getElementById('slap-text');
     if (overlay && txt) {
@@ -670,57 +663,62 @@ function applySlapUpdate(data) {
         overlay.classList.remove('hidden');
     }
 
-    // 3. SMART VISIBILITY (The Fix for Double Vision)
-    // We iterate through the AI Hand (Real Cards).
-    // We check if a Ghost exists for them.
+    // 3. SMART VISIBILITY (The Robust Fix)
+    // Instead of guessing the full key, we just check if the Ghost Map 
+    // contains ANY key starting with "Suit:Rank:Value".
+    // This ignores owner/lane mismatches.
+    
+    const ghostKeys = Array.from(gameState.opponentDragGhosts.keys());
+
     gameState.aiHand.forEach(c => {
         if (c.element) {
-            // CRITICAL FIX: The Ghost Map stores keys sent by the Opponent.
-            // The Opponent sees themselves as 'player', so the Ghost Key has owner='player'.
-            // We must construct the key with 'player' to match what is in the map.
-            const key = `${c.suit}:${c.rank}:${c.value}:player:${c.laneIndex}`;
+            // The prefix of the card (e.g., "hearts:jack:11")
+            const cardPrefix = `${c.suit}:${c.rank}:${c.value}`;
             
-            const hasGhost = gameState.opponentDragGhosts.has(key);
+            // Does any ghost match this card?
+            const hasGhost = ghostKeys.some(k => k.startsWith(cardPrefix));
             
-            // If Ghost exists, keep Real Card hidden (0). Else show Real Card (1).
+            // Hide real card if ghost exists
             c.element.style.opacity = hasGhost ? '0' : '1';
         }
     });
 
-    // Player hand always visible
     gameState.playerHand.forEach(c => { if (c.element) c.element.style.opacity = '1'; });
 
-    // 4. SYNC TOTALS
+    // 4. SYNC TOTALS (Safety Checks Added)
+    const p1S = (typeof data.p1Slaps === 'number') ? data.p1Slaps : 0;
+    const aiS = (typeof data.aiSlaps === 'number') ? data.aiSlaps : 0;
+
     if (gameState.isHost) {
         gameState.playerTotal = data.pTotal;
         gameState.aiTotal = data.aTotal;
-        gameState.p1Slaps = data.p1Slaps;
-        gameState.aiSlaps = data.aiSlaps;
+        gameState.p1Slaps = p1S;
+        gameState.aiSlaps = aiS;
     } else {
         gameState.playerTotal = data.aTotal;
         gameState.aiTotal = data.pTotal;
-        gameState.p1Slaps = data.aiSlaps; 
-        gameState.aiSlaps = data.p1Slaps;
+        // Swap because 'p1' coming from Host means Host's score
+        gameState.p1Slaps = aiS; 
+        gameState.aiSlaps = p1S;
     }
     
     updateScoreboard();
-    updateScoreboardWidget();
+    updateScoreboardWidget(); 
 
     // 5. RESET AFTER 2 SECONDS
     setTimeout(() => {
-        // Clear Piles
         gameState.centerPileLeft = [];
         gameState.centerPileRight = [];
         document.getElementById('center-pile-left').innerHTML = '';
         document.getElementById('center-pile-right').innerHTML = '';
 
-        // NOW we can clear the ghosts, because the round is resetting
+        // Now we can clear ghosts safely
         if (gameState.opponentDragGhosts) {
             gameState.opponentDragGhosts.forEach(el => el.remove()); 
             gameState.opponentDragGhosts.clear(); 
         }
 
-        // Restore Opacity for next round
+        // Restore real cards
         gameState.aiHand.forEach(c => { if (c.element) c.element.style.opacity = '1'; });
 
         overlay.classList.add('hidden');
