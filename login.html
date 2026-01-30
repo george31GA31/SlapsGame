@@ -5,139 +5,86 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ISF Online - Log In</title>
     <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+    
+    <script src="firebase-init.js"></script>
+
     <style>
-        /* REUSING THE AUTH STYLES */
-        body {
-            background-color: black;
-            display: flex;
-            flex-direction: column;
-            height: 100vh;
-            margin: 0;
-        }
-        .main-container {
-            flex: 1;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            background: radial-gradient(circle at center, #111 0%, #000 100%);
-        }
-        .auth-card {
-            background-color: #0a0a0a;
-            border: 1px solid #222;
-            border-radius: 15px;
-            padding: 40px;
-            width: 400px;
-            text-align: center;
-            box-shadow: 0 0 30px rgba(0,0,0,0.8);
-        }
-        .auth-header h1 {
-            color: white;
-            font-size: 1.8rem;
-            margin-bottom: 5px;
-            text-transform: uppercase;
-            font-style: italic;
-        }
-        .auth-header p {
-            color: #666;
-            font-size: 0.9rem;
-            margin-bottom: 25px;
-        }
-        .input-group {
-            margin-bottom: 15px;
-            text-align: left;
-        }
-        .input-label {
-            color: #00BFFF;
-            font-size: 0.8rem;
-            font-weight: bold;
-            display: block;
-            margin-bottom: 5px;
-            text-transform: uppercase;
-        }
-        .auth-input {
-            width: 100%;
-            background: #111;
-            border: 1px solid #333;
-            color: white;
-            padding: 12px;
-            font-size: 1rem;
-            border-radius: 6px;
-            box-sizing: border-box;
-            transition: 0.3s;
-        }
-        .auth-input:focus {
-            outline: none;
-            border-color: #00BFFF;
-            box-shadow: 0 0 10px rgba(0, 191, 255, 0.2);
-        }
-        .btn-auth {
-            width: 100%;
-            padding: 15px;
-            background: #00BFFF;
-            color: black;
-            border: none;
-            border-radius: 30px;
-            font-weight: 900;
-            font-size: 1rem;
-            cursor: pointer;
-            margin-top: 20px;
-            text-transform: uppercase;
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
-        .btn-auth:hover {
-            transform: scale(1.02);
-            box-shadow: 0 0 20px rgba(0, 191, 255, 0.5);
-        }
-        .alt-link {
-            display: block;
-            margin-top: 15px;
-            color: #888;
-            text-decoration: none;
-            font-size: 0.9rem;
-        }
-        .alt-link span { color: #00BFFF; font-weight: bold; }
-        .alt-link:hover span { text-decoration: underline; }
+        /* SAME STYLES AS SIGNUP */
+        body { background-color: #050505; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; font-family: 'Roboto', sans-serif; background-image: radial-gradient(circle at center, #111 0%, #000 100%); }
+        .auth-card { background-color: #0a0a0a; border: 1px solid #333; border-radius: 15px; padding: 40px; width: 400px; text-align: center; box-shadow: 0 0 40px rgba(0,0,0,0.8); }
+        .auth-header h1 { color: white; font-size: 1.8rem; margin-bottom: 5px; text-transform: uppercase; font-style: italic; }
+        .auth-header p { color: #666; font-size: 0.9rem; margin-bottom: 25px; }
+        .input-group { margin-bottom: 15px; text-align: left; }
+        .input-label { color: #00ccff; font-size: 0.75rem; font-weight: bold; display: block; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 1px; }
+        .auth-input { width: 100%; background: #151515; border: 1px solid #333; color: white; padding: 12px; font-size: 1rem; border-radius: 5px; box-sizing: border-box; transition: 0.3s; }
+        .auth-input:focus { outline: none; border-color: #00ccff; box-shadow: 0 0 15px rgba(0, 204, 255, 0.1); }
+        .btn-auth { width: 100%; padding: 15px; background: #00ccff; color: black; border: none; border-radius: 5px; font-weight: 900; font-size: 1rem; cursor: pointer; margin-top: 20px; text-transform: uppercase; transition: transform 0.2s; }
+        .btn-auth:hover { transform: scale(1.02); box-shadow: 0 0 20px rgba(0, 204, 255, 0.4); }
+        .alt-link { display: block; margin-top: 15px; color: #666; text-decoration: none; font-size: 0.9rem; }
+        .alt-link span { color: #00ccff; font-weight: bold; }
+        .error-msg { color: #ff4444; font-size: 0.85rem; margin-top: 10px; display: none; }
     </style>
 </head>
 <body>
 
-    <div class="top-bar">
-        <div class="logo-area">
-            <img src="assets/ISF_ONLINE.png" alt="ISF Online" style="height: 40px;">
+    <div class="auth-card">
+        <div class="auth-header">
+            <img src="assets/ISF_ONLINE.png" alt="ISF" style="height: 30px; margin-bottom: 10px;">
+            <h1>Welcome Back</h1>
+            <p>Log in to access your stats</p>
         </div>
-        <div class="auth-buttons">
-            <button class="btn-login" style="border: 1px solid #333; color: #888; background: transparent; padding: 8px 20px; cursor: pointer;" onclick="window.location.href='index.html'">CANCEL</button>
-        </div>
-    </div>
 
-    <div class="main-container">
-        <div class="auth-card">
-            <div class="auth-header">
-                <h1>Welcome Back</h1>
-                <p>Log in to access your stats</p>
+        <form id="login-form">
+            <div class="input-group">
+                <label class="input-label">Email</label>
+                <input type="email" id="li-email" class="auth-input" placeholder="name@example.com" required>
+            </div>
+            <div class="input-group">
+                <label class="input-label">Password</label>
+                <input type="password" id="li-pass" class="auth-input" placeholder="••••••••" required>
             </div>
 
-            <form onsubmit="event.preventDefault(); window.location.href='index.html';">
-                <div class="input-group">
-                    <label class="input-label">Email</label>
-                    <input type="email" class="auth-input" placeholder="name@example.com" required>
-                </div>
-                <div class="input-group">
-                    <label class="input-label">Password</label>
-                    <input type="password" class="auth-input" placeholder="••••••••" required>
-                </div>
+            <p id="error-text" class="error-msg">Invalid Email or Password</p>
 
-                <div style="text-align: right; margin-bottom: 20px;">
-                    <a href="#" style="color:#666; font-size: 0.8rem; text-decoration: none;">Forgot Password?</a>
-                </div>
+            <button type="submit" class="btn-auth">Log In</button>
+        </form>
 
-                <button type="submit" class="btn-auth">Log In</button>
-            </form>
-
-            <a href="signup.html" class="alt-link">Don't have an account? <span>Sign Up</span></a>
-        </div>
+        <a href="signup.html" class="alt-link">Don't have an account? <span>Sign Up</span></a>
+        <a href="index.html" class="alt-link" style="font-size: 0.8rem; margin-top: 10px;">Back to Home</a>
     </div>
 
+    <script>
+        document.getElementById('login-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const email = document.getElementById('li-email').value.trim();
+            const pass = document.getElementById('li-pass').value;
+            const errorText = document.getElementById('error-text');
+
+            // --- 3. LOG IN WITH FIREBASE ---
+            auth.signInWithEmailAndPassword(email, pass)
+                .then((userCredential) => {
+                    const user = userCredential.user;
+                    
+                    // Get Username (we stored it in display name during sign up)
+                    // If it's missing, default to "Member"
+                    const username = user.displayName || "Member";
+                    
+                    localStorage.setItem('isf_username', username);
+                    localStorage.setItem('isf_is_guest', 'false');
+                    
+                    window.location.href = 'index.html';
+                })
+                .catch((error) => {
+                    errorText.innerText = "Incorrect Email or Password.";
+                    errorText.style.display = "block";
+                    console.error("Login Failed:", error.message);
+                });
+        });
+    </script>
 </body>
 </html>
