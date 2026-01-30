@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ISF Online - Report a Bug</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+
+    <div class="top-bar">
+        <div class="logo-area">
+            <span class="logo-text">ISF <span style="color:var(--accent-blue)">ONLINE</span></span>
+        </div>
+        <div class="auth-buttons">
+            <button class="btn-login" onclick="window.location.href='index.html'">BACK TO HOME</button>
+        </div>
+    </div>
+
+    <div class="main-container" style="justify-content: center; align-items: center; padding-top: 0;">
+        
+        <div class="setup-card" style="width: 600px; text-align: left;">
+            <div class="setup-header" style="text-align: center; margin-bottom: 30px;">
+                <i class="fa-solid fa-bug" style="font-size: 50px; color: #ff4444; margin-bottom: 10px;"></i>
+                <h1 style="color: white; font-family: var(--font-header); font-size: 2rem;">REPORT A BUG</h1>
+                <p style="color: #999;">Found a glitch? Let us know so we can fix it.</p>
+            </div>
+
+            <form id="bug-form" action="https://formspree.io/f/YOUR_FORMSPREE_ID" method="POST">
+                
+                <div style="margin-bottom: 20px;">
+                    <label style="color: var(--accent-gold); font-weight: bold; display: block; margin-bottom: 10px;">YOUR NAME</label>
+                    <input type="text" name="name" required class="lobby-input" style="text-align: left; width: 100%;" placeholder="Enter your name...">
+                </div>
+
+                <div style="margin-bottom: 20px;">
+                    <label style="color: var(--accent-gold); font-weight: bold; display: block; margin-bottom: 10px;">TOPIC</label>
+                    <select name="topic" class="lobby-input" style="text-align: left; width: 100%; cursor: pointer;">
+                        <option value="Bug Report">🐛 Bug / Glitch</option>
+                        <option value="Feedback">💡 General Feedback</option>
+                        <option value="Question">❓ Question</option>
+                    </select>
+                </div>
+
+                <div style="margin-bottom: 30px;">
+                    <label style="color: var(--accent-gold); font-weight: bold; display: block; margin-bottom: 10px;">DETAILS</label>
+                    <textarea name="message" required class="lobby-input" style="text-align: left; width: 100%; height: 150px; resize: none; font-size: 1rem; line-height: 1.5;" placeholder="Describe what happened..."></textarea>
+                </div>
+
+                <button type="submit" class="btn-start" style="background: linear-gradient(135deg, #ff4444, #cc0000); border: none;">
+                    SEND REPORT
+                </button>
+            </form>
+
+            <div id="status-message" class="hidden" style="text-align: center; margin-top: 20px;">
+                <h3 style="color: #66ff66;">REPORT SENT!</h3>
+                <p style="color: #ccc;">Thanks for helping us improve the game.</p>
+                <button class="btn-login" onclick="window.location.href='index.html'" style="margin-top: 15px;">RETURN HOME</button>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        const form = document.getElementById("bug-form");
+        
+        async function handleSubmit(event) {
+            event.preventDefault();
+            const status = document.getElementById("status-message");
+            const data = new FormData(event.target);
+            
+            // --- IF YOU ARE USING FORMSPREE (Real Emails) ---
+            // Uncomment the lines below to actually send data
+            /*
+            fetch(event.target.action, {
+                method: form.method,
+                body: data,
+                headers: { 'Accept': 'application/json' }
+            }).then(response => {
+                if (response.ok) {
+                    form.style.display = "none";
+                    status.classList.remove("hidden");
+                } else {
+                    alert("Oops! There was a problem submitting your form.");
+                }
+            });
+            */
+
+            // --- SIMULATION MODE (Just to test the UI) ---
+            // Remove this block when you add your real Formspree ID
+            form.style.display = "none";
+            status.classList.remove("hidden");
+        }
+        
+        form.addEventListener("submit", handleSubmit);
+    </script>
+
+</body>
+</html>
