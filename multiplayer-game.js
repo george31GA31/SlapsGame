@@ -47,32 +47,30 @@ function fetchEnemyStats(enemyId) {
 }
 
 // --- 3. REPORT RESULT TO FIREBASE ---
-function reportMatchResultInternal(isWin) {
+// --- 3. REPORT RESULT TO FIREBASE ---
+function reportMatchResultInternal(isWin, onComplete) {
     console.log("🚀 STARTING ELO UPDATE...");
 
     const user = firebase.auth().currentUser;
     if (!user) {
         console.error("❌ ERROR: You are not logged in.");
+        if (onComplete) onComplete(); // Run callback anyway so game doesn't hang
         return;
     }
 
-    // Reference to MY database entry
     const userRef = firebase.database().ref('users/' + user.uid);
 
     userRef.transaction((userData) => {
         if (userData) {
-            // 1. Get MY current stats
             const currentElo = userData.elo || 1000;
             const wins = userData.wins || 0;
             const losses = userData.losses || 0;
             const myGameCount = wins + losses;
 
-            console.log(`📊 My Old ELO: ${currentElo} | Enemy ELO: ${enemyElo}`);
-
-            // 2. Do the Math (using elo-engine.js)
+            // Safety check for the math engine
             if (typeof calculateNewElo !== 'function') {
-                console.error("❌ CRITICAL: calculateNewElo function missing! Check elo-engine.js");
-                return userData; // Abort transaction
+                console.error("❌ CRITICAL: Missing math engine.");
+                return userData;
             }
 
             const newElo = calculateNewElo(
@@ -83,15 +81,11 @@ function reportMatchResultInternal(isWin) {
                 enemyGameCount 
             );
 
-            console.log(`📈 Calculated New ELO: ${newElo}`);
+            console.log(`📈 New ELO: ${newElo} (Win: ${isWin})`);
 
-            // 3. Save to Database
             userData.elo = newElo;
-            if (isWin) {
-                userData.wins = wins + 1;
-            } else {
-                userData.losses = losses + 1;
-            }
+            if (isWin) userData.wins = wins + 1;
+            else userData.losses = losses + 1;
             
             return userData;
         }
@@ -102,9 +96,10 @@ function reportMatchResultInternal(isWin) {
         } else if (committed) {
             console.log("✅ SUCCESS! Database updated.");
         }
+        // CRITICAL: Run the "Go Home" code now that we are finished
+        if (onComplete) onComplete();
     });
 }
-
 // --- 4. INITIALIZATION ---
 window.onload = function () {
     document.addEventListener('keydown', handleInput);
@@ -364,16 +359,26 @@ function handleNet(msg) {
     if (msg.type === 'CONCESSION_RESULT') {
         // I am the Quitter receiving the verdict
         if (msg.accepted) {
-            window.location.href = 'index.html'; // Void
+            // ACCEPTED: Void match, just leave
+            window.location.href = 'index.html'; 
         } else {
-            // They declined. I take the Loss.
-            console.log("Opponent declined. Taking Loss.");
-            if (isRanked) reportMatchResultInternal(false); 
+            // DECLINED: Force Loss
+            console.log("Opponent declined. Taking Loss...");
             
-            setTimeout(() => {
-                alert("Opponent declined concession. Match recorded as LOSS.");
+            // 1. Show message immediately so user knows what's happening
+            const overlay = document.getElementById('concession-waiting-overlay');
+            if(overlay) overlay.innerHTML = "<h1>DECLINED</h1><p>Recording Loss...</p>";
+
+            // 2. Report Loss, THEN Redirect
+            if (isRanked) {
+                reportMatchResultInternal(false, () => {
+                    // This runs ONLY after the database is updated
+                    alert("Opponent declined concession. Loss recorded.");
+                    window.location.href = 'index.html';
+                });
+            } else {
                 window.location.href = 'index.html';
-            }, 500);
+            }
         }
         return;
     }
