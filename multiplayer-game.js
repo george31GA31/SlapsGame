@@ -4,7 +4,64 @@
    - Guest Visual Mirroring
    - Phase 1 & 2 Stalemate Logic Implemented
    ========================================= */
+/* ================================
+   ELO SYSTEM SETUP
+   ================================ */
 
+// 1. Is this a ranked match? (Set to true for Multiplayer)
+let isRanked = true; 
+
+// 2. Variables to hold the enemy's stats (defaults)
+let enemyElo = 1000;
+let enemyGameCount = 0;
+
+// 3. Helper to fetch enemy data from Firebase
+function fetchEnemyStats(enemyId) {
+    console.log("Fetching stats for enemy:", enemyId);
+    
+    // Check if Firebase is loaded
+    if (!window.db) {
+        console.error("Firebase Database not found! Make sure firebase-init.js is loaded.");
+        return;
+    }
+
+    // Go to the database and get their info
+    window.db.ref('users/' + enemyId).once('value')
+        .then((snapshot) => {
+            if (snapshot.exists()) {
+                const data = snapshot.val();
+                enemyElo = data.elo || 1000;
+                enemyGameCount = (data.wins || 0) + (data.losses || 0);
+                console.log(`Enemy Found! ELO: ${enemyElo}, Games Played: ${enemyGameCount}`);
+            } else {
+                console.log("Enemy not found in database. Using default stats.");
+            }
+        });
+}
+
+// ---------------------------------------------------------
+// FETCH ENEMY STATS ON LOAD
+// We use the room code/host ID logic to determine the opponent ID
+// ---------------------------------------------------------
+window.addEventListener('load', () => {
+   // If I am the host, the opponent ID is not in the URL/localStorage easily
+   // We will need to grab it from the handshake or a different method later.
+   // For now, if you are the Joiner, the 'hostId' is the opponent.
+   
+   const role = (localStorage.getItem('isf_role') || '').toLowerCase();
+   const hostId = (localStorage.getItem('isf_code') || '').trim();
+   
+   if (role === 'joiner' && hostId) {
+       fetchEnemyStats(hostId);
+   }
+   // Note: Hosts currently don't know the Joiner's ID until the connection is made.
+   // You might want to pass the ID in the 'HANDSHAKE' message if you want full 2-way ELO.
+});
+
+/* =========================================
+   MULTIPLAYER GAME.JS (Human vs Human)
+   ... existing code starts here ...
+*/
 const gameState = {
     // Deck/hand state
     playerDeck: [],
@@ -146,7 +203,11 @@ function bindConnection(conn) {
     gameState.conn = conn;
 
     conn.on('open', () => {
-        sendNet({ type: 'HANDSHAKE', name: gameState.myName });
+        // GET MY FIREBASE ID
+        const myUid = (window.auth && window.auth.currentUser) ? window.auth.currentUser.uid : null;
+        
+        // SEND IT IN THE HANDSHAKE
+        sendNet({ type: 'HANDSHAKE', name: gameState.myName, uid: myUid });
     });
 
     conn.on('data', (msg) => handleNet(msg));
@@ -177,9 +238,19 @@ function handleNet(msg) {
         gameState.opponentName = msg.name || 'OPPONENT';
         updateScoreboardWidget();
 
+        // --- NEW: FETCH ENEMY STATS ---
+        if (msg.uid) {
+            fetchEnemyStats(msg.uid);
+        }
+        // ------------------------------
+
         if (!gameState.handshakeDone) {
             gameState.handshakeDone = true;
-            sendNet({ type: 'HANDSHAKE', name: gameState.myName });
+            
+            // GET MY ID AGAIN TO SEND BACK
+            const myUid = (window.auth && window.auth.currentUser) ? window.auth.currentUser.uid : null;
+            
+            sendNet({ type: 'HANDSHAKE', name: gameState.myName, uid: myUid });
         }
 
         if (gameState.isHost && !gameState.roundStarted) {
@@ -1820,6 +1891,25 @@ function applyMatchOver(data) {
     const title = iWon ? "YOU WON THE MATCH!" : "OPPONENT WINS THE MATCH!";
     
     showEndGame(title, iWon);
+
+    // --- ELO REPORTING LOGIC ---
+    // Only run this if the match is officially over and we have a winner
+    
+    if (iWon) { 
+        console.log("VICTORY! Reporting win to database...");
+        
+        if (isRanked && typeof window.reportMatchResult === "function") {
+            // reportMatchResult(EnemyRating, EnemyGames, true for WIN)
+            window.reportMatchResult(enemyElo, enemyGameCount, true);
+        }
+    } else {
+        console.log("DEFEAT. Reporting loss to database...");
+        
+        if (isRanked && typeof window.reportMatchResult === "function") {
+            // reportMatchResult(EnemyRating, EnemyGames, false for LOSS)
+            window.reportMatchResult(enemyElo, enemyGameCount, false);
+        }
+    }
 }
 function quitMatch() {
     console.log("Quitting match...");
