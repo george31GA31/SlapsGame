@@ -72,45 +72,37 @@
             </div>
             <div class="modes-grid">
                 
-                <div class="mode-box" onclick="hostMatch()"> 
-                    <div class="mode-icon">
-                        <i class="fa-solid fa-handshake"></i>
-                    </div>
-                    <h3>PLAY A<br>FRIEND</h3>
-                    <button class="btn-mode-play">PLAY</button>
-                </div>
+                <div class="mode-box" onclick="handleGameMode('multiplayer-setup.html')">
+    <div class="mode-icon">
+        <i class="fa-solid fa-handshake"></i>
+    </div>
+    <h3>PLAY A<br>FRIEND</h3>
+    <button class="btn-mode-play">PLAY</button>
+</div>
 
-                <div class="mode-box" onclick="window.location.href='setup.html'">
-                    <div class="mode-icon">
-                        <i class="fa-solid fa-robot"></i>
-                    </div>
-                    <h3>PLAY AI<br>BOT</h3>
-                    <button class="btn-mode-play">PLAY</button>
-                </div>
+<div class="mode-box" onclick="handleGameMode('setup.html')">
+    <div class="mode-icon">
+        <i class="fa-solid fa-robot"></i>
+    </div>
+    <h3>PLAY AI<br>BOT</h3>
+    <button class="btn-mode-play">PLAY</button>
+</div>
 
-                <div class="mode-box" onclick="window.location.href='matchmaking.html'">
-                    <div class="mode-icon">
-                        <i class="fa-solid fa-globe"></i>
-                    </div>
-                    <h3>PLAY<br>ONLINE</h3>
-                    <button class="btn-mode-play">PLAY</button>
-                </div>
+<div class="mode-box" onclick="handleGameMode('matchmaking.html')">
+    <div class="mode-icon">
+        <i class="fa-solid fa-globe"></i>
+    </div>
+    <h3>PLAY<br>ONLINE</h3>
+    <button class="btn-mode-play">PLAY</button>
+</div>
 
-                <div class="mode-box" onclick="window.location.href='tournament-setup.html'">
-                    <div class="mode-icon">
-                        <i class="fa-solid fa-trophy"></i>
-                    </div>
-                    <h3>PLAY<br>TOURNAMENT</h3>
-                    <button class="btn-mode-play">PLAY</button>
-                </div>
-
-                <div class="mode-box disabled">
-                    <div class="mode-icon">
-                        <i class="fa-solid fa-medal"></i>
-                    </div>
-                    <h3>PLAY<br>LEAGUE</h3>
-                    <button class="btn-mode-coming">COMING SOON</button>
-                </div>
+<div class="mode-box" onclick="handleGameMode('tournament-setup.html')">
+    <div class="mode-icon">
+        <i class="fa-solid fa-trophy"></i>
+    </div>
+    <h3>PLAY<br>TOURNAMENT</h3>
+    <button class="btn-mode-play">PLAY</button>
+</div>
 
             </div>
         </aside>
