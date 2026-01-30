@@ -75,10 +75,16 @@
 
             snapshot.forEach((child) => {
                 const data = child.val();
+                
+                // Construct Real Name safely
+                const fName = data.firstName || "";
+                const lName = data.lastName || "";
+                const fullName = (fName + " " + lName).trim() || "Unknown Player";
+
                 players.push({
                     username: data.username || "Unknown",
-                    realName: (data.firstName || "") + " " + (data.lastName || ""), // Combine names
-                    // Use the saved flag, or fallback to USA if missing
+                    realName: fullName,
+                    // Use the saved flag. If it's missing, use a default.
                     flagSrc: data.flag || "assets/flags/UnitedStatesofAmerica.png",
                     elo: data.elo || 1000,
                     wins: data.wins || 0,
@@ -105,8 +111,12 @@
                         </div>
                         
                         <div class="player-info">
-                            <span class="p-name">${p.username}</span>
-                            <span style="display:block; font-size:0.75rem; color:#888; margin-top:2px;">${p.realName}</span>
+                            <span class="p-name">${p.realName.toUpperCase()}</span>
+                            
+                            <span style="display:block; font-size:0.75rem; color:#888; margin-top:2px;">
+                                @${p.username}
+                            </span>
+                            
                             <span class="p-stats">${p.wins} Wins - ${p.losses} Losses</span>
                         </div>
                         
