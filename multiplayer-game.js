@@ -670,47 +670,58 @@ function applySlapUpdate(data) {
         overlay.classList.remove('hidden');
     }
 
-    // 3. SMART VISIBILITY UPDATE (The Fix)
-    // We do NOT clear ghosts anymore. We want them to stay messy.
-    // We only ensure that if a ghost exists, the real card stays hidden (opacity 0).
-    // If no ghost exists, make sure the real card is visible (opacity 1).
-    
+    // 3. SMART VISIBILITY (The Fix for Double Vision)
+    // We iterate through the AI Hand (Real Cards).
+    // We check if a Ghost exists for them.
     gameState.aiHand.forEach(c => {
         if (c.element) {
-            // Reconstruct the key used for ghosts: suit:rank:value:owner:lane
-            const key = `${c.suit}:${c.rank}:${c.value}:${c.owner}:${c.laneIndex}`;
+            // CRITICAL FIX: The Ghost Map stores keys sent by the Opponent.
+            // The Opponent sees themselves as 'player', so the Ghost Key has owner='player'.
+            // We must construct the key with 'player' to match what is in the map.
+            const key = `${c.suit}:${c.rank}:${c.value}:player:${c.laneIndex}`;
+            
             const hasGhost = gameState.opponentDragGhosts.has(key);
             
-            // If there is a ghost, hide real card. If no ghost, show real card.
+            // If Ghost exists, keep Real Card hidden (0). Else show Real Card (1).
             c.element.style.opacity = hasGhost ? '0' : '1';
         }
     });
 
-    // Player hand doesn't use ghosts for self, so always ensure visible
+    // Player hand always visible
     gameState.playerHand.forEach(c => { if (c.element) c.element.style.opacity = '1'; });
 
-    // 4. Update Totals
+    // 4. SYNC TOTALS
     if (gameState.isHost) {
         gameState.playerTotal = data.pTotal;
         gameState.aiTotal = data.aTotal;
+        gameState.p1Slaps = data.p1Slaps;
+        gameState.aiSlaps = data.aiSlaps;
     } else {
         gameState.playerTotal = data.aTotal;
         gameState.aiTotal = data.pTotal;
+        gameState.p1Slaps = data.aiSlaps; 
+        gameState.aiSlaps = data.p1Slaps;
     }
     
     updateScoreboard();
-    
-    if (iWon) gameState.p1Slaps++; 
-    else gameState.aiSlaps++;
-    
     updateScoreboardWidget();
 
-    // 5. RESET CENTER PILES AFTER 2 SECONDS (But keep hands messy)
+    // 5. RESET AFTER 2 SECONDS
     setTimeout(() => {
+        // Clear Piles
         gameState.centerPileLeft = [];
         gameState.centerPileRight = [];
         document.getElementById('center-pile-left').innerHTML = '';
         document.getElementById('center-pile-right').innerHTML = '';
+
+        // NOW we can clear the ghosts, because the round is resetting
+        if (gameState.opponentDragGhosts) {
+            gameState.opponentDragGhosts.forEach(el => el.remove()); 
+            gameState.opponentDragGhosts.clear(); 
+        }
+
+        // Restore Opacity for next round
+        gameState.aiHand.forEach(c => { if (c.element) c.element.style.opacity = '1'; });
 
         overlay.classList.add('hidden');
         gameState.playerReady = false;
