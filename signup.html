@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ISF Online - Sign Up</title>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
@@ -42,6 +42,18 @@
         .alt-link { display: block; margin-top: 15px; color: #666; text-decoration: none; font-size: 0.9rem; }
         .alt-link span { color: #00ccff; font-weight: bold; }
         .error-msg { color: #ff4444; font-size: 0.85rem; margin-top: 10px; display: none; }
+        /* --- PASSWORD EYE STYLES --- */
+.password-wrapper { position: relative; width: 100%; }
+.toggle-password {
+    position: absolute;
+    right: 15px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #666;
+    cursor: pointer;
+    z-index: 10;
+}
+.toggle-password:hover { color: #00ccff; }
     </style>
 </head>
 <body>
@@ -77,14 +89,17 @@
                 <input type="hidden" id="su-country" required>
 
                 <div class="custom-select-wrapper" onclick="toggleDropdown()">
-                    <div class="custom-select-trigger" id="select-trigger">
-                        <span id="trigger-text">Select Nation...</span>
-                        <span class="arrow">▼</span>
-                    </div>
-                    
-                    <div class="custom-option" onclick="selectOption('ABK', 'assets/flags/Abkhazia.png', 'Abkhazia')">
-    <img src="assets/flags/Abkhazia.png" alt="ABK"> Abkhazia
-</div>
+    
+    <div class="custom-select-trigger" id="select-trigger">
+        <span id="trigger-text">Select Nation...</span>
+        <span class="arrow">▼</span>
+    </div>
+    
+    <div class="custom-options" id="custom-options">
+        
+        <div class="custom-option" onclick="selectOption('ABK', 'assets/flags/Abkhazia.png', 'Abkhazia')">
+            <img src="assets/flags/Abkhazia.png" alt="ABK"> Abkhazia
+        </div>
 <div class="custom-option" onclick="selectOption('AFG', 'assets/flags/Afghanistan.png', 'Afghanistan')">
     <img src="assets/flags/Afghanistan.png" alt="AFG"> Afghanistan
 </div>
@@ -823,16 +838,19 @@
                     </div>
                 </div>
             </div>
-
+        </div>
             <div class="input-group">
                 <label class="input-label">Email</label>
                 <input type="email" id="su-email" class="auth-input" placeholder="name@example.com" required>
             </div>
 
             <div class="input-group">
-                <label class="input-label">Password</label>
-                <input type="password" id="su-pass" class="auth-input" placeholder="••••••••" required>
-            </div>
+    <label class="input-label">Password</label>
+    <div class="password-wrapper">
+        <input type="password" id="su-pass" class="auth-input" placeholder="••••••••" required>
+        <i class="fa-solid fa-eye toggle-password" onclick="togglePasswordVisibility()"></i>
+    </div>
+</div>
             
             <p id="error-text" class="error-msg">Error message here</p>
 
@@ -850,17 +868,16 @@
         }
 
         function selectOption(value, imgSrc, text) {
-            // Update the UI
-            const trigger = document.getElementById('select-trigger');
-            trigger.innerHTML = `<div style="display:flex; align-items:center;"><img src="${imgSrc}" class="flag-icon"> ${text}</div><span class="arrow">▼</span>`;
-            
-            // Set the hidden value
-            document.getElementById('su-country').value = value;
-            
-            // Close dropdown
-            document.getElementById('custom-options').classList.remove('open');
-        }
-
+    // Update the UI
+    const trigger = document.getElementById('select-trigger');
+    trigger.innerHTML = `<div style="display:flex; align-items:center;"><img src="${imgSrc}" class="flag-icon"> ${text}</div><span class="arrow">▼</span>`;
+    
+    // Set the hidden value
+    document.getElementById('su-country').value = value;
+    
+    // ADD THIS LINE HERE TO CLOSE IT:
+    document.getElementById('custom-options').classList.remove('open');
+}
         // Close dropdown if clicking outside
         window.addEventListener('click', function(e) {
             const wrapper = document.querySelector('.custom-select-wrapper');
@@ -921,6 +938,20 @@
             el.innerText = msg;
             el.style.display = "block";
         }
+        function togglePasswordVisibility() {
+    const passInput = document.getElementById('su-pass');
+    const icon = document.querySelector('.toggle-password');
+    
+    if (passInput.type === "password") {
+        passInput.type = "text";
+        icon.classList.remove('fa-eye');
+        icon.classList.add('fa-eye-slash');
+    } else {
+        passInput.type = "password";
+        icon.classList.remove('fa-eye-slash');
+        icon.classList.add('fa-eye');
+    }
+}
     </script>
 </body>
 </html>
