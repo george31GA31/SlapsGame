@@ -1,72 +1,114 @@
 /* =========================================
-   MULTIPLAYER GAME.JS (Human vs Human)
-   - Host Authoritative Logic
-   - Guest Visual Mirroring
-   - Phase 1 & 2 Stalemate Logic Implemented
+   MULTIPLAYER GAME.JS
    ========================================= */
 
-/* ================================
-   ELO SYSTEM SETUP
-   ================================ */
-
-// 1. Is this a ranked match? (Set to true for Multiplayer)
+// --- 1. ELO VARIABLES ---
 let isRanked = true; 
+let enemyElo = 1000;      // Default
+let enemyGameCount = 0;   // Default
 
-// 2. Variables to hold the enemy's stats (defaults)
-let enemyElo = 1000;
-let enemyGameCount = 0;
-
-// 3. Helper to fetch enemy data from Firebase
+// --- 2. FETCH ENEMY STATS ---
 function fetchEnemyStats(enemyId) {
-    console.log("Fetching stats for enemy:", enemyId);
+    console.log("🔍 Fetching stats for enemy:", enemyId);
     
-    // Check if Firebase is loaded
     if (!window.db) {
-        console.warn("Firebase Database not ready yet. Retrying in 500ms...");
-        setTimeout(() => fetchEnemyStats(enemyId), 500);
+        console.warn("⚠️ Firebase not ready. Retrying in 1s...");
+        setTimeout(() => fetchEnemyStats(enemyId), 1000);
         return;
     }
 
-    // Go to the database and get their info
     window.db.ref('users/' + enemyId).once('value')
         .then((snapshot) => {
             if (snapshot.exists()) {
                 const data = snapshot.val();
                 enemyElo = data.elo || 1000;
                 enemyGameCount = (data.wins || 0) + (data.losses || 0);
-                console.log(`Enemy Found! ELO: ${enemyElo}, Games Played: ${enemyGameCount}`);
+                console.log(`✅ Enemy Found! ELO: ${enemyElo}, Games: ${enemyGameCount}`);
             } else {
-                console.log("Enemy not found in database. Using default stats.");
+                console.log("⚠️ Enemy not found in DB. Using defaults.");
             }
-        })
-        .catch(err => console.error("Error fetching stats:", err));
+        });
 }
 
-// ---------------------------------------------------------
-// WAIT FOR PAGE LOAD AND FIREBASE
-// ---------------------------------------------------------
+// --- 3. REPORT RESULT TO FIREBASE ---
+function reportMatchResultInternal(isWin) {
+    console.log("🚀 STARTING ELO UPDATE...");
+
+    const user = firebase.auth().currentUser;
+    if (!user) {
+        console.error("❌ ERROR: You are not logged in.");
+        return;
+    }
+
+    // Reference to MY database entry
+    const userRef = firebase.database().ref('users/' + user.uid);
+
+    userRef.transaction((userData) => {
+        if (userData) {
+            // 1. Get MY current stats
+            const currentElo = userData.elo || 1000;
+            const wins = userData.wins || 0;
+            const losses = userData.losses || 0;
+            const myGameCount = wins + losses;
+
+            console.log(`📊 My Old ELO: ${currentElo} | Enemy ELO: ${enemyElo}`);
+
+            // 2. Do the Math (using elo-engine.js)
+            if (typeof calculateNewElo !== 'function') {
+                console.error("❌ CRITICAL: calculateNewElo function missing! Check elo-engine.js");
+                return userData; // Abort transaction
+            }
+
+            const newElo = calculateNewElo(
+                currentElo, 
+                enemyElo, 
+                isWin, 
+                myGameCount, 
+                enemyGameCount 
+            );
+
+            console.log(`📈 Calculated New ELO: ${newElo}`);
+
+            // 3. Save to Database
+            userData.elo = newElo;
+            if (isWin) {
+                userData.wins = wins + 1;
+            } else {
+                userData.losses = losses + 1;
+            }
+            
+            return userData;
+        }
+        return userData;
+    }, (error, committed, snapshot) => {
+        if (error) {
+            console.error("❌ Transaction Failed:", error);
+        } else if (committed) {
+            console.log("✅ SUCCESS! Database updated.");
+        }
+    });
+}
+
+// --- 4. INITIALIZATION ---
 window.onload = function () {
     document.addEventListener('keydown', handleInput);
-
     const pDeck = document.getElementById('player-draw-deck');
     if (pDeck) pDeck.onclick = handlePlayerDeckClick;
-
-    updateScoreboardWidget();
     
-    // Start the game logic
-    initMultiplayer();
+    updateScoreboardWidget();
+    initMultiplayer(); // Start PeerJS
 
-    // Try to fetch enemy stats if we are the Joiner
-    // We delay this slightly to let Firebase initialize
+    // Trigger Stat Fetch for Joiners
     setTimeout(() => {
         const role = (localStorage.getItem('isf_role') || '').toLowerCase();
         const hostId = (localStorage.getItem('isf_code') || '').trim();
-        
-        if (role === 'joiner' && hostId) {
-            fetchEnemyStats(hostId);
-        }
-    }, 1000);
+        if (role === 'joiner' && hostId) fetchEnemyStats(hostId);
+    }, 1500);
 };
+
+/* =========================================
+   GAME LOGIC STARTS HERE ...
+*/
 const gameState = {
     // Deck/hand state
     playerDeck: [],
@@ -1891,29 +1933,18 @@ function applyMatchOver(data) {
     
     const iAmHost = gameState.isHost;
     const hostWon = (data.winner === 'player');
+    
+    // DID I WIN?
     const iWon = (iAmHost && hostWon) || (!iAmHost && !hostWon);
 
     const title = iWon ? "YOU WON THE MATCH!" : "OPPONENT WINS THE MATCH!";
-    
     showEndGame(title, iWon);
 
-    // --- ELO REPORTING LOGIC ---
-    // Only run this if the match is officially over and we have a winner
-    
-    if (iWon) { 
-        console.log("VICTORY! Reporting win to database...");
-        
-        if (isRanked && typeof window.reportMatchResult === "function") {
-            // reportMatchResult(EnemyRating, EnemyGames, true for WIN)
-            window.reportMatchResult(enemyElo, enemyGameCount, true);
-        }
-    } else {
-        console.log("DEFEAT. Reporting loss to database...");
-        
-        if (isRanked && typeof window.reportMatchResult === "function") {
-            // reportMatchResult(EnemyRating, EnemyGames, false for LOSS)
-            window.reportMatchResult(enemyElo, enemyGameCount, false);
-        }
+    // --- ELO TRIGGER ---
+    if (isRanked) {
+        console.log(`🏆 Match Over. I Won? ${iWon}`);
+        // Call the internal function we wrote at the top
+        reportMatchResultInternal(iWon);
     }
 }
 function quitMatch() {
