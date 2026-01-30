@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ISF Online - Leaderboard</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+    <script src="firebase-init.js"></script>
+
+    <style>
+        body { background-color: #050505; color: white; font-family: 'Roboto', sans-serif; margin: 0; padding: 20px; }
+        
+        .header-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 20px; }
+        .title { font-size: 2rem; font-weight: 900; font-style: italic; color: #00ccff; }
+        
+        .back-btn { 
+            text-decoration: none; color: #fff; background: #333; 
+            padding: 10px 20px; border-radius: 5px; font-weight: bold; 
+            transition: 0.2s; 
+        }
+        .back-btn:hover { background: #ff4444; }
+
+        /* LEADERBOARD TABLE */
+        .lb-container { max-width: 800px; margin: 0 auto; background: #0a0a0a; border: 1px solid #333; border-radius: 10px; overflow: hidden; }
+        
+        .lb-row { display: flex; padding: 15px; border-bottom: 1px solid #222; align-items: center; transition: 0.2s; }
+        .lb-row:last-child { border-bottom: none; }
+        .lb-row:hover { background: #111; }
+        
+        /* Highlight the current user */
+        .lb-row.me { background: rgba(0, 204, 255, 0.1); border-left: 4px solid #00ccff; }
+
+        .rank { width: 60px; font-size: 1.2rem; font-weight: 900; color: #666; text-align: center; }
+        .rank.top3 { color: #ffd700; text-shadow: 0 0 10px rgba(255, 215, 0, 0.5); }
+        
+        .country img { width: 30px; border-radius: 3px; display: block; }
+        .country { width: 60px; display: flex; justify-content: center; }
+        
+        .player-info { flex: 1; padding-left: 20px; }
+        .p-name { font-weight: bold; font-size: 1.1rem; display: block; }
+        .p-stats { font-size: 0.8rem; color: #888; }
+        
+        .elo-score { width: 100px; text-align: right; font-size: 1.5rem; font-weight: 900; color: #00ccff; padding-right: 20px; }
+        
+        .loading-text { text-align: center; padding: 50px; color: #666; }
+    </style>
+</head>
+<body>
+
+    <div class="header-bar">
+        <div class="title">GLOBAL RANKINGS</div>
+        <a href="index.html" class="back-btn">BACK TO ARENA</a>
+    </div>
+
+    <div class="lb-container" id="lb-list">
+        <div class="loading-text">Loading Top Players...</div>
+    </div>
+
+    <script>
+        const listContainer = document.getElementById('lb-list');
+        const myUsername = localStorage.getItem('isf_username'); // To highlight yourself
+
+        // 1. QUERY FIREBASE (Sort by ELO, Get Top 50)
+        // Note: Firebase sorts Ascending (Low to High), so "limitToLast" gets the highest scores.
+        const leaderboardQuery = db.ref('users').orderByChild('elo').limitToLast(50);
+
+        leaderboardQuery.on('value', (snapshot) => {
+            listContainer.innerHTML = ''; // Clear old list
+            
+            let players = [];
+
+            // 2. CONVERT SNAPSHOT TO ARRAY
+            snapshot.forEach((child) => {
+                const data = child.val();
+                players.push({
+                    name: data.username || "Unknown",
+                    country: data.country || "USA", // Default fallback
+                    elo: data.elo || 1000,
+                    wins: data.wins || 0,
+                    losses: data.losses || 0,
+                    isMe: (data.username === myUsername)
+                });
+            });
+
+            // 3. REVERSE THE ARRAY (Because Firebase gave us Low -> High)
+            players.reverse(); 
+
+            // 4. RENDER THE LIST
+            players.forEach((p, index) => {
+                const rank = index + 1;
+                const isTop3 = rank <= 3 ? 'top3' : '';
+                const isMeClass = p.isMe ? 'me' : '';
+                
+                // Construct the flag path based on your assets folder structure
+                // Assuming you saved country codes like 'USA', 'GBR' which match your filenames
+                // OR if you saved Full Names, make sure images match those names.
+                // Adjustable logic:
+                let flagSrc = `assets/flags/${p.country}.png`; 
+                
+                // If you saved country codes (e.g. 'USA') but filenames are 'UnitedStates.png', 
+                // you might need a mapper here. For now, assuming direct match.
+
+                const html = `
+                    <div class="lb-row ${isMeClass}">
+                        <div class="rank ${isTop3}">#${rank}</div>
+                        <div class="country">
+                            <img src="${flagSrc}" onerror="this.src='assets/flags/UnitedStatesofAmerica.png'">
+                        </div>
+                        <div class="player-info">
+                            <span class="p-name">${p.name}</span>
+                            <span class="p-stats">${p.wins} Wins - ${p.losses} Losses</span>
+                        </div>
+                        <div class="elo-score">${p.elo}</div>
+                    </div>
+                `;
+                
+                listContainer.insertAdjacentHTML('beforeend', html);
+            });
+
+            if (players.length === 0) {
+                listContainer.innerHTML = '<div class="loading-text">No ranked players found.</div>';
+            }
+        });
+    </script>
+</body>
+</html>
