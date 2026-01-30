@@ -8,6 +8,13 @@
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700;900&display=swap" rel="stylesheet">
     
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+    <script src="firebase-init.js"></script>
+    <script src="elo-engine.js"></script>
 </head>
 <body class="game-body" ondragstart="return false;" ondrop="return false;">
     <div class="bottom-left-actions">
@@ -90,8 +97,65 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
 <script src="firebase-init.js"></script>
+<script>
+    /**
+     * REPORTS THE MATCH RESULT TO FIREBASE
+     * This function is called by multiplayer-game.js when the match ends.
+     */
+    function reportMatchResult(opponentElo, opponentGameCount, isWin) {
+        
+        // 1. Check if user is logged in
+        const user = firebase.auth().currentUser;
+        if (!user) {
+            console.error("ELO ERROR: No user logged in.");
+            return;
+        }
 
-<script src="multiplayer-game.js">
+        console.log(`REPORTING MATCH... Opponent ELO: ${opponentElo}, Win: ${isWin}`);
+
+        const userRef = firebase.database().ref('users/' + user.uid);
+
+        // 2. Run the Transaction (Safe Update)
+        userRef.transaction((userData) => {
+            if (userData) {
+                // Get current stats (default to 1000 if missing)
+                const currentElo = userData.elo || 1000;
+                const wins = userData.wins || 0;
+                const losses = userData.losses || 0;
+                const myGameCount = wins + losses;
+
+                // 3. Calculate New ELO 
+                // (Uses the function from elo-engine.js)
+                const newElo = calculateNewElo(
+                    currentElo, 
+                    opponentElo, 
+                    isWin, 
+                    myGameCount, 
+                    opponentGameCount 
+                );
+
+                // 4. Save Data
+                userData.elo = newElo;
+                if (isWin) {
+                    userData.wins = wins + 1;
+                } else {
+                    userData.losses = losses + 1;
+                }
+                
+                return userData;
+            }
+            return userData;
+        }, (error, committed, snapshot) => {
+            if (error) {
+                console.error("Transaction failed abnormally!", error);
+            } else if (committed) {
+                console.log("Stats Saved! New ELO:", snapshot.val().elo);
+            }
+        });
+    }
 </script>
+
+<script src="multiplayer-game.js"></script>
+
 </body>
 </html>
