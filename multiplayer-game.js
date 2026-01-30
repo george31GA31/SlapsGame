@@ -670,14 +670,16 @@ function applySlapUpdate(data) {
         overlay.classList.remove('hidden');
     }
 
-    // --- FIX: DO NOT CLEAR PILES YET ---
+    // 3. RESTORE CARDS BEFORE CLEARING GHOSTS (Fixes the "Reset" glitch)
+    // Make sure the real cards are visible again immediately
+    gameState.aiHand.forEach(c => { if (c.element) c.element.style.opacity = '1'; });
+    gameState.playerHand.forEach(c => { if (c.element) c.element.style.opacity = '1'; });
+
+    // 4. NOW Clear Ghosts
     if (gameState.opponentDragGhosts) {
         gameState.opponentDragGhosts.forEach(el => el.remove()); 
         gameState.opponentDragGhosts.clear(); 
     }
-
-    gameState.aiHand.forEach(c => { if (c.element) c.element.style.opacity = '1'; });
-    gameState.playerHand.forEach(c => { if (c.element) c.element.style.opacity = '1'; });
 
     if (gameState.isHost) {
         gameState.playerTotal = data.pTotal;
@@ -694,7 +696,7 @@ function applySlapUpdate(data) {
     
     updateScoreboardWidget();
 
-    // 4. RESET EVERYTHING AFTER 2 SECONDS
+    // 5. RESET EVERYTHING AFTER 2 SECONDS
     setTimeout(() => {
         gameState.centerPileLeft = [];
         gameState.centerPileRight = [];
@@ -1272,7 +1274,6 @@ function applyMoveAuthoritative(mover, cardObj, side, reqId) {
     targetPile.push(cardObj);
 
     // 3. Remove from Hand and Decrement Score
-    // FIX: We update the global state, then grab a fresh reference to check length later.
     if (mover === 'player') {
         gameState.playerHand = gameState.playerHand.filter(c => c !== cardObj);
         gameState.playerTotal--;
@@ -1287,19 +1288,12 @@ function applyMoveAuthoritative(mover, cardObj, side, reqId) {
     updateScoreboard();
     checkSlapCondition();
 
-    // 5. Handle Reveal
-    // We need the *updated* hand to check for reveals
-    const currentHand = (mover === 'player') ? gameState.playerHand : gameState.aiHand;
-    
-    let newTopCardPayload = null;
-    const laneCards = currentHand.filter(c => c.laneIndex === cardObj.laneIndex);
-    if (laneCards.length > 0) {
-        const newTop = laneCards[laneCards.length - 1];
-        if (mover === 'player') newTopCardPayload = packCardWithMeta(newTop);
-        if (mover === 'ai' && !newTop.isFaceUp && newTop.element) setCardFaceUp(newTop.element, newTop, 'ai');
-    }
+    // 5. [DELETED AUTO-REVEAL LOGIC]
+    // We do NOT reveal the next card automatically. 
+    // The player must click it to flip it.
 
     // 6. CHECK FOR SIMULTANEOUS SHORTAGE TRIGGER
+    // We grab fresh references to length after the update
     if (gameState.playerDeck.length === 0 && gameState.aiDeck.length === 0) {
         if (gameState.centerPileLeft.length > 0 || gameState.centerPileRight.length > 0) {
             triggerSuddenDeathSplit(); 
@@ -1307,7 +1301,7 @@ function applyMoveAuthoritative(mover, cardObj, side, reqId) {
     }
 
     // 7. WIN / END ROUND LOGIC
-    // FIX: Use the 'currentHand' reference we grabbed after the update
+    const currentHand = (mover === 'player') ? gameState.playerHand : gameState.aiHand;
     const handEmpty = (currentHand.length === 0);
     
     const bpHidden = document.getElementById('borrowed-player').classList.contains('hidden');
@@ -1316,18 +1310,16 @@ function applyMoveAuthoritative(mover, cardObj, side, reqId) {
 
     if (handEmpty) {
         if (isSimultaneousPhase) {
-            // === RARE SCENARIO (Simultaneous Shortage Phase) ===
+            // Penalty Survival Logic
             let hasPenalty = false;
             if (mover === 'player') hasPenalty = (gameState.playerReds > 0 || gameState.playerYellows > 0);
             else hasPenalty = (gameState.aiReds > 0 || gameState.aiYellows > 0);
 
             if (!hasPenalty) {
-                // Scenario 1: Clean Win
                 const payload = { type: 'MATCH_OVER', winner: mover };
                 sendNet(payload);
                 applyMatchOver(payload);
             } else {
-                // Scenario 2: Penalty Survival
                 const DEBT = 3; 
                 let nextPTotal = (mover === 'player') ? DEBT : (52 - DEBT);
                 let nextATotal = (mover === 'ai') ? DEBT : (52 - DEBT);
@@ -1343,32 +1335,32 @@ function applyMoveAuthoritative(mover, cardObj, side, reqId) {
                 applyRoundOver(payload);
             }
         } else {
-            // === STANDARD GAMEPLAY ===
+            // Standard Gameplay
             if ((mover === 'player' && gameState.playerTotal <= 0) || (mover === 'ai' && gameState.aiTotal <= 0)) {
                 const payload = { type: 'MATCH_OVER', winner: mover };
                 sendNet(payload);
                 applyMatchOver(payload);
             } else {
-                // Standard Round Win
                 handleRoundOver(mover);
             }
         }
     }
 
+    // Return the clean object (No newTopCard data)
     return {
         reqId,
         mover,
         side,
         card: packCardWithMeta(cardObj),
         playerTotal: gameState.playerTotal,
-        aiTotal: gameState.aiTotal,
-        newTopCard: newTopCardPayload
+        aiTotal: gameState.aiTotal
     };
 }
 function applyMoveFromHost(a) {
     const localMover = (a.mover === 'player') ? 'ai' : 'player';
     const localSide = (a.side === 'left') ? 'right' : 'left';
 
+    // Cleanup ghosts for the moved card
     gameState.opponentDragGhosts.forEach((ghostEl, key) => {
         const parts = key.split(':'); 
         if (parts[0] === a.card.suit && parts[1] === a.card.rank && parts[2] == a.card.value) {
@@ -1396,11 +1388,13 @@ function applyMoveFromHost(a) {
         cardObj = unpackCard(a.card);
     }
 
+    // Remove the card from the lane (visually)
     if (cardObj.element) {
         cardObj.element.remove();
         cardObj.element = null; 
     }
     
+    // Safety cleanup for duplicates
     if (localMover === 'ai') {
         const container = document.getElementById('ai-foundation-area');
         if (container) {
@@ -1410,6 +1404,7 @@ function applyMoveFromHost(a) {
         }
     }
 
+    // Add to center pile
     const pile = (localSide === 'left') ? gameState.centerPileLeft : gameState.centerPileRight;
     pile.push(cardObj);
     renderCenterPile(localSide, cardObj);
@@ -1417,19 +1412,10 @@ function applyMoveFromHost(a) {
     updateScoreboard();
     checkSlapCondition();
 
-    if (a.newTopCard && localMover === 'ai') {
-        let newCardObj = gameState.aiHand.find(c => c.id === a.newTopCard.id);
-        if (!newCardObj) {
-            newCardObj = gameState.aiHand.find(c => c.suit === a.newTopCard.suit && c.rank === a.newTopCard.rank);
-        }
-        if (newCardObj && newCardObj.element) {
-            setCardFaceUp(newCardObj.element, newCardObj, 'ai');
-        }
-    }
+    // [DELETED AUTO-REVEAL LISTENER]
+    // We no longer flip the next card automatically.
+    // The opponent must click it, sending an 'OPPONENT_FLIP' message.
 }
-/* ================================
-   DECK READY / COUNTDOWN
-   ================================ */
 
 function handlePlayerDeckClick() {
     if (!gameState.gameActive) {
