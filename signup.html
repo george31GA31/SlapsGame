@@ -14,16 +14,21 @@
 
     <style>
         /* AUTH STYLES */
-        body { background-color: #050505; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; font-family: 'Roboto', sans-serif; background-image: radial-gradient(circle at center, #111 0%, #000 100%); }
-        .auth-card { background-color: #0a0a0a; border: 1px solid #333; border-radius: 15px; padding: 40px; width: 400px; text-align: center; box-shadow: 0 0 40px rgba(0,0,0,0.8); }
+        body { background-color: #050505; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; font-family: 'Roboto', sans-serif; background-image: radial-gradient(circle at center, #111 0%, #000 100%); }
+        .auth-card { background-color: #0a0a0a; border: 1px solid #333; border-radius: 15px; padding: 40px; width: 400px; text-align: center; box-shadow: 0 0 40px rgba(0,0,0,0.8); margin: 20px; }
         .auth-header h1 { color: white; font-size: 1.8rem; margin-bottom: 5px; text-transform: uppercase; font-style: italic; }
         .auth-header p { color: #666; font-size: 0.9rem; margin-bottom: 25px; }
-        .input-group { margin-bottom: 15px; text-align: left; }
+        
+        .input-row { display: flex; gap: 10px; }
+        .input-group { margin-bottom: 15px; text-align: left; flex: 1; }
         .input-label { color: #00ccff; font-size: 0.75rem; font-weight: bold; display: block; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 1px; }
-        .auth-input { width: 100%; background: #151515; border: 1px solid #333; color: white; padding: 12px; font-size: 1rem; border-radius: 5px; box-sizing: border-box; transition: 0.3s; }
-        .auth-input:focus { outline: none; border-color: #00ccff; box-shadow: 0 0 15px rgba(0, 204, 255, 0.1); }
+        
+        .auth-input, .auth-select { width: 100%; background: #151515; border: 1px solid #333; color: white; padding: 12px; font-size: 1rem; border-radius: 5px; box-sizing: border-box; transition: 0.3s; }
+        .auth-input:focus, .auth-select:focus { outline: none; border-color: #00ccff; box-shadow: 0 0 15px rgba(0, 204, 255, 0.1); }
+        
         .btn-auth { width: 100%; padding: 15px; background: #00ccff; color: black; border: none; border-radius: 5px; font-weight: 900; font-size: 1rem; cursor: pointer; margin-top: 20px; text-transform: uppercase; transition: transform 0.2s; }
         .btn-auth:hover { transform: scale(1.02); box-shadow: 0 0 20px rgba(0, 204, 255, 0.4); }
+        
         .alt-link { display: block; margin-top: 15px; color: #666; text-decoration: none; font-size: 0.9rem; }
         .alt-link span { color: #00ccff; font-weight: bold; }
         .error-msg { color: #ff4444; font-size: 0.85rem; margin-top: 10px; display: none; }
@@ -34,19 +39,53 @@
     <div class="auth-card">
         <div class="auth-header">
             <img src="assets/ISF_ONLINE.png" alt="ISF" style="height: 30px; margin-bottom: 10px;">
-            <h1>Create Account</h1>
-            <p>Join the Federation</p>
+            <h1>Join the League</h1>
+            <p>Create your Player Profile</p>
         </div>
 
         <form id="signup-form">
-            <div class="input-group">
-                <label class="input-label">Username</label>
-                <input type="text" id="su-username" class="auth-input" placeholder="Desired Nickname" required>
+            
+            <div class="input-row">
+                <div class="input-group">
+                    <label class="input-label">First Name</label>
+                    <input type="text" id="su-fname" class="auth-input" placeholder="John" required>
+                </div>
+                <div class="input-group">
+                    <label class="input-label">Last Name</label>
+                    <input type="text" id="su-lname" class="auth-input" placeholder="Doe" required>
+                </div>
             </div>
+
+            <div class="input-group">
+                <label class="input-label">Unique Username</label>
+                <input type="text" id="su-username" class="auth-input" placeholder="Slayer99" required>
+            </div>
+
+            <div class="input-group">
+                <label class="input-label">Country</label>
+                <select id="su-country" class="auth-select" required>
+                    <option value="" disabled selected>Select Nation...</option>
+                    <option value="USA">🇺🇸 United States</option>
+                    <option value="UK">🇬🇧 United Kingdom</option>
+                    <option value="CAN">🇨🇦 Canada</option>
+                    <option value="AUS">🇦🇺 Australia</option>
+                    <option value="GER">🇩🇪 Germany</option>
+                    <option value="FRA">🇫🇷 France</option>
+                    <option value="BRA">🇧🇷 Brazil</option>
+                    <option value="JPN">🇯🇵 Japan</option>
+                    <option value="KOR">🇰🇷 South Korea</option>
+                    <option value="IND">🇮🇳 India</option>
+                    <option value="CHN">🇨🇳 China</option>
+                    <option value="RUS">🇷🇺 Russia</option>
+                    <option value="INT">🌍 International / Other</option>
+                </select>
+            </div>
+
             <div class="input-group">
                 <label class="input-label">Email</label>
                 <input type="email" id="su-email" class="auth-input" placeholder="name@example.com" required>
             </div>
+
             <div class="input-group">
                 <label class="input-label">Password</label>
                 <input type="password" id="su-pass" class="auth-input" placeholder="••••••••" required>
@@ -54,7 +93,7 @@
             
             <p id="error-text" class="error-msg">Error message here</p>
 
-            <button type="submit" class="btn-auth">Sign Up</button>
+            <button type="submit" class="btn-auth">Create Profile</button>
         </form>
 
         <a href="login.html" class="alt-link">Already have an account? <span>Log In</span></a>
@@ -62,48 +101,66 @@
     </div>
 
     <script>
-        document.getElementById('signup-form').addEventListener('submit', function(e) {
+        document.getElementById('signup-form').addEventListener('submit', async function(e) {
             e.preventDefault();
             
-            const username = document.getElementById('su-username').value.trim().toUpperCase();
+            const fname = document.getElementById('su-fname').value.trim();
+            const lname = document.getElementById('su-lname').value.trim();
+            const username = document.getElementById('su-username').value.trim().toUpperCase(); // Force Upper for uniqueness
+            const country = document.getElementById('su-country').value;
             const email = document.getElementById('su-email').value.trim();
             const pass = document.getElementById('su-pass').value;
             const errorText = document.getElementById('error-text');
 
             if(username.length < 3) {
-                errorText.innerText = "Username must be at least 3 characters.";
-                errorText.style.display = "block";
+                showError("Username must be at least 3 characters.");
                 return;
             }
 
-            // --- 3. CREATE ACCOUNT IN FIREBASE ---
+            // 1. CHECK IF USERNAME EXISTS
+            // We read the 'users' database to see if anyone has this username
+            // (Note: In a huge app we'd filter, but for now we loop check or rely on Auth email)
+            
+            // To keep it simple and free, we will proceed to create the account.
+            // If we wanted strict username uniqueness enforcement on the server, 
+            // we would need specific database rules. For now, we will create the user first.
+
             auth.createUserWithEmailAndPassword(email, pass)
                 .then((userCredential) => {
                     const user = userCredential.user;
                     
-                    // Update Profile with Nickname
+                    // 2. UPDATE PROFILE
                     user.updateProfile({ displayName: username });
 
-                    // Save extra stats to Realtime Database
+                    // 3. SAVE FULL DATA TO DATABASE
                     db.ref('users/' + user.uid).set({
                         username: username,
+                        firstName: fname,
+                        lastName: lname,
+                        country: country,
                         email: email,
+                        elo: 1000, // STARTING ELO RATING
                         wins: 0,
                         losses: 0,
                         joined: new Date().toISOString()
                     }).then(() => {
-                        // Success! Save to local browser for speed and go home
+                        // 4. SUCCESS
                         localStorage.setItem('isf_username', username);
                         localStorage.setItem('isf_is_guest', 'false');
-                        alert("Account Created! Welcome, " + username);
+                        alert("Profile Created! Welcome to the ISF, " + fname + ".");
                         window.location.href = 'index.html';
                     });
                 })
                 .catch((error) => {
-                    errorText.innerText = error.message; // Show error (e.g. Email used)
-                    errorText.style.display = "block";
+                    showError(error.message);
                 });
         });
+
+        function showError(msg) {
+            const el = document.getElementById('error-text');
+            el.innerText = msg;
+            el.style.display = "block";
+        }
     </script>
 </body>
 </html>
