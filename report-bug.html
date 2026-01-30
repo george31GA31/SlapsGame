@@ -27,11 +27,16 @@
                 <p style="color: #999;">Found a glitch? Let us know so we can fix it.</p>
             </div>
 
-            <form id="bug-form" action="https://formspree.io/f/https://formspree.io/f/xgoynpvp" method="POST">
+            <form id="bug-form" action="https://formspree.io/f/xgoynpvp" method="POST">
                 
                 <div style="margin-bottom: 20px;">
                     <label style="color: var(--accent-gold); font-weight: bold; display: block; margin-bottom: 10px;">YOUR NAME</label>
                     <input type="text" name="name" required class="lobby-input" style="text-align: left; width: 100%;" placeholder="Enter your name...">
+                </div>
+
+                <div style="margin-bottom: 20px;">
+                    <label style="color: var(--accent-gold); font-weight: bold; display: block; margin-bottom: 10px;">YOUR EMAIL</label>
+                    <input type="email" name="email" required class="lobby-input" style="text-align: left; width: 100%;" placeholder="name@example.com">
                 </div>
 
                 <div style="margin-bottom: 20px;">
@@ -54,9 +59,9 @@
             </form>
 
             <div id="status-message" class="hidden" style="text-align: center; margin-top: 20px;">
-                <h3 style="color: #66ff66;">REPORT SENT!</h3>
-                <p style="color: #ccc;">Thanks for helping us improve the game.</p>
-                <button class="btn-login" onclick="window.location.href='index.html'" style="margin-top: 15px;">RETURN HOME</button>
+                <h3 style="color: #66ff66; font-size: 2rem;"><i class="fa-solid fa-check-circle"></i> SENT!</h3>
+                <p style="color: #ccc; margin-top: 10px;">Thanks for helping us improve the game.</p>
+                <button class="btn-login" onclick="window.location.href='index.html'" style="margin-top: 20px; border-color: #66ff66; color: #66ff66;">RETURN HOME</button>
             </div>
 
         </div>
@@ -70,27 +75,27 @@
             const status = document.getElementById("status-message");
             const data = new FormData(event.target);
             
-            // --- IF YOU ARE USING FORMSPREE (Real Emails) ---
-            // Uncomment the lines below to actually send data
             fetch(event.target.action, {
                 method: form.method,
                 body: data,
                 headers: { 'Accept': 'application/json' }
             }).then(response => {
                 if (response.ok) {
-                    form.style.display = "none";
-                    status.classList.remove("hidden");
+                    form.style.display = "none"; // Hide form
+                    status.classList.remove("hidden"); // Show success message
                 } else {
-                    alert("Oops! There was a problem submitting your form.");
+                    response.json().then(data => {
+                        if (Object.hasOwn(data, 'errors')) {
+                            alert(data["errors"].map(error => error["message"]).join(", "));
+                        } else {
+                            alert("Oops! There was a problem submitting your form");
+                        }
+                    })
                 }
+            }).catch(error => {
+                alert("Oops! There was a problem submitting your form");
             });
-
-            // --- SIMULATION MODE (Just to test the UI) ---
-            // Remove this block when you add your real Formspree ID
-            form.style.display = "none";
-            status.classList.remove("hidden");
         }
-        
         form.addEventListener("submit", handleSubmit);
     </script>
 
