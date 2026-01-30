@@ -1,100 +1,82 @@
 /* =========================================
-   SCRIPT.JS - GLOBAL UI LOGIC
+   SCRIPT.JS - GUEST LOGIC
    ========================================= */
 
-// 1. RUN ON PAGE LOAD
-// This checks if the user is already remembered as a guest
 window.onload = function() {
-    checkGuestSession();
+    checkAuthSession();
 };
 
-/* ========================
-   GUEST MODAL LOGIC
-   ======================== */
-
-function openGuestModal() {
-    const modal = document.getElementById('guest-modal');
-    if (modal) {
-        modal.classList.remove('hidden');
-        modal.style.display = 'flex'; // Force flex to center it
-    }
+/* --- 1. SHOW/HIDE LOGIC --- */
+function showGuestInput() {
+    document.getElementById('state-buttons').classList.add('hidden');
+    document.getElementById('state-input').classList.remove('hidden');
+    document.getElementById('guest-sidebar-name').focus();
 }
 
-function closeGuestModal() {
-    const modal = document.getElementById('guest-modal');
-    if (modal) {
-        modal.classList.add('hidden');
-        modal.style.display = 'none';
-    }
+function cancelGuestInput() {
+    document.getElementById('state-input').classList.add('hidden');
+    document.getElementById('state-buttons').classList.remove('hidden');
 }
 
-function saveGuestIdentity() {
-    const nameInput = document.getElementById('guest-name-input');
-    const nationInput = document.getElementById('guest-nation-input');
-
+/* --- 2. SAVE NAME LOGIC --- */
+function confirmGuestLogin() {
+    const nameInput = document.getElementById('guest-sidebar-name');
     const name = nameInput.value.trim().toUpperCase();
-    const nation = nationInput.value;
 
     if (!name) {
         alert("Please enter a nickname.");
         return;
     }
 
-    // Save to Browser Storage
+    // Save to browser memory
     localStorage.setItem('isf_username', name);
-    localStorage.setItem('isf_nation', nation);
     localStorage.setItem('isf_is_guest', 'true');
 
-    // Update the UI immediately
-    checkGuestSession();
-    closeGuestModal();
+    checkAuthSession(); // Refresh UI
 }
 
-/* ========================
-   SESSION CHECK & UI UPDATE
-   ======================== */
-
-function checkGuestSession() {
+/* --- 3. CHECK SESSION ON LOAD --- */
+function checkAuthSession() {
     const name = localStorage.getItem('isf_username');
-    const nation = localStorage.getItem('isf_nation');
+    
+    const btns = document.getElementById('state-buttons');
+    const input = document.getElementById('state-input');
+    const profile = document.getElementById('state-profile');
+    const displayName = document.getElementById('sidebar-display-name');
 
-    // Get the HTML elements
-    const authDiv = document.getElementById('auth-actions');
-    const profileDiv = document.getElementById('user-profile');
-    const nameDisplay = document.getElementById('profile-name');
-    const nationDisplay = document.getElementById('profile-nation');
-
-    // If elements don't exist (e.g., on a different page), stop here
-    if (!authDiv || !profileDiv) return;
+    // If elements are missing (e.g. on different page), stop
+    if (!btns || !profile) return;
 
     if (name) {
-        // --- LOGGED IN STATE ---
-        // Hide the Login/Sign Up buttons
-        authDiv.style.display = 'none';
-        
-        // Show the User Profile
-        profileDiv.classList.remove('hidden');
-        profileDiv.style.display = 'flex';
-        
-        // Update Text
-        if(nameDisplay) nameDisplay.innerText = name;
-        if(nationDisplay) nationDisplay.innerText = nation;
+        // LOGGED IN
+        btns.classList.add('hidden');
+        input.classList.add('hidden');
+        profile.classList.remove('hidden');
+        if(displayName) displayName.innerText = name;
     } else {
-        // --- LOGGED OUT STATE ---
-        // Show buttons
-        authDiv.style.display = 'flex';
-        
-        // Hide profile
-        profileDiv.style.display = 'none';
+        // LOGGED OUT
+        profile.classList.add('hidden');
+        input.classList.add('hidden');
+        btns.classList.remove('hidden');
     }
 }
 
 function logoutGuest() {
-    // Clear data
     localStorage.removeItem('isf_username');
-    localStorage.removeItem('isf_nation');
     localStorage.removeItem('isf_is_guest');
+    checkAuthSession();
+}
+
+/* --- 4. PLAY A FRIEND CLICK --- */
+function handlePlayFriendClick() {
+    const name = localStorage.getItem('isf_username');
     
-    // Refresh page to reset UI
-    location.reload();
+    if (!name) {
+        // If not signed in, open the input box and shake it
+        showGuestInput();
+        alert("Please create a Guest Name first!");
+    } else {
+        // If signed in, go to setup
+        window.location.href = 'multiplayer-setup.html';
+    }
 }
