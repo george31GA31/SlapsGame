@@ -9,25 +9,41 @@ let enemyGameCount = 0;   // Default
 
 // --- 2. FETCH ENEMY STATS ---
 function fetchEnemyStats(enemyId) {
-    console.log("🔍 Fetching stats for enemy:", enemyId);
+    console.log("Fetching stats for enemy:", enemyId);
     
     if (!window.db) {
-        console.warn("⚠️ Firebase not ready. Retrying in 1s...");
-        setTimeout(() => fetchEnemyStats(enemyId), 1000);
+        console.warn("Firebase Database not ready yet. Retrying in 500ms...");
+        setTimeout(() => fetchEnemyStats(enemyId), 500);
         return;
     }
 
+    // Go to the database and get their info
     window.db.ref('users/' + enemyId).once('value')
         .then((snapshot) => {
             if (snapshot.exists()) {
                 const data = snapshot.val();
+                
+                // 1. GET ELO & GAMES
                 enemyElo = data.elo || 1000;
                 enemyGameCount = (data.wins || 0) + (data.losses || 0);
-                console.log(`✅ Enemy Found! ELO: ${enemyElo}, Games: ${enemyGameCount}`);
+                
+                // 2. GET LAST NAME (Fallback to Username if missing)
+                // We force it to uppercase for that "Jersey" look
+                const realLastName = data.lastName ? data.lastName.toUpperCase() : (data.username || "OPPONENT");
+                
+                console.log(`Enemy Found! Name: ${realLastName}, ELO: ${enemyElo}`);
+
+                // 3. UPDATE GAME STATE IMMEDIATELY
+                gameState.opponentName = realLastName;
+                
+                // 4. REFRESH THE SCOREBOARD TO SHOW NAME + ELO
+                updateScoreboardWidget();
+
             } else {
-                console.log("⚠️ Enemy not found in DB. Using defaults.");
+                console.log("Enemy not found in database. Using default stats.");
             }
-        });
+        })
+        .catch(err => console.error("Error fetching stats:", err));
 }
 
 // --- 3. REPORT RESULT TO FIREBASE ---
@@ -1752,11 +1768,21 @@ function checkDeckVisibility() {
 }
 
 function updateScoreboardWidget() {
+    // 1. Update My Name (You can keep this as nickname or change to Last Name later)
     const p1Name = document.getElementById('sb-p1-name');
-    const p2Name = document.getElementById('sb-p2-name');
-    if (p1Name) p1Name.innerText = gameState.myName || "You";
-    if (p2Name) p2Name.innerText = gameState.opponentName || "Opponent";
+    if (p1Name) p1Name.innerText = "YOU";
 
+    // 2. Update Opponent Name (LAST NAME + ELO)
+    const p2Name = document.getElementById('sb-p2-name'); // Sidebar
+    const oppLabel = document.getElementById('opponent-display-name'); // Top Left UI
+
+    // Format: "SMITH (1050)"
+    const displayName = `${gameState.opponentName} (${enemyElo})`;
+
+    if (p2Name) p2Name.innerText = displayName;
+    if (oppLabel) oppLabel.innerText = displayName;
+
+    // 3. Update Stats (Rounds/Slaps)
     const p1R = document.getElementById('sb-p1-rounds');
     const p2R = document.getElementById('sb-p2-rounds');
     const p1S = document.getElementById('sb-p1-slaps');
@@ -1766,12 +1792,6 @@ function updateScoreboardWidget() {
     if (p2R) p2R.innerText = gameState.aiRounds;
     if (p1S) p1S.innerText = gameState.p1Slaps;
     if (p2S) p2S.innerText = gameState.aiSlaps;
-
-    const oppLabel = document.getElementById('opponent-display-name');
-    if (oppLabel) {
-        const name = gameState.opponentName || "OPPONENT";
-        oppLabel.innerText = name.toUpperCase();
-    }
 }
 function showRoundMessage(title, sub) {
     const modal = document.getElementById('game-message');
