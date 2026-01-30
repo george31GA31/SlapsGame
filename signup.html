@@ -97,6 +97,8 @@
                 <label class="input-label">Country</label>
                 
                 <input type="hidden" id="su-country" required>
+                
+                <input type="hidden" id="su-flag-url" required>
 
                 <div class="custom-select-wrapper" onclick="toggleDropdown()">
                     <div class="custom-select-trigger" id="select-trigger">
@@ -871,6 +873,28 @@
 
     <script>
         // --- TOGGLE PASSWORD VISIBILITY ---
+        <div class="input-group">
+                <label class="input-label">Country</label>
+                
+                <input type="hidden" id="su-country" required>
+                
+                <input type="hidden" id="su-flag-url" required>
+
+                <div class="custom-select-wrapper" onclick="toggleDropdown()">
+                    <div class="custom-select-trigger" id="select-trigger">
+                        <span id="trigger-text">Select Nation...</span>
+                        <span class="arrow">▼</span>
+                    </div>
+                    
+                    <div class="custom-options" id="custom-options">
+                        ```
+
+**2. The Script Change**
+Scroll to the very bottom. **Replace the entire `<script>` section** with this. I have updated it to save the Flag URL and ensure names are saved correctly.
+
+```javascript
+    <script>
+        // --- TOGGLE PASSWORD VISIBILITY ---
         function togglePasswordVisibility() {
             const passInput = document.getElementById('su-pass');
             const icon = document.querySelector('.toggle-password');
@@ -893,7 +917,11 @@
         function selectOption(value, imgSrc, text) {
             const trigger = document.getElementById('select-trigger');
             trigger.innerHTML = `<div style="display:flex; align-items:center;"><img src="${imgSrc}" class="flag-icon"> ${text}</div><span class="arrow">▼</span>`;
+            
+            // SAVE BOTH VALUES
             document.getElementById('su-country').value = value;
+            document.getElementById('su-flag-url').value = imgSrc; // <--- The Fix
+            
             document.getElementById('custom-options').classList.remove('open');
         }
 
@@ -904,20 +932,19 @@
             }
         });
 
-        // --- SEAMLESS SIGN UP LOGIC ---
+        // --- SIGN UP LOGIC ---
         document.getElementById('signup-form').addEventListener('submit', async function(e) {
             e.preventDefault();
 
-            // 1. Gather Data
             const fname = document.getElementById('su-fname').value.trim();
             const lname = document.getElementById('su-lname').value.trim();
             const username = document.getElementById('su-username').value.trim().toUpperCase();
-            const country = document.getElementById('su-country').value; 
+            const countryCode = document.getElementById('su-country').value; 
+            const countryFlag = document.getElementById('su-flag-url').value; 
             const email = document.getElementById('su-email').value.trim();
             const pass = document.getElementById('su-pass').value;
 
-            // 2. Validate Inputs (Show errors in red text, no popups)
-            if(!country) {
+            if(!countryCode) {
                 showError("Please select a country.");
                 return;
             }
@@ -926,27 +953,23 @@
                 return;
             }
 
-            // 3. Create User in Firebase
             auth.createUserWithEmailAndPassword(email, pass)
                 .then((userCredential) => {
                     const user = userCredential.user;
-                    
-                    // Update Auth Profile
                     user.updateProfile({ displayName: username });
 
-                    // 4. Save Data to Database
                     db.ref('users/' + user.uid).set({
                         username: username,
                         firstName: fname,
                         lastName: lname,
-                        country: country, 
+                        country: countryCode, 
+                        flag: countryFlag, // <--- SAVING FLAG HERE
                         email: email,
                         elo: 1000,
                         wins: 0,
                         losses: 0,
                         joined: new Date().toISOString()
                     }).then(() => {
-                        // 5. SUCCESS: Save session and Redirect Instantly
                         localStorage.setItem('isf_username', username);
                         localStorage.setItem('isf_is_guest', 'false');
                         window.location.href = 'index.html';
@@ -956,11 +979,7 @@
                     });
                 })
                 .catch((authError) => {
-                    // Handle common errors (Email already in use, weak password)
-                    let msg = authError.message;
-                    if(authError.code === 'auth/email-already-in-use') msg = "That email is already registered.";
-                    if(authError.code === 'auth/weak-password') msg = "Password should be at least 6 characters.";
-                    showError(msg);
+                    showError(authError.message);
                 });
         });
 
