@@ -115,8 +115,6 @@
         <i class="fa-solid fa-users" style="color: #00ccff; font-size: 3rem; margin-bottom: 10px;"></i>
         <h1>PLAY A FRIEND</h1>
 
-        <input type="text" id="nickname" class="modern-input" placeholder="ENTER NICKNAME" maxlength="12">
-
         <div id="lobby-actions-container">
             
             <button class="btn-action-large" id="btn-host" onclick="hostGame()">
@@ -150,8 +148,10 @@
         let isHost = false;
 
         function hostGame() {
-            const name = document.getElementById('nickname').value || "Player 1";
+            // AUTOMATICALLY USE LOGGED IN USERNAME
+            const name = localStorage.getItem('isf_username') || "Player";
             localStorage.setItem('isf_my_name', name);
+            
             isHost = true;
 
             const randomCode = Math.floor(1000 + Math.random() * 9000);
@@ -160,7 +160,6 @@
             localStorage.setItem('isf_role', 'host');
             localStorage.setItem('isf_code', myId);
 
-            // --- FIX 1: Target the main container, not just the column ---
             const mainContainer = document.getElementById('lobby-actions-container');
             mainContainer.innerHTML = `
                 <div class="host-code-display">
@@ -196,9 +195,10 @@
         }
 
         function joinGame() {
-            // ... (Rest of joinGame logic is fine) ...
-            const name = document.getElementById('nickname').value || "Player 2";
+            // AUTOMATICALLY USE LOGGED IN USERNAME
+            const name = localStorage.getItem('isf_username') || "Player";
             localStorage.setItem('isf_my_name', name);
+            
             isHost = false;
 
             const targetId = document.getElementById('join-code').value.toUpperCase();
