@@ -173,58 +173,52 @@ function resolveSlap(winner) {
     gameState.slapActive = false;
     gameState.gameActive = false; 
 
-    // --- SCENARIO 1 CHECK: Slap during Sudden Death? ---
-    const isSuddenDeath = !document.getElementById('borrowed-player').classList.contains('hidden');
-    
-    // Calculate Pot Size
-    const pilesTotal = gameState.centerPileLeft.length + gameState.centerPileRight.length;
+    // --- PHASE 2, SCENARIO 1 CHECK ---
+    // Slap occurs when Decks are Empty BUT 'Borrowed' hasn't triggered yet
+    const isBorrowed = !document.getElementById('borrowed-player').classList.contains('hidden');
+    const bothDecksEmpty = (gameState.playerDeck.length === 0 && gameState.aiDeck.length === 0);
 
-    // Award Cards
-    if (winner === 'player') {
-        gameState.aiTotal += pilesTotal; // Give pot to AI (Wait, standard rule is Winner takes?)
-        // Standard Slap Rule: Winner TAKES the pile.
-        // If Player Slaps, Player gets the cards added to their count?
-        // Your code previously said: gameState.aiTotal += pilesTotal (for Player Win??)
-        // CHECKING YOUR PREVIOUS CODE: 
-        // "if (winner === 'player') { ... gameState.aiTotal += pilesTotal ... }"
-        // This implies the LOSER picks up the cards?
-        // Standard Slapjack: Winner keeps pile? Or Winner makes loser pick up?
-        // Assuming your previous logic was "Loser picks up":
+    if (!isBorrowed && bothDecksEmpty) {
+        console.log("Slap on last cards before Borrowed Phase. Ending Round.");
         
-        gameState.aiTotal += pilesTotal; 
-        gameState.p1Slaps++; 
-    } else {
-        gameState.playerTotal += pilesTotal;
-        gameState.aiSlaps++; 
-    }
-    
-    // Clear Visuals
-    gameState.centerPileLeft = []; gameState.centerPileRight = [];
-    document.getElementById('center-pile-left').innerHTML = '';
-    document.getElementById('center-pile-right').innerHTML = '';
+        const pilesTotal = gameState.centerPileLeft.length + gameState.centerPileRight.length;
+        
+        if (winner === 'player') {
+            gameState.playerTotal = gameState.playerHand.length;
+            gameState.aiTotal = gameState.aiHand.length + pilesTotal;
+        } else {
+            gameState.aiTotal = gameState.aiHand.length;
+            gameState.playerTotal = gameState.playerHand.length + pilesTotal;
+        }
 
-    // --- IF SUDDEN DEATH -> FORCE RESTART ---
-    if (isSuddenDeath) {
-        console.log("Slap during Sudden Death. Forcing Round Restart.");
-        
-        // We do NOT award a round point. We just restart with new totals.
-        // The totals were updated above (Loser picked up cards).
-        
-        // Brief delay to see the slap color, then restart
         const overlay = document.getElementById('slap-overlay');
-        const txt = document.getElementById('slap-text');
         overlay.classList.remove('hidden');
-        txt.innerText = (winner === 'player') ? "PLAYER SLAPS! ROUND RESET" : "AI SLAPS! ROUND RESET";
+        document.getElementById('slap-text').innerText = (winner === 'player') ? "PLAYER SLAPS! ROUND RESET" : "AI SLAPS! ROUND RESET";
         overlay.style.backgroundColor = (winner === 'player') ? "rgba(0, 200, 0, 0.9)" : "rgba(200, 0, 0, 0.9)";
 
         setTimeout(() => {
             overlay.classList.add('hidden');
-            startRound(); // Restart immediately with new totals
-        }, 1500);
+            startRound(); // Restart with new totals
+        }, 2000);
         return; 
     }
 
-    // --- NORMAL GAME CONTINUATION ---
+    // --- NORMAL SLAP ---
+    // Winner forces Loser to pick up cards
+    const pilesTotal = gameState.centerPileLeft.length + gameState.centerPileRight.length;
+
+    if (winner === 'player') {
+        gameState.aiTotal += pilesTotal; 
+        gameState.p1Slaps++; 
+    } else {
+        gameState.playerTotal += pilesTotal; 
+        gameState.aiSlaps++; 
+    }
+
+    gameState.centerPileLeft = []; gameState.centerPileRight = [];
+    document.getElementById('center-pile-left').innerHTML = '';
+    document.getElementById('center-pile-right').innerHTML = '';
+    
     updateScoreboard();
     updateScoreboardWidget();
 
@@ -260,11 +254,17 @@ function startRound(oddCard = null) {
     if (gameState.aiTotal <= 0) { showEndGame("AI WINS THE MATCH!", false); return; }
 
     const pTotal = gameState.playerTotal;
+    const aTotal = gameState.aiTotal;
+
+    // --- EXACT SLICING & ODD CARD ---
     const pAllCards = fullDeck.slice(0, pTotal);
-    const aAllCards = fullDeck.slice(pTotal, 52);
+    const aAllCards = fullDeck.slice(pTotal, pTotal + aTotal);
+    
+    // Check if total is 51 (meaning 1 card is leftover from deal)
+    const leftoverCard = (pTotal + aTotal < 52) ? fullDeck[pTotal + aTotal] : null;
 
     const pHandSize = Math.min(10, pTotal);
-    const aHandSize = Math.min(10, 52 - pTotal);
+    const aHandSize = Math.min(10, aTotal);
 
     const pHandCards = pAllCards.splice(0, pHandSize);
     gameState.playerDeck = pAllCards; 
@@ -272,16 +272,11 @@ function startRound(oddCard = null) {
     const aHandCards = aAllCards.splice(0, aHandSize);
     gameState.aiDeck = aAllCards;
 
-   gameState.centerPileLeft = []; gameState.centerPileRight = [];
-    document.getElementById('center-pile-left').innerHTML = '';
-    document.getElementById('center-pile-right').innerHTML = '';
-   if (oddCard) {
-        // Place in Left or Right? Let's assume Left for simplicity
-        gameState.centerPileLeft.push(oddCard);
-        renderCenterPile('left', oddCard);
-    }
-   
-    // CHECK SHORTAGE AT START
+    // RESET BORROW TAGS
+    document.getElementById('borrowed-player').classList.add('hidden');
+    document.getElementById('borrowed-ai').classList.add('hidden');
+
+    // CHECK SHORTAGE (Standard Phase Only)
     if (gameState.playerDeck.length === 0 && gameState.aiDeck.length > 1) {
         const steal = Math.floor(gameState.aiDeck.length / 2);
         gameState.playerDeck = gameState.aiDeck.splice(0, steal);
@@ -300,6 +295,15 @@ function startRound(oddCard = null) {
     gameState.centerPileLeft = []; gameState.centerPileRight = [];
     document.getElementById('center-pile-left').innerHTML = '';
     document.getElementById('center-pile-right').innerHTML = '';
+    
+    // --- ODD CARD HANDLING ---
+    // Use either the odd card passed from previous reset OR the leftover from this deal
+    const centerCard = oddCard || leftoverCard;
+    if (centerCard) {
+        gameState.centerPileLeft.push(centerCard);
+        renderCenterPile('left', centerCard);
+    }
+
     document.getElementById('game-message').classList.add('hidden');
     gameState.slapActive = false;
 
@@ -307,7 +311,6 @@ function startRound(oddCard = null) {
     gameState.gameActive = false;
     updateScoreboard();
 }
-
 function dealSmartHand(cards, owner) {
     const container = document.getElementById(`${owner}-foundation-area`);
     container.innerHTML = ''; 
@@ -444,47 +447,66 @@ function performRevealPreload() {
     document.getElementById('player-draw-deck').classList.remove('deck-ready');
     document.getElementById('ai-draw-deck').classList.remove('deck-ready');
     
-    // 1. Check for Shortage & Borrow
-    if (gameState.playerDeck.length === 0 && gameState.aiDeck.length > 0) {
-        const stealAmount = Math.floor(gameState.aiDeck.length / 2);
-        if (stealAmount > 0) {
-            const stolen = gameState.aiDeck.splice(0, stealAmount);
-            gameState.playerDeck = gameState.playerDeck.concat(stolen);
-            document.getElementById('borrowed-player').classList.remove('hidden');
+    const bpEl = document.getElementById('borrowed-player');
+    const baEl = document.getElementById('borrowed-ai');
+
+    // 1. Check for Standard Shortage
+    // Only if we are NOT already in the Simultaneous Borrowed Phase
+    const isSimultaneous = bpEl && !bpEl.classList.contains('hidden') && baEl && !baEl.classList.contains('hidden');
+
+    if (!isSimultaneous) {
+        if (gameState.playerDeck.length === 0 && gameState.aiDeck.length > 0) {
+            const steal = Math.floor(gameState.aiDeck.length / 2);
+            if (steal > 0) {
+                gameState.playerDeck = gameState.playerDeck.concat(gameState.aiDeck.splice(0, steal));
+                bpEl.classList.remove('hidden');
+            }
         }
-    }
-    if (gameState.aiDeck.length === 0 && gameState.playerDeck.length > 0) {
-        const stealAmount = Math.floor(gameState.playerDeck.length / 2);
-        if (stealAmount > 0) {
-            const stolen = gameState.playerDeck.splice(0, stealAmount);
-            gameState.aiDeck = gameState.aiDeck.concat(stolen);
-            document.getElementById('borrowed-ai').classList.remove('hidden');
+        if (gameState.aiDeck.length === 0 && gameState.playerDeck.length > 0) {
+            const steal = Math.floor(gameState.playerDeck.length / 2);
+            if (steal > 0) {
+                gameState.aiDeck = gameState.aiDeck.concat(gameState.playerDeck.splice(0, steal));
+                baEl.classList.remove('hidden');
+            }
         }
     }
     
-    // 2. Scoring Logic
-    const playerBorrowing = !document.getElementById('borrowed-player').classList.contains('hidden');
-    const aiBorrowing = !document.getElementById('borrowed-ai').classList.contains('hidden');
+    // 2. Scoring Logic (FIX: Don't deduct points if in Borrowed Phase)
+    const playerBorrowing = !bpEl.classList.contains('hidden');
+    const aiBorrowing = !baEl.classList.contains('hidden');
+    const nowSimultaneous = (playerBorrowing && aiBorrowing);
 
-    if (playerBorrowing) gameState.aiTotal--; else gameState.playerTotal--;
-    if (aiBorrowing) gameState.playerTotal--; else gameState.aiTotal--;
+    if (!nowSimultaneous) {
+        if (playerBorrowing) gameState.aiTotal--; else gameState.playerTotal--;
+        if (aiBorrowing) gameState.playerTotal--; else gameState.aiTotal--;
+    }
 
-    // 3. Render Cards (HIDDEN)
+    // 3. Render Cards
     if (gameState.playerDeck.length > 0) { 
         let pCard = gameState.playerDeck.pop(); 
         gameState.centerPileRight.push(pCard); 
-        renderCenterPile('right', pCard, true); // true = hidden
+        renderCenterPile('right', pCard, true); 
     }
     if (gameState.aiDeck.length > 0) { 
         let aCard = gameState.aiDeck.pop(); 
         gameState.centerPileLeft.push(aCard); 
-        renderCenterPile('left', aCard, true); // true = hidden
+        renderCenterPile('left', aCard, true); 
+    }
+    
+    // 4. Trigger Check (Phase 1 & 2)
+    if (gameState.playerDeck.length === 0 && gameState.aiDeck.length === 0) {
+        if (gameState.centerPileLeft.length > 0 || gameState.centerPileRight.length > 0) {
+            if (nowSimultaneous) {
+                triggerSecondCycleReset();
+            } else {
+                triggerBorrowedSplit();
+            }
+        }
     }
     
     checkDeckVisibility(); 
     updateScoreboard();
 }
-
 function performRevealShow() {
     // 1. Show Hidden Cards
     const hiddenCards = document.querySelectorAll('.pending-reveal');
@@ -773,16 +795,12 @@ function playCardToCenter(card, imgElement, dropSide) {
     if (dropSide === 'left' && isLeftLegal) { target = gameState.centerPileLeft; side = 'left'; }
     if (dropSide === 'right' && isRightLegal) { target = gameState.centerPileRight; side = 'right'; }
 
-    // No fallback to the other pile. If you dropped on the wrong one, it fails.
     if (!target) return false;
 
-    // --- VISUAL & STATE UPDATES ---
     gameState.playerReady = false; 
     gameState.aiReady = false;
-    const pDeckEl = document.getElementById('player-draw-deck');
-    const aDeckEl = document.getElementById('ai-draw-deck');
-    if(pDeckEl) pDeckEl.classList.remove('deck-ready');
-    if(aDeckEl) aDeckEl.classList.remove('deck-ready');
+    document.getElementById('player-draw-deck').classList.remove('deck-ready');
+    document.getElementById('ai-draw-deck').classList.remove('deck-ready');
 
     target.push(card);
     
@@ -795,29 +813,18 @@ function playCardToCenter(card, imgElement, dropSide) {
         gameState.aiTotal--; 
     }
 
-    // --- CHECK FOR SUDDEN DEATH TRIGGER (Rule G.7.4) ---
-    // Trigger only if both DECKS are zero, but Hands still have cards
-    if (gameState.playerDeck.length === 0 && gameState.aiDeck.length === 0) {
-        if (gameState.centerPileLeft.length > 0 || gameState.centerPileRight.length > 0) {
-            triggerSuddenDeathSplit();
-        }
-    }
-
     // --- CHECK FOR WIN / END ROUND ---
-    // FIX: A Round ends when the HAND is empty. 
-    // The Deck is just "Score" reserve, unless we are in Sudden Death where Deck represents the borrowed pile.
-    
     const playerHandEmpty = (gameState.playerHand.length === 0);
     const aiHandEmpty = (gameState.aiHand.length === 0);
+    
+    const isBorrowed = !document.getElementById('borrowed-player').classList.contains('hidden') 
+                    && !document.getElementById('borrowed-ai').classList.contains('hidden');
 
     if (playerHandEmpty) {
-        // Check if we are in Sudden Death Mode (Borrowed Tags Visible)
-        const isSuddenDeath = !document.getElementById('borrowed-player').classList.contains('hidden');
-        
-        if (isSuddenDeath) {
+        if (isBorrowed) {
             handleSuddenDeathWin('player');
         } else {
-            // STANDARD MODE
+            // Standard Phase Win
             if (gameState.playerTotal <= 0) showEndGame("YOU WIN THE MATCH!", true);
             else endRound('player');
         }
@@ -825,19 +832,16 @@ function playCardToCenter(card, imgElement, dropSide) {
     }
 
     if (aiHandEmpty) {
-        const isSuddenDeath = !document.getElementById('borrowed-player').classList.contains('hidden');
-
-        if (isSuddenDeath) {
+        if (isBorrowed) {
             handleSuddenDeathWin('ai');
         } else {
-            // STANDARD MODE
+            // Standard Phase Win
             if (gameState.aiTotal <= 0) showEndGame("AI WINS THE MATCH!", false);
             else endRound('ai');
         }
         return true;
     }
 
-    // Standard UI Updates (Game Continues)
     checkDeckVisibility(); 
     imgElement.remove(); 
     renderCenterPile(side, card); 
@@ -1007,6 +1011,105 @@ function handleSuddenDeathWin(winner) {
         updatePenaltyUI();
         
         // Stats update
+        if (winner === 'player') gameState.p1Rounds++; else gameState.aiRounds++;
+        updateScoreboardWidget();
+    }
+}
+function triggerBorrowedSplit() {
+    // 1. Collect Center Cards
+    const salvage = [...gameState.centerPileLeft, ...gameState.centerPileRight];
+    gameState.centerPileLeft = [];
+    gameState.centerPileRight = [];
+    document.getElementById('center-pile-left').innerHTML = '';
+    document.getElementById('center-pile-right').innerHTML = '';
+
+    // 2. Shuffle & Split Evenly
+    shuffle(salvage);
+    const mid = Math.ceil(salvage.length / 2);
+    
+    gameState.playerDeck = salvage.slice(0, mid);
+    gameState.aiDeck = salvage.slice(mid);
+
+    // 3. IMMEDIATE REVEAL (Fix for empty piles)
+    // Deal top card so players can play
+    if (gameState.playerDeck.length > 0) {
+        const pCard = gameState.playerDeck.pop();
+        gameState.centerPileRight.push(pCard);
+        renderCenterPile('right', pCard);
+    }
+    if (gameState.aiDeck.length > 0) {
+        const aCard = gameState.aiDeck.pop();
+        gameState.centerPileLeft.push(aCard);
+        renderCenterPile('left', aCard);
+    }
+
+    // 4. Mark as BORROWED
+    document.getElementById('borrowed-player').classList.remove('hidden');
+    document.getElementById('borrowed-ai').classList.remove('hidden');
+    
+    checkDeckVisibility();
+    
+    const modal = document.getElementById('slap-overlay');
+    const txt = document.getElementById('slap-text');
+    txt.innerText = "SUDDEN DEATH!";
+    modal.style.backgroundColor = "rgba(255, 165, 0, 0.9)";
+    modal.classList.remove('hidden');
+    setTimeout(() => modal.classList.add('hidden'), 1500);
+}
+
+function triggerSecondCycleReset() {
+    // 1. Collect Pot
+    const pot = [...gameState.centerPileLeft, ...gameState.centerPileRight];
+    
+    // 2. Handle Odd Card
+    let oddCard = null;
+    if (pot.length % 2 !== 0) oddCard = pot.pop();
+
+    // 3. Split Evenly
+    const half = pot.length / 2;
+    
+    // 4. Update Totals
+    gameState.playerTotal = gameState.playerHand.length + half;
+    gameState.aiTotal = gameState.aiHand.length + half;
+
+    // 5. Restart
+    const modal = document.getElementById('slap-overlay');
+    modal.classList.remove('hidden');
+    document.getElementById('slap-text').innerText = "STALEMATE! DECK SPLIT";
+    
+    setTimeout(() => {
+        modal.classList.add('hidden');
+        startRound(oddCard);
+    }, 2000);
+}
+
+function handleSuddenDeathWin(winner) {
+    let hasPenalty = false;
+    if (winner === 'player') {
+        if (gameState.playerReds > 0 || gameState.playerYellows > 0) hasPenalty = true;
+    } else {
+        if (gameState.aiReds > 0 || gameState.aiYellows > 0) hasPenalty = true;
+    }
+
+    if (!hasPenalty) {
+        if (winner === 'player') showEndGame("YOU WIN THE MATCH!", true);
+        else showEndGame("AI WINS THE MATCH!", false);
+    } else {
+        const PENALTY_COST = 3;
+        if (winner === 'player') {
+            gameState.playerTotal = PENALTY_COST;
+            gameState.aiTotal = 52 - PENALTY_COST;
+            showRoundMessage("SURVIVED!", `You cleared your hand but had penalties. You start with ${PENALTY_COST} cards.`);
+        } else {
+            gameState.aiTotal = PENALTY_COST;
+            gameState.playerTotal = 52 - PENALTY_COST;
+            showRoundMessage("OPPONENT SURVIVED", `Opponent cleared hand with penalties. They start with ${PENALTY_COST} cards.`);
+        }
+        
+        gameState.playerReds = 0; gameState.playerYellows = 0;
+        gameState.aiReds = 0; gameState.aiYellows = 0;
+        updatePenaltyUI();
+        
         if (winner === 'player') gameState.p1Rounds++; else gameState.aiRounds++;
         updateScoreboardWidget();
     }
