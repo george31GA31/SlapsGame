@@ -9,7 +9,6 @@
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
-    
     <script src="firebase-init.js"></script>
 
     <style>
@@ -20,12 +19,44 @@
         .auth-header p { color: #666; font-size: 0.9rem; margin-bottom: 25px; }
         
         .input-row { display: flex; gap: 10px; }
-        .input-group { margin-bottom: 15px; text-align: left; flex: 1; }
+        .input-group { margin-bottom: 15px; text-align: left; flex: 1; position: relative; }
         .input-label { color: #00ccff; font-size: 0.75rem; font-weight: bold; display: block; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 1px; }
         
-        .auth-input, .auth-select { width: 100%; background: #151515; border: 1px solid #333; color: white; padding: 12px; font-size: 1rem; border-radius: 5px; box-sizing: border-box; transition: 0.3s; }
-        .auth-input:focus, .auth-select:focus { outline: none; border-color: #00ccff; box-shadow: 0 0 15px rgba(0, 204, 255, 0.1); }
+        .auth-input { width: 100%; background: #151515; border: 1px solid #333; color: white; padding: 12px; font-size: 1rem; border-radius: 5px; box-sizing: border-box; transition: 0.3s; }
+        .auth-input:focus { outline: none; border-color: #00ccff; box-shadow: 0 0 15px rgba(0, 204, 255, 0.1); }
         
+        /* --- CUSTOM FLAG DROPDOWN STYLES --- */
+        .custom-select-wrapper {
+            position: relative;
+            user-select: none;
+            cursor: pointer;
+        }
+        .custom-select-trigger {
+            display: flex; align-items: center; justify-content: space-between;
+            background: #151515; border: 1px solid #333; border-radius: 5px;
+            padding: 10px; color: white; transition: 0.3s;
+        }
+        .custom-select-trigger:hover { border-color: #555; }
+        
+        .flag-icon { width: 24px; height: auto; margin-right: 10px; border-radius: 2px; }
+        .arrow { font-size: 0.8rem; color: #00ccff; }
+
+        .custom-options {
+            position: absolute; top: 100%; left: 0; right: 0;
+            background: #0a0a0a; border: 1px solid #333; border-top: none;
+            border-radius: 0 0 5px 5px; z-index: 100;
+            display: none; max-height: 200px; overflow-y: auto;
+        }
+        .custom-options.open { display: block; }
+        
+        .custom-option {
+            padding: 10px; display: flex; align-items: center;
+            color: #ccc; transition: 0.2s;
+        }
+        .custom-option:hover { background: #151515; color: white; }
+        .custom-option img { width: 24px; margin-right: 10px; }
+        /* ------------------------------------ */
+
         .btn-auth { width: 100%; padding: 15px; background: #00ccff; color: black; border: none; border-radius: 5px; font-weight: 900; font-size: 1rem; cursor: pointer; margin-top: 20px; text-transform: uppercase; transition: transform 0.2s; }
         .btn-auth:hover { transform: scale(1.02); box-shadow: 0 0 20px rgba(0, 204, 255, 0.4); }
         
@@ -63,22 +94,35 @@
 
             <div class="input-group">
                 <label class="input-label">Country</label>
-                <select id="su-country" class="auth-select" required>
-                    <option value="" disabled selected>Select Nation...</option>
-                    <option value="USA">🇺🇸 United States</option>
-                    <option value="UK">🇬🇧 United Kingdom</option>
-                    <option value="CAN">🇨🇦 Canada</option>
-                    <option value="AUS">🇦🇺 Australia</option>
-                    <option value="GER">🇩🇪 Germany</option>
-                    <option value="FRA">🇫🇷 France</option>
-                    <option value="BRA">🇧🇷 Brazil</option>
-                    <option value="JPN">🇯🇵 Japan</option>
-                    <option value="KOR">🇰🇷 South Korea</option>
-                    <option value="IND">🇮🇳 India</option>
-                    <option value="CHN">🇨🇳 China</option>
-                    <option value="RUS">🇷🇺 Russia</option>
-                    <option value="INT">🌍 International / Other</option>
-                </select>
+                
+                <input type="hidden" id="su-country" required>
+
+                <div class="custom-select-wrapper" onclick="toggleDropdown()">
+                    <div class="custom-select-trigger" id="select-trigger">
+                        <span id="trigger-text">Select Nation...</span>
+                        <span class="arrow">▼</span>
+                    </div>
+                    <div class="custom-options" id="custom-options">
+                        <div class="custom-option" onclick="selectOption('UK', 'assets/flags/united_kingdom.png', 'United Kingdom')">
+                            <img src="assets/flags/united_kingdom.png" alt="UK"> United Kingdom
+                        </div>
+                        <div class="custom-option" onclick="selectOption('USA', 'assets/flags/usa.png', 'United States')">
+                            <img src="assets/flags/usa.png" alt="USA"> United States
+                        </div>
+                        <div class="custom-option" onclick="selectOption('CAN', 'assets/flags/canada.png', 'Canada')">
+                            <img src="assets/flags/canada.png" alt="CAN"> Canada
+                        </div>
+                        <div class="custom-option" onclick="selectOption('AUS', 'assets/flags/australia.png', 'Australia')">
+                            <img src="assets/flags/australia.png" alt="AUS"> Australia
+                        </div>
+                        <div class="custom-option" onclick="selectOption('GER', 'assets/flags/germany.png', 'Germany')">
+                            <img src="assets/flags/germany.png" alt="GER"> Germany
+                        </div>
+                        <div class="custom-option" onclick="selectOption('FRA', 'assets/flags/france.png', 'France')">
+                            <img src="assets/flags/france.png" alt="FRA"> France
+                        </div>
+                        </div>
+                </div>
             </div>
 
             <div class="input-group">
@@ -101,50 +145,64 @@
     </div>
 
     <script>
+        // --- DROPDOWN LOGIC ---
+        function toggleDropdown() {
+            document.getElementById('custom-options').classList.toggle('open');
+        }
+
+        function selectOption(value, imgSrc, text) {
+            // Update the UI
+            const trigger = document.getElementById('select-trigger');
+            trigger.innerHTML = `<div style="display:flex; align-items:center;"><img src="${imgSrc}" class="flag-icon"> ${text}</div><span class="arrow">▼</span>`;
+            
+            // Set the hidden value
+            document.getElementById('su-country').value = value;
+        }
+
+        // Close dropdown if clicking outside
+        window.addEventListener('click', function(e) {
+            const wrapper = document.querySelector('.custom-select-wrapper');
+            if (!wrapper.contains(e.target)) {
+                document.getElementById('custom-options').classList.remove('open');
+            }
+        });
+
+        // --- SIGN UP LOGIC ---
         document.getElementById('signup-form').addEventListener('submit', async function(e) {
             e.preventDefault();
             
             const fname = document.getElementById('su-fname').value.trim();
             const lname = document.getElementById('su-lname').value.trim();
-            const username = document.getElementById('su-username').value.trim().toUpperCase(); // Force Upper for uniqueness
-            const country = document.getElementById('su-country').value;
+            const username = document.getElementById('su-username').value.trim().toUpperCase();
+            const country = document.getElementById('su-country').value; // Gets the hidden value
             const email = document.getElementById('su-email').value.trim();
             const pass = document.getElementById('su-pass').value;
-            const errorText = document.getElementById('error-text');
 
+            if(!country) {
+                showError("Please select a country.");
+                return;
+            }
             if(username.length < 3) {
                 showError("Username must be at least 3 characters.");
                 return;
             }
 
-            // 1. CHECK IF USERNAME EXISTS
-            // We read the 'users' database to see if anyone has this username
-            // (Note: In a huge app we'd filter, but for now we loop check or rely on Auth email)
-            
-            // To keep it simple and free, we will proceed to create the account.
-            // If we wanted strict username uniqueness enforcement on the server, 
-            // we would need specific database rules. For now, we will create the user first.
-
             auth.createUserWithEmailAndPassword(email, pass)
                 .then((userCredential) => {
                     const user = userCredential.user;
-                    
-                    // 2. UPDATE PROFILE
                     user.updateProfile({ displayName: username });
 
-                    // 3. SAVE FULL DATA TO DATABASE
                     db.ref('users/' + user.uid).set({
                         username: username,
                         firstName: fname,
                         lastName: lname,
-                        country: country,
+                        country: country, // Saves 'UK', 'USA', etc.
                         email: email,
-                        elo: 1000, // STARTING ELO RATING
+                        elo: 1000,
                         wins: 0,
                         losses: 0,
                         joined: new Date().toISOString()
                     }).then(() => {
-                        // 4. SUCCESS
                         localStorage.setItem('isf_username', username);
                         localStorage.setItem('isf_is_guest', 'false');
                         alert("Profile Created! Welcome to the ISF, " + fname + ".");
