@@ -64,6 +64,17 @@
         .alt-link { display: block; margin-top: 15px; color: #666; text-decoration: none; font-size: 0.9rem; }
         .alt-link span { color: #00ccff; font-weight: bold; }
         .error-msg { color: #ff4444; font-size: 0.85rem; margin-top: 10px; display: none; }
+        /* SECURITY WARNING STYLE */
+        .security-warning {
+            color: #ffcc00; /* Gold/Yellow */
+            font-size: 0.75rem;
+            margin-top: 8px;
+            line-height: 1.3;
+            border: 1px solid #ffcc00;
+            padding: 8px;
+            border-radius: 5px;
+            background: rgba(255, 204, 0, 0.1);
+        }
     </style>
 </head>
 <body>
@@ -860,6 +871,11 @@
                     <input type="password" id="su-pass" class="auth-input" placeholder="••••••••" required>
                     <i class="fa-solid fa-eye toggle-password" onclick="togglePasswordVisibility()"></i>
                 </div>
+                
+                <p class="security-warning">
+                    <i class="fa-solid fa-shield-halved"></i> 
+                    <strong>SECURITY NOTE:</strong> Please do <u>NOT</u> use your banking or main email password. Use a unique password for this game.
+                </p>
             </div>
             
             <p id="error-text" class="error-msg">Error message here</p>
