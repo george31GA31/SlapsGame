@@ -889,10 +889,6 @@
                     <div class="custom-options" id="custom-options">
                         ```
 
-**2. The Script Change**
-Scroll to the very bottom. **Replace the entire `<script>` section** with this. I have updated it to save the Flag URL and ensure names are saved correctly.
-
-```javascript
     <script>
         // --- TOGGLE PASSWORD VISIBILITY ---
         function togglePasswordVisibility() {
@@ -911,20 +907,24 @@ Scroll to the very bottom. **Replace the entire `<script>` section** with this. 
 
         // --- DROPDOWN LOGIC ---
         function toggleDropdown() {
-            document.getElementById('custom-options').classList.toggle('open');
+            const dropdown = document.getElementById('custom-options');
+            dropdown.classList.toggle('open');
         }
 
         function selectOption(value, imgSrc, text) {
             const trigger = document.getElementById('select-trigger');
             trigger.innerHTML = `<div style="display:flex; align-items:center;"><img src="${imgSrc}" class="flag-icon"> ${text}</div><span class="arrow">▼</span>`;
             
-            // SAVE BOTH VALUES
+            // 1. SAVE THE COUNTRY CODE
             document.getElementById('su-country').value = value;
-            document.getElementById('su-flag-url').value = imgSrc; // <--- The Fix
+            
+            // 2. SAVE THE FLAG URL (This is the fix)
+            document.getElementById('su-flag-url').value = imgSrc;
             
             document.getElementById('custom-options').classList.remove('open');
         }
 
+        // Close dropdown if clicking outside
         window.addEventListener('click', function(e) {
             const wrapper = document.querySelector('.custom-select-wrapper');
             if (!wrapper.contains(e.target)) {
@@ -938,9 +938,11 @@ Scroll to the very bottom. **Replace the entire `<script>` section** with this. 
 
             const fname = document.getElementById('su-fname').value.trim();
             const lname = document.getElementById('su-lname').value.trim();
-            const username = document.getElementById('su-username').value.trim().toUpperCase();
+            const username = document.getElementById('su-username').value.trim().toUpperCase(); // Force Uppercase for ID
+            
             const countryCode = document.getElementById('su-country').value; 
-            const countryFlag = document.getElementById('su-flag-url').value; 
+            const countryFlag = document.getElementById('su-flag-url').value; // Get the flag
+            
             const email = document.getElementById('su-email').value.trim();
             const pass = document.getElementById('su-pass').value;
 
@@ -958,12 +960,13 @@ Scroll to the very bottom. **Replace the entire `<script>` section** with this. 
                     const user = userCredential.user;
                     user.updateProfile({ displayName: username });
 
+                    // SAVE TO DATABASE
                     db.ref('users/' + user.uid).set({
                         username: username,
                         firstName: fname,
                         lastName: lname,
                         country: countryCode, 
-                        flag: countryFlag, // <--- SAVING FLAG HERE
+                        flag: countryFlag, // Saving flag to DB
                         email: email,
                         elo: 1000,
                         wins: 0,
@@ -979,7 +982,10 @@ Scroll to the very bottom. **Replace the entire `<script>` section** with this. 
                     });
                 })
                 .catch((authError) => {
-                    showError(authError.message);
+                    let msg = authError.message;
+                    if(authError.code === 'auth/email-already-in-use') msg = "Email already in use.";
+                    if(authError.code === 'auth/weak-password') msg = "Password too weak.";
+                    showError(msg);
                 });
         });
 
