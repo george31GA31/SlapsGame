@@ -297,25 +297,17 @@ function sendNet(obj) {
 function handleNet(msg) {
     if (!msg) return;
 
+    // --- 1. STANDARD GAME HANDLERS ---
     if (msg.type === 'HANDSHAKE') {
         gameState.opponentName = msg.name || 'OPPONENT';
         updateScoreboardWidget();
-
-        // --- NEW: FETCH ENEMY STATS ---
-        if (msg.uid) {
-            fetchEnemyStats(msg.uid);
-        }
-        // ------------------------------
+        if (msg.uid) fetchEnemyStats(msg.uid);
 
         if (!gameState.handshakeDone) {
             gameState.handshakeDone = true;
-            
-            // GET MY ID AGAIN TO SEND BACK
             const myUid = (window.auth && window.auth.currentUser) ? window.auth.currentUser.uid : null;
-            
             sendNet({ type: 'HANDSHAKE', name: gameState.myName, uid: myUid });
         }
-
         if (gameState.isHost && !gameState.roundStarted) {
             gameState.roundStarted = true;
             startRoundHostAuthoritative();
@@ -323,186 +315,120 @@ function handleNet(msg) {
         return;
     }
 
-    if (msg.type === 'ROUND_START') {
-        if (!gameState.isHost) startRoundJoinerFromState(msg.state);
-        return;
-    }
-
-    if (msg.type === 'READY') {
-        gameState.aiReady = true;
-        const oDeck = document.getElementById('ai-draw-deck');
-        if (oDeck) oDeck.classList.add('deck-ready');
-        checkDrawConditionMultiplayer();
-        return;
-    }
-
-    if (msg.type === 'HOST_COUNTDOWN') {
-        startCountdownFromHost();
-        return;
-    }
-
-    if (msg.type === 'REVEAL_PRELOAD') {
-        applyRevealPreload(msg.result);
-        return;
-    }
-
-    if (msg.type === 'REVEAL_SHOW') {
-        applyRevealShow();
-        return;
-    }
-
-    if (msg.type === 'DRAG') {
-        applyOpponentDrag(msg.drag);
-        return;
-    }
-
-    if (msg.type === 'MOVE_REQ') {
-        if (gameState.isHost) adjudicateMove(msg.move, 'ai');
-        return;
-    }
-
-    if (msg.type === 'MOVE_APPLY') {
-        applyMoveFromHost(msg.apply);
-        return;
-    }
-
-    if (msg.type === 'MOVE_REJECT') {
-        rejectMoveFromHost(msg.reject);
-        return;
-    }
-   
-   if (msg.type === 'OPPONENT_REJECT') {
-        cleanupGhost(msg.card);
-        return;
-    }
-
-    if (msg.type === 'SYNC') {
-        if (!gameState.isHost) startRoundJoinerFromState(msg.state);
-        return;
-    }
-
-    if (msg.type === 'OPPONENT_FLIP') {
-        const card = gameState.aiHand.find(c => c.id === msg.cardId);
-        if (card && card.element) setCardFaceUp(card.element, card, 'ai');
-        return;
-    }
-    
-    // --- SLAP & PENALTY HANDLERS ---
-    if (msg.type === 'SLAP_REQ') {
-        if (gameState.isHost) adjudicateSlap('ai');
-        return;
-    }
-
-    if (msg.type === 'SLAP_UPDATE') {
-        applySlapUpdate(msg);
-        return;
-    }
-
-    if (msg.type === 'PENALTY_UPDATE') {
-        applyPenaltyUpdate(msg);
-        return;
-    }
-    if (msg.type === 'ROUND_OVER') {
-        applyRoundOver(msg);
-        return;
-    }
-
-    if (msg.type === 'MATCH_OVER') {
-        applyMatchOver(msg);
-        return;
-    } // <--- FIXED MISSING BRACE HERE
-
-    // --- PHASE 1 & 2 MESSAGE HANDLERS ---
-    if (msg.type === 'BORROWED_START') {
-        gameState.playerDeck = msg.aDeck.map(unpackCard); // Swap
+    // ... (Keep your standard game handlers: ROUND_START, MOVE_REQ, SLAP, etc.) ...
+    if (msg.type === 'ROUND_START') { if (!gameState.isHost) startRoundJoinerFromState(msg.state); return; }
+    if (msg.type === 'READY') { gameState.aiReady = true; document.getElementById('ai-draw-deck')?.classList.add('deck-ready'); checkDrawConditionMultiplayer(); return; }
+    if (msg.type === 'HOST_COUNTDOWN') { startCountdownFromHost(); return; }
+    if (msg.type === 'REVEAL_PRELOAD') { applyRevealPreload(msg.result); return; }
+    if (msg.type === 'REVEAL_SHOW') { applyRevealShow(); return; }
+    if (msg.type === 'DRAG') { applyOpponentDrag(msg.drag); return; }
+    if (msg.type === 'MOVE_REQ') { if (gameState.isHost) adjudicateMove(msg.move, 'ai'); return; }
+    if (msg.type === 'MOVE_APPLY') { applyMoveFromHost(msg.apply); return; }
+    if (msg.type === 'MOVE_REJECT') { rejectMoveFromHost(msg.reject); return; }
+    if (msg.type === 'OPPONENT_REJECT') { cleanupGhost(msg.card); return; }
+    if (msg.type === 'OPPONENT_FLIP') { const card = gameState.aiHand.find(c => c.id === msg.cardId); if (card && card.element) setCardFaceUp(card.element, card, 'ai'); return; }
+    if (msg.type === 'SLAP_REQ') { if (gameState.isHost) adjudicateSlap('ai'); return; }
+    if (msg.type === 'SLAP_UPDATE') { applySlapUpdate(msg); return; }
+    if (msg.type === 'PENALTY_UPDATE') { applyPenaltyUpdate(msg); return; }
+    if (msg.type === 'ROUND_OVER') { applyRoundOver(msg); return; }
+    if (msg.type === 'MATCH_OVER') { applyMatchOver(msg); return; }
+    if (msg.type === 'BORROWED_START') { 
+        gameState.playerDeck = msg.aDeck.map(unpackCard); 
         gameState.aiDeck = msg.pDeck.map(unpackCard);
-        
-        gameState.centerPileLeft = [];
-        gameState.centerPileRight = [];
-        
-        // Handle Starter Cards (Perspective Swap)
-        // Host's Right (pStart) -> Guest's Left
-        // Host's Left (aStart) -> Guest's Right
+        gameState.centerPileLeft = []; gameState.centerPileRight = [];
         const localLeft = msg.pStart ? unpackCard(msg.pStart) : null;
         const localRight = msg.aStart ? unpackCard(msg.aStart) : null;
-        
         if (localLeft) gameState.centerPileLeft.push(localLeft);
         if (localRight) gameState.centerPileRight.push(localRight);
-
-        gameState.playerReady = false; 
-        gameState.aiReady = false;
-        
-        applyBorrowedUI(localRight, localLeft); // Pass to UI renderer
-        return;
+        gameState.playerReady = false; gameState.aiReady = false;
+        applyBorrowedUI(localRight, localLeft); 
+        return; 
     }
-
-    if (msg.type === 'CYCLE_RESET') {
-        gameState.playerTotal = msg.aTotal;
-        gameState.aiTotal = msg.pTotal;
-        // Don't need to handle odd card here, the round restart follows
-        
-        const modal = document.getElementById('slap-overlay');
-        modal.classList.remove('hidden');
-        document.getElementById('slap-text').innerText = "STALEMATE RESET";
-        return;
+    if (msg.type === 'CYCLE_RESET') { 
+        gameState.playerTotal = msg.aTotal; gameState.aiTotal = msg.pTotal; 
+        const modal = document.getElementById('slap-overlay'); 
+        modal.classList.remove('hidden'); 
+        document.getElementById('slap-text').innerText = "STALEMATE RESET"; 
+        return; 
     }
     
-    // --- DISCONNECT HANDLER ---
+    // --- 2. CONCESSION HANDLERS (The Polite Way) ---
+    if (msg.type === 'CONCESSION_REQ') {
+        // Freeze my game too while I decide
+        gameState.gameActive = false; 
+        const modal = document.getElementById('concession-modal');
+        if (modal) modal.classList.remove('hidden');
+        return;
+    }
+
+    if (msg.type === 'CONCESSION_RESULT') {
+        // I am the Quitter receiving the verdict
+        if (msg.accepted) {
+            window.location.href = 'index.html'; // Void
+        } else {
+            // They declined. I take the Loss.
+            console.log("Opponent declined. Taking Loss.");
+            if (isRanked) reportMatchResultInternal(false); 
+            
+            setTimeout(() => {
+                alert("Opponent declined concession. Match recorded as LOSS.");
+                window.location.href = 'index.html';
+            }, 500);
+        }
+        return;
+    }
+
+    // --- 3. DISCONNECT HANDLER (The Rude Way) ---
     if (msg.type === 'OPPONENT_LEFT') {
         if (gameState.matchEnded) return;
 
+        // Force close any waiting screens
+        document.getElementById('concession-waiting-overlay')?.classList.add('hidden');
+        document.getElementById('concession-modal')?.classList.add('hidden');
+        document.getElementById('rematch-modal')?.classList.add('hidden');
+
+        // Automatic Win
+        if (isRanked) reportMatchResultInternal(true);
+
         const name = (gameState.opponentName || "OPPONENT").toUpperCase();
-        const modal = document.getElementById('game-message');
-        if (modal) {
-            modal.querySelector('h1').innerText = "VICTORY";
-            modal.querySelector('h1').style.color = '#66ff66';
-            const contentArea = modal.querySelector('p');
+        showEndGame(`${name} DISCONNECTED`, true);
+        
+        const contentArea = document.querySelector('#game-message p');
+        if(contentArea) {
             contentArea.innerHTML = `
-                YOU WON. ${name} HAS CONCEDED THE MATCH.
+                Connection lost.<br>
+                <strong>VICTORY IS YOURS!</strong>
                 <div style="display:flex; gap:10px; justify-content:center; margin-top:20px;">
                     <button class="btn-action-small" onclick="window.location.href='index.html'" style="background:#ff4444; width:auto;">
                         MAIN MENU
                     </button>
                 </div>
             `;
-            const oldBtn = document.getElementById('msg-btn');
-            if (oldBtn) oldBtn.classList.add('hidden');
-            modal.classList.remove('hidden');
         }
         return;
     }
 
-    // --- REMATCH HANDLERS ---
+    // --- 4. REMATCH HANDLERS ---
     if (msg.type === 'REMATCH_REQ') {
-        const modal = document.getElementById('rematch-modal');
-        if (modal) modal.classList.remove('hidden');
+        document.getElementById('rematch-modal').classList.remove('hidden');
         return;
     }
-
     if (msg.type === 'REMATCH_YES') {
-        const modal = document.getElementById('game-message');
-        if(modal) modal.classList.add('hidden');
-        
+        document.getElementById('game-message').classList.add('hidden');
         gameState.p1Rounds = 0; gameState.aiRounds = 0;
         gameState.p1Slaps = 0; gameState.aiSlaps = 0;
-        gameState.playerTotal = 26; 
-        gameState.aiTotal = 26;
+        gameState.playerTotal = 26; gameState.aiTotal = 26;
         gameState.matchEnded = false;
-        
         updateScoreboardWidget();
-
-        if (gameState.isHost) {
-            startRoundHostAuthoritative();
-        }
+        if (gameState.isHost) startRoundHostAuthoritative();
         return;
     }
-
     if (msg.type === 'REMATCH_NO') {
         alert("Opponent declined the rematch.");
         window.location.href = 'index.html';
         return;
     }
-} 
+}
 
 function handleInput(e) {
     if (e.code === 'Space') {
@@ -1968,18 +1894,47 @@ function applyMatchOver(data) {
     }
 }
 function quitMatch() {
-    console.log("Quitting match...");
-    try {
-        sendNet({ type: 'OPPONENT_LEFT' });
-    } catch (e) {
-        console.error("Connection already closed", e);
-    }
-    setTimeout(() => {
-        if (gameState.peer) {
-            gameState.peer.destroy();
-        }
+    console.log("Requesting concession...");
+    
+    if (!gameState.conn || !gameState.conn.open) {
         window.location.href = 'index.html';
-    }, 100); 
+        return;
+    }
+
+    // 1. FREEZE THE GAME (No going back)
+    gameState.gameActive = false; 
+
+    // 2. SHOW BLOCKING OVERLAY
+    const overlay = document.getElementById('concession-waiting-overlay');
+    if (overlay) overlay.classList.remove('hidden');
+
+    // 3. SEND REQUEST
+    sendNet({ type: 'CONCESSION_REQ' });
+}
+function respondConcession(accepted) {
+    // Hide the modal
+    document.getElementById('concession-modal').classList.add('hidden');
+
+    // 1. Tell the Quitter the decision
+    sendNet({ type: 'CONCESSION_RESULT', accepted: accepted });
+
+    if (accepted) {
+        // --- ACCEPTED (VOID) ---
+        // No stats updated. Just leave.
+        alert("You accepted the concession. Match is void.");
+        window.location.href = 'index.html';
+    } else {
+        // --- DECLINED (RAGE QUIT ENFORCED) ---
+        // They tried to leave, I say NO. 
+        // I take the Win, they get the Loss.
+        console.log("Concession declined. Claiming Victory.");
+        
+        // Report MY Win immediately
+        if (isRanked) reportMatchResultInternal(true);
+        
+        // Show Victory Screen
+        showEndGame("OPPONENT FORFEIT (VICTORY)", true);
+    }
 }
 /* ================================
    REMATCH LOGIC
@@ -2221,3 +2176,11 @@ function applyBorrowedUI(pStart = null, aStart = null) {
     // CRITICAL: Ensure game is active so drag-and-drop works
     gameState.gameActive = true; 
 }
+window.addEventListener('beforeunload', () => {
+    if (gameState.conn && gameState.conn.open) {
+        gameState.conn.send({ type: 'OPPONENT_LEFT' });
+        // Small delay loop to try and force the packet out
+        const start = Date.now();
+        while (Date.now() - start < 50) { /* busy wait */ }
+    }
+});
