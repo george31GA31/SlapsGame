@@ -282,11 +282,23 @@ function handleNet(msg) {
     if (msg.type === 'BORROWED_START') {
         gameState.playerDeck = msg.aDeck.map(unpackCard); // Swap
         gameState.aiDeck = msg.pDeck.map(unpackCard);
+        
         gameState.centerPileLeft = [];
         gameState.centerPileRight = [];
+        
+        // Handle Starter Cards (Perspective Swap)
+        // Host's Right (pStart) -> Guest's Left
+        // Host's Left (aStart) -> Guest's Right
+        const localLeft = msg.pStart ? unpackCard(msg.pStart) : null;
+        const localRight = msg.aStart ? unpackCard(msg.aStart) : null;
+        
+        if (localLeft) gameState.centerPileLeft.push(localLeft);
+        if (localRight) gameState.centerPileRight.push(localRight);
+
         gameState.playerReady = false; 
         gameState.aiReady = false;
-        applyBorrowedUI();
+        
+        applyBorrowedUI(localRight, localLeft); // Pass to UI renderer
         return;
     }
 
@@ -761,7 +773,6 @@ async function startRoundHostAuthoritative(oddCard = null) {
 
     sendNet({ type: 'ROUND_START', state: guestState });
 }
-
 async function startRoundJoinerFromState(state) {
     importState(state);
     await preloadCardImages([...gameState.playerHand, ...gameState.aiHand]);
@@ -1952,71 +1963,115 @@ function cleanupGhost(cardData) {
 function triggerBorrowedSplit() {
     console.log("Both decks empty. Triggering Borrowed Phase (Cycle 1).");
 
+    // 1. Collect Center Cards
     const salvage = [...gameState.centerPileLeft, ...gameState.centerPileRight];
     gameState.centerPileLeft = [];
     gameState.centerPileRight = [];
 
+    // 2. Shuffle & Split Evenly
     shuffle(salvage);
     const mid = Math.ceil(salvage.length / 2);
     
     gameState.playerDeck = salvage.slice(0, mid);
     gameState.aiDeck = salvage.slice(mid);
 
+    // 3. IMMEDIATE REVEAL (The Fix)
+    // We pop the top card of the newly created decks so the piles aren't empty.
+    let pStart = null;
+    let aStart = null;
+
+    if (gameState.playerDeck.length > 0) {
+        pStart = gameState.playerDeck.pop();
+        gameState.centerPileRight.push(pStart); // Host's Right
+    }
+    if (gameState.aiDeck.length > 0) {
+        aStart = gameState.aiDeck.pop();
+        gameState.centerPileLeft.push(aStart); // Host's Left
+    }
+
+    // 4. Reset Ready States
     gameState.playerReady = false;
     gameState.aiReady = false;
     document.getElementById('player-draw-deck')?.classList.remove('deck-ready');
     document.getElementById('ai-draw-deck')?.classList.remove('deck-ready');
 
+    // 5. Sync with Guest (Send the start cards too)
     const syncData = {
         type: 'BORROWED_START',
         pDeck: gameState.playerDeck.map(packCard),
-        aDeck: gameState.aiDeck.map(packCard)
+        aDeck: gameState.aiDeck.map(packCard),
+        pStart: pStart ? packCard(pStart) : null,
+        aStart: aStart ? packCard(aStart) : null
     };
     sendNet(syncData);
 
-    applyBorrowedUI();
+    // 6. Update Local UI
+    applyBorrowedUI(pStart, aStart);
 }
-
 function triggerSecondCycleReset() {
     console.log("Borrowed decks empty again. Triggering Cycle 2 Reset.");
 
+    // 1. Collect Pot
     const pot = [...gameState.centerPileLeft, ...gameState.centerPileRight];
     
+    // 2. Handle Odd Card (Remove it from distribution)
     let oddCard = null;
     if (pot.length % 2 !== 0) {
+        // We remove the card from the pot so it isn't dealt to players.
+        // We do NOT need to pass this specific object to startRound, 
+        // because startRound generates a fresh deck. 
+        // We just need the totals to equal 51.
         oddCard = pot.pop(); 
     }
 
+    // 3. Split Evenly
     const half = pot.length / 2;
 
+    // 4. Update Totals for Next Round
+    // Formula: Current Hand + Half of Pot
+    // The odd card is excluded, so Sum is 51 (assuming 52 total initially).
     gameState.playerTotal = gameState.playerHand.length + half;
     gameState.aiTotal = gameState.aiHand.length + half;
 
+    // 5. Broadcast Reset
     const payload = {
         type: 'CYCLE_RESET',
         pTotal: gameState.playerTotal,
         aTotal: gameState.aiTotal,
-        oddCard: oddCard ? packCard(oddCard) : null
+        // We pass oddCard just for visual confirmation if needed, but startRound uses totals
+        oddCard: oddCard ? packCard(oddCard) : null 
     };
     sendNet(payload);
 
+    // 6. Visual Message & Restart
     const modal = document.getElementById('slap-overlay');
     modal.classList.remove('hidden');
     document.getElementById('slap-text').innerText = "STALEMATE! DECK SPLIT";
     
     setTimeout(() => {
         modal.classList.add('hidden');
-        startRoundHostAuthoritative(oddCard); 
+        // We call startRound. It will generate 52 cards.
+        // It will see pTotal + aTotal = 51.
+        // It will take the 52nd card and put it in the center.
+        startRoundHostAuthoritative(); 
     }, 2000);
 }
-
-function applyBorrowedUI() {
+function applyBorrowedUI(pStart = null, aStart = null) {
     document.getElementById('borrowed-player').classList.remove('hidden');
     document.getElementById('borrowed-ai').classList.remove('hidden');
     
-    document.getElementById('center-pile-left').innerHTML = '';
-    document.getElementById('center-pile-right').innerHTML = '';
+    const l = document.getElementById('center-pile-left');
+    const r = document.getElementById('center-pile-right');
+    if (l) l.innerHTML = '';
+    if (r) r.innerHTML = '';
+    
+    // Render the new starter cards
+    if (pStart) renderCenterPile('right', pStart);
+    if (aStart) renderCenterPile('left', aStart);
     
     checkDeckVisibility();
     updateScoreboard();
+    
+    // CRITICAL: Ensure game is active so drag-and-drop works
+    gameState.gameActive = true; 
 }
