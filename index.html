@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ISF Online - Dashboard</title>
+    <title>ISF Online - Arena</title>
     <link rel="stylesheet" href="style.css">
     
     <script>
@@ -18,95 +18,157 @@
     <script src="firebase-init.js"></script>
 
     <style>
-        /* DASHBOARD STYLES */
-        body { background-color: #050505; color: white; font-family: 'Roboto', sans-serif; margin: 0; padding: 20px; }
+        /* --- LAYOUT STYLES --- */
+        body { 
+            background-color: #050505; 
+            color: white; 
+            font-family: 'Roboto', sans-serif; 
+            margin: 0; 
+            padding: 0; 
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
         
-        .nav-bar { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 20px; margin-bottom: 30px; }
-        .logo-section img { height: 40px; vertical-align: middle; }
-        .logo-section span { font-weight: 900; font-size: 1.5rem; margin-left: 10px; font-style: italic; }
+        /* TOP HUD (STATS BAR) */
+        .hud-bar { 
+            background: #0a0a0a; 
+            border-bottom: 2px solid #00ccff; 
+            padding: 15px 30px; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            box-shadow: 0 0 20px rgba(0, 204, 255, 0.1);
+            z-index: 100;
+        }
+
+        .hud-left { display: flex; align-items: center; gap: 20px; }
+        .logo-small { height: 30px; }
+        .player-tag { font-weight: 900; font-size: 1.2rem; color: white; text-transform: uppercase; font-style: italic; }
         
-        .user-info { text-align: right; }
-        .user-name { color: #00ccff; font-weight: bold; font-size: 1.2rem; display: block; }
-        .btn-logout { background: transparent; border: 1px solid #333; color: #666; padding: 5px 10px; cursor: pointer; font-size: 0.8rem; margin-top: 5px; transition: 0.3s; }
+        .hud-stats { display: flex; gap: 30px; }
+        .stat-item { text-align: center; }
+        .stat-label { font-size: 0.65rem; color: #666; text-transform: uppercase; letter-spacing: 1px; display: block; }
+        .stat-val { font-size: 1.2rem; font-weight: bold; color: #00ccff; }
+        .stat-val.loss { color: #ff4444; }
+
+        .btn-logout { 
+            background: transparent; border: 1px solid #333; color: #666; 
+            padding: 5px 15px; cursor: pointer; font-size: 0.7rem; 
+            text-transform: uppercase; transition: 0.3s; 
+        }
         .btn-logout:hover { border-color: #ff4444; color: #ff4444; }
 
-        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; }
-        .stat-card { background: #0a0a0a; border: 1px solid #333; padding: 20px; border-radius: 10px; text-align: center; }
-        .stat-value { font-size: 2.5rem; font-weight: 900; margin: 10px 0; }
-        .stat-label { color: #666; text-transform: uppercase; font-size: 0.8rem; letter-spacing: 1px; }
-        
-        .elo-card { border-color: #00ccff; box-shadow: 0 0 15px rgba(0, 204, 255, 0.1); }
-        .elo-card .stat-value { color: #00ccff; }
+        /* GAME AREA */
+        .game-container {
+            flex: 1; /* Takes up remaining space */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            background-image: radial-gradient(circle at center, #111 0%, #000 100%);
+            overflow: auto; /* Scroll if game is too big */
+        }
+
+        /* Placeholder style for the game area */
+        .game-placeholder {
+            text-align: center;
+            border: 1px dashed #333;
+            padding: 50px;
+            border-radius: 10px;
+            color: #444;
+        }
     </style>
 </head>
 <body>
 
-    <div class="nav-bar">
-        <div class="logo-section">
-            <img src="assets/ISF_ONLINE.png" alt="ISF">
-            <span>ISF ONLINE</span>
+    <div class="hud-bar">
+        <div class="hud-left">
+            <img src="assets/ISF_ONLINE.png" class="logo-small" alt="ISF">
+            <span class="player-tag" id="display-name">PLAYER</span>
         </div>
-        <div class="user-info">
-            <span class="user-name" id="display-name">LOADING...</span>
-            <button class="btn-logout" onclick="logout()">LOG OUT</button>
+
+        <div class="hud-stats">
+            <div class="stat-item">
+                <span class="stat-label">Rating</span>
+                <span class="stat-val" id="stat-elo">1000</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Wins</span>
+                <span class="stat-val" id="stat-wins">0</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Losses</span>
+                <span class="stat-val loss" id="stat-losses">0</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Nation</span>
+                <span class="stat-val" id="stat-country" style="font-size:1rem; padding-top:2px;">---</span>
+            </div>
         </div>
+
+        <button class="btn-logout" onclick="logout()">Log Out</button>
     </div>
 
-    <div class="stats-grid">
-        <div class="stat-card elo-card">
-            <div class="stat-label">Federation ELO</div>
-            <div class="stat-value" id="stat-elo">---</div>
+    <div class="game-container" id="main-game-area">
+        
+        <div class="game-placeholder">
+            <h2>GAME ARENA</h2>
+            <p>Paste your match simulation code inside the "game-container" div in index.html</p>
+            <br>
+            <button style="padding: 15px 30px; background: #00ccff; border:none; font-weight:bold; cursor:pointer;">START MATCH (Example)</button>
         </div>
-        <div class="stat-card">
-            <div class="stat-label">Career Wins</div>
-            <div class="stat-value" id="stat-wins">---</div>
+
         </div>
-        <div class="stat-card">
-            <div class="stat-label">Career Losses</div>
-            <div class="stat-value" id="stat-losses">---</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-label">Country</div>
-            <div class="stat-value" id="stat-country" style="font-size: 2rem;">---</div>
-        </div>
-    </div>
 
     <script>
-        // 1. GET USERNAME FROM STORAGE
+        // 1. LOAD USER DATA
         const storedName = localStorage.getItem('isf_username');
-        document.getElementById('display-name').innerText = storedName;
+        if(storedName) document.getElementById('display-name').innerText = storedName;
 
-        // 2. FETCH REAL STATS FROM FIREBASE
+        // 2. LIVE FIREBASE CONNECTION (Updates stats automatically)
         auth.onAuthStateChanged((user) => {
             if (user) {
-                // User is logged in, pull their data
                 const userRef = db.ref('users/' + user.uid);
-                
                 userRef.on('value', (snapshot) => {
                     const data = snapshot.val();
                     if(data) {
                         document.getElementById('stat-elo').innerText = data.elo || 1000;
                         document.getElementById('stat-wins').innerText = data.wins || 0;
                         document.getElementById('stat-losses').innerText = data.losses || 0;
-                        
-                        // Handle Country Flag (Assuming you saved the code like 'USA')
-                        if(data.country) {
-                            // You can make this an image later, for now just the text code
-                            document.getElementById('stat-country').innerText = data.country;
-                        }
+                        document.getElementById('stat-country').innerText = data.country || "---";
                     }
                 });
-            } else {
-                // If Firebase thinks they aren't logged in, kick them out
-                window.location.href = 'login.html';
             }
         });
 
-        // 3. LOGOUT FUNCTION
+        // 3. LOGOUT
         function logout() {
             auth.signOut().then(() => {
                 localStorage.clear();
                 window.location.href = 'login.html';
+            });
+        }
+        
+        // 4. FUNCTION TO UPDATE STATS AFTER A GAME (Call this from your game code!)
+        function recordGameResult(isWin) {
+            const user = auth.currentUser;
+            if(!user) return;
+
+            const userRef = db.ref('users/' + user.uid);
+            
+            // Use a transaction to safely update stats
+            userRef.transaction((currentData) => {
+                if (currentData) {
+                    if (isWin) {
+                        currentData.wins = (currentData.wins || 0) + 1;
+                        currentData.elo = (currentData.elo || 1000) + 25; // Gain points
+                    } else {
+                        currentData.losses = (currentData.losses || 0) + 1;
+                        currentData.elo = (currentData.elo || 1000) - 25; // Lose points
+                    }
+                }
+                return currentData;
             });
         }
     </script>
