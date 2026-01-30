@@ -14,8 +14,8 @@
         
         <nav class="sidebar-left">
             <div class="logo-area-sidebar">
-    <img src="assets/ISF_ONLINE.png" alt="ISF Online" class="sidebar-logo">
-</div>
+                <img src="assets/ISF_ONLINE.png" alt="ISF Online" class="sidebar-logo">
+            </div>
 
             <ul class="nav-links">
                 <li class="active"><a href="#">Home</a></li>
@@ -39,15 +39,40 @@
 
         <aside class="sidebar-right">
             
-            <div class="auth-row">
-                <button class="btn-guest">PLAY AS<br>GUEST</button>
-                <button class="btn-login-blue">LOG IN</button>
-                <button class="btn-signup-gray">SIGN UP</button>
+            <div class="auth-wrapper" id="sidebar-auth-area">
+    
+                <div id="state-buttons" class="auth-row fade-in">
+                    <button class="btn-guest" onclick="showGuestInput()">PLAY AS<br>GUEST</button>
+                    <button class="btn-login-blue" onclick="window.location.href='login.html'">LOG IN</button>
+                    <button class="btn-signup-gray" onclick="window.location.href='signup.html'">SIGN UP</button>
+                </div>
+            
+                <div id="state-input" class="auth-row hidden">
+                    <input type="text" id="guest-sidebar-name" class="lobby-input" placeholder="NICKNAME" maxlength="10" 
+                           style="width: 100%; text-align: center; text-transform: uppercase; margin-bottom: 8px;">
+                    
+                    <div style="display: flex; gap: 5px; width: 100%;">
+                        <button class="btn-signup-gray" style="flex:1; padding: 8px;" onclick="cancelGuestInput()">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                        <button class="btn-login-blue" style="flex:1; padding: 8px;" onclick="confirmGuestLogin()">
+                            <i class="fa-solid fa-check"></i>
+                        </button>
+                    </div>
+                </div>
+            
+                <div id="state-profile" class="auth-row hidden" style="flex-direction: column; align-items: center; gap: 5px;">
+                    <div style="color: #888; font-size: 0.8rem;">PLAYING AS</div>
+                    <div id="sidebar-display-name" style="color: #00BFFF; font-weight: 900; font-size: 1.2rem; text-transform: uppercase; margin-bottom: 5px;">GUEST</div>
+                    <button onclick="logoutGuest()" style="background: transparent; border: 1px solid #333; color: #ff4444; border-radius: 4px; padding: 5px 15px; cursor: pointer; font-size: 0.8rem;">
+                        LOG OUT
+                    </button>
+                </div>
+            
             </div>
-
             <div class="modes-grid">
                 
-                <div class="mode-box" onclick="window.location.href='multiplayer-setup.html'">
+                <div class="mode-box" onclick="hostMatch()"> 
                     <div class="mode-icon">
                         <i class="fa-solid fa-handshake"></i>
                     </div>
