@@ -17,32 +17,36 @@
     <script src="elo-engine.js"></script>
 </head>
 <body class="game-body" ondragstart="return false;" ondrop="return false;">
+
     <div class="bottom-left-actions">
-    <button class="btn-action-small btn-quit" onclick="quitMatch()">
-        <i class="fa-solid fa-door-open"></i> Quit Match
-    </button>
-</div>
+        <button class="btn-action-small btn-quit" onclick="quitMatch()">
+            <i class="fa-solid fa-door-open"></i> Quit Match
+        </button>
+    </div>
+
     <div id="scoreboard-widget" class="scoreboard-widget">
-    <div class="sb-header">
-        <span>PLAYER</span>
-        <span>ROUNDS</span>
-        <span>SLAPS</span>
+        <div class="sb-header">
+            <span>PLAYER</span>
+            <span>ROUNDS</span>
+            <span>SLAPS</span>
+        </div>
+        <div class="sb-row">
+            <span id="sb-p1-name">You</span>
+            <span id="sb-p1-rounds">0</span>
+            <span id="sb-p1-slaps">0</span>
+        </div>
+        <div class="sb-row">
+            <span id="sb-p2-name">AI</span>
+            <span id="sb-p2-rounds">0</span>
+            <span id="sb-p2-slaps">0</span>
+        </div>
     </div>
-    <div class="sb-row">
-        <span id="sb-p1-name">You</span>
-        <span id="sb-p1-rounds">0</span>
-        <span id="sb-p1-slaps">0</span>
+
+    <div class="ui-widget-left" style="top: 20%; left: 20px;">
+        <span id="opponent-display-name" class="stat-label">OPPONENT</span>
+        <div class="stat-value text-red" id="score-ai">26</div>
+        <div class="penalty-box" id="ai-penalties"></div>
     </div>
-    <div class="sb-row">
-        <span id="sb-p2-name">AI</span>
-        <span id="sb-p2-rounds">0</span>
-        <span id="sb-p2-slaps">0</span>
-    </div>
-</div> <div class="ui-widget-left" style="top: 20%; left: 20px;">
-    <span id="opponent-display-name" class="stat-label">OPPONENT</span>
-    <div class="stat-value text-red" id="score-ai">26</div>
-    <div class="penalty-box" id="ai-penalties"></div>
-</div>
 
     <div class="ui-widget-right" style="top: 20%; right: 20px;">
         <span class="stat-label">YOU</span>
@@ -84,78 +88,17 @@
         </div>
         <div class="foundation-box player-box" id="player-foundation-area"></div>
     </div>
-<div id="rematch-modal" class="message-modal hidden" style="z-index: 5000; margin-top: 200px;">
-    <h1>REMATCH?</h1>
-    <p>Your opponent wants to play again.</p>
-    <div style="display:flex; gap:15px; justify-content:center; margin-top:20px;">
-        <button class="btn-action-small" onclick="acceptRematch()" style="background:#66ff66; color:#000;">YES</button>
-        <button class="btn-action-small" onclick="declineRematch()" style="background:#ff4444;">NO</button>
+
+    <div id="rematch-modal" class="message-modal hidden" style="z-index: 5000; margin-top: 200px;">
+        <h1>REMATCH?</h1>
+        <p>Your opponent wants to play again.</p>
+        <div style="display:flex; gap:15px; justify-content:center; margin-top:20px;">
+            <button class="btn-action-small" onclick="acceptRematch()" style="background:#66ff66; color:#000;">YES</button>
+            <button class="btn-action-small" onclick="declineRematch()" style="background:#ff4444;">NO</button>
+        </div>
     </div>
-</div>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
-<script src="firebase-init.js"></script>
-<script>
-    /**
-     * REPORTS THE MATCH RESULT TO FIREBASE
-     * This function is called by multiplayer-game.js when the match ends.
-     */
-    function reportMatchResult(opponentElo, opponentGameCount, isWin) {
-        
-        // 1. Check if user is logged in
-        const user = firebase.auth().currentUser;
-        if (!user) {
-            console.error("ELO ERROR: No user logged in.");
-            return;
-        }
-
-        console.log(`REPORTING MATCH... Opponent ELO: ${opponentElo}, Win: ${isWin}`);
-
-        const userRef = firebase.database().ref('users/' + user.uid);
-
-        // 2. Run the Transaction (Safe Update)
-        userRef.transaction((userData) => {
-            if (userData) {
-                // Get current stats (default to 1000 if missing)
-                const currentElo = userData.elo || 1000;
-                const wins = userData.wins || 0;
-                const losses = userData.losses || 0;
-                const myGameCount = wins + losses;
-
-                // 3. Calculate New ELO 
-                // (Uses the function from elo-engine.js)
-                const newElo = calculateNewElo(
-                    currentElo, 
-                    opponentElo, 
-                    isWin, 
-                    myGameCount, 
-                    opponentGameCount 
-                );
-
-                // 4. Save Data
-                userData.elo = newElo;
-                if (isWin) {
-                    userData.wins = wins + 1;
-                } else {
-                    userData.losses = losses + 1;
-                }
-                
-                return userData;
-            }
-            return userData;
-        }, (error, committed, snapshot) => {
-            if (error) {
-                console.error("Transaction failed abnormally!", error);
-            } else if (committed) {
-                console.log("Stats Saved! New ELO:", snapshot.val().elo);
-            }
-        });
-    }
-</script>
-
-<script src="multiplayer-game.js"></script>
+    <script src="multiplayer-game.js"></script>
 
 </body>
 </html>
