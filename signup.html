@@ -874,7 +874,6 @@
         function togglePasswordVisibility() {
             const passInput = document.getElementById('su-pass');
             const icon = document.querySelector('.toggle-password');
-            
             if (passInput.type === "password") {
                 passInput.type = "text";
                 icon.classList.remove('fa-eye');
@@ -892,18 +891,12 @@
         }
 
         function selectOption(value, imgSrc, text) {
-            // Update the UI
             const trigger = document.getElementById('select-trigger');
             trigger.innerHTML = `<div style="display:flex; align-items:center;"><img src="${imgSrc}" class="flag-icon"> ${text}</div><span class="arrow">▼</span>`;
-            
-            // Set the hidden value
             document.getElementById('su-country').value = value;
-            
-            // Close dropdown
             document.getElementById('custom-options').classList.remove('open');
         }
 
-        // Close dropdown if clicking outside
         window.addEventListener('click', function(e) {
             const wrapper = document.querySelector('.custom-select-wrapper');
             if (!wrapper.contains(e.target)) {
@@ -911,36 +904,50 @@
             }
         });
 
-        // --- SIGN UP LOGIC ---
+        // --- DEBUG SIGN UP LOGIC ---
         document.getElementById('signup-form').addEventListener('submit', async function(e) {
             e.preventDefault();
-            
+            console.log("Button Clicked"); // Check console if possible
+
+            // 1. Check if Firebase is loaded
+            if (typeof auth === 'undefined') {
+                alert("CRITICAL ERROR: Firebase is not connected! Check your firebase-init.js file.");
+                return;
+            }
+
             const fname = document.getElementById('su-fname').value.trim();
             const lname = document.getElementById('su-lname').value.trim();
             const username = document.getElementById('su-username').value.trim().toUpperCase();
-            const country = document.getElementById('su-country').value; // Gets the hidden value
+            const country = document.getElementById('su-country').value; 
             const email = document.getElementById('su-email').value.trim();
             const pass = document.getElementById('su-pass').value;
 
+            // 2. Validate Inputs
             if(!country) {
-                showError("Please select a country.");
+                alert("Please select a country from the dropdown.");
                 return;
             }
             if(username.length < 3) {
-                showError("Username must be at least 3 characters.");
+                alert("Username must be at least 3 characters.");
                 return;
             }
 
+            alert("Data looks good... contacting Firebase...");
+
+            // 3. Create User
             auth.createUserWithEmailAndPassword(email, pass)
                 .then((userCredential) => {
                     const user = userCredential.user;
+                    alert("Account Created! ID: " + user.uid + ". Now saving profile...");
+
                     user.updateProfile({ displayName: username });
 
+                    // 4. Save to Database
                     db.ref('users/' + user.uid).set({
                         username: username,
                         firstName: fname,
                         lastName: lname,
-                        country: country, // Saves 'USA', 'GBR', etc.
+                        country: country, 
                         email: email,
                         elo: 1000,
                         wins: 0,
@@ -949,20 +956,17 @@
                     }).then(() => {
                         localStorage.setItem('isf_username', username);
                         localStorage.setItem('isf_is_guest', 'false');
-                        alert("Profile Created! Welcome to the ISF, " + fname + ".");
+                        alert("SUCCESS! Profile saved.");
                         window.location.href = 'index.html';
+                    })
+                    .catch((dbError) => {
+                        alert("DATABASE ERROR: " + dbError.message + "\nDid you enable the Database in 'Test Mode'?");
                     });
                 })
-                .catch((error) => {
-                    showError(error.message);
+                .catch((authError) => {
+                    alert("SIGN UP ERROR: " + authError.message);
                 });
         });
-
-        function showError(msg) {
-            const el = document.getElementById('error-text');
-            el.innerText = msg;
-            el.style.display = "block";
-        }
     </script>
 </body>
 </html>
