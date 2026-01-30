@@ -4,6 +4,7 @@
    - Guest Visual Mirroring
    - Phase 1 & 2 Stalemate Logic Implemented
    ========================================= */
+
 /* ================================
    ELO SYSTEM SETUP
    ================================ */
@@ -21,7 +22,8 @@ function fetchEnemyStats(enemyId) {
     
     // Check if Firebase is loaded
     if (!window.db) {
-        console.error("Firebase Database not found! Make sure firebase-init.js is loaded.");
+        console.warn("Firebase Database not ready yet. Retrying in 500ms...");
+        setTimeout(() => fetchEnemyStats(enemyId), 500);
         return;
     }
 
@@ -36,32 +38,35 @@ function fetchEnemyStats(enemyId) {
             } else {
                 console.log("Enemy not found in database. Using default stats.");
             }
-        });
+        })
+        .catch(err => console.error("Error fetching stats:", err));
 }
 
 // ---------------------------------------------------------
-// FETCH ENEMY STATS ON LOAD
-// We use the room code/host ID logic to determine the opponent ID
+// WAIT FOR PAGE LOAD AND FIREBASE
 // ---------------------------------------------------------
-window.addEventListener('load', () => {
-   // If I am the host, the opponent ID is not in the URL/localStorage easily
-   // We will need to grab it from the handshake or a different method later.
-   // For now, if you are the Joiner, the 'hostId' is the opponent.
-   
-   const role = (localStorage.getItem('isf_role') || '').toLowerCase();
-   const hostId = (localStorage.getItem('isf_code') || '').trim();
-   
-   if (role === 'joiner' && hostId) {
-       fetchEnemyStats(hostId);
-   }
-   // Note: Hosts currently don't know the Joiner's ID until the connection is made.
-   // You might want to pass the ID in the 'HANDSHAKE' message if you want full 2-way ELO.
-});
+window.onload = function () {
+    document.addEventListener('keydown', handleInput);
 
-/* =========================================
-   MULTIPLAYER GAME.JS (Human vs Human)
-   ... existing code starts here ...
-*/
+    const pDeck = document.getElementById('player-draw-deck');
+    if (pDeck) pDeck.onclick = handlePlayerDeckClick;
+
+    updateScoreboardWidget();
+    
+    // Start the game logic
+    initMultiplayer();
+
+    // Try to fetch enemy stats if we are the Joiner
+    // We delay this slightly to let Firebase initialize
+    setTimeout(() => {
+        const role = (localStorage.getItem('isf_role') || '').toLowerCase();
+        const hostId = (localStorage.getItem('isf_code') || '').trim();
+        
+        if (role === 'joiner' && hostId) {
+            fetchEnemyStats(hostId);
+        }
+    }, 1000);
+};
 const gameState = {
     // Deck/hand state
     playerDeck: [],
