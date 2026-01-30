@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ISF Online - Sign Up</title>
+    <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -25,14 +26,35 @@
         .auth-input { width: 100%; background: #151515; border: 1px solid #333; color: white; padding: 12px; font-size: 1rem; border-radius: 5px; box-sizing: border-box; transition: 0.3s; }
         .auth-input:focus { outline: none; border-color: #00ccff; box-shadow: 0 0 15px rgba(0, 204, 255, 0.1); }
         
+        /* --- PASSWORD EYE STYLES --- */
+        .password-wrapper { position: relative; width: 100%; }
+        .toggle-password {
+            position: absolute;
+            right: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #666;
+            cursor: pointer;
+            z-index: 10;
+        }
+        .toggle-password:hover { color: #00ccff; }
+
         /* --- CUSTOM FLAG DROPDOWN STYLES --- */
         .custom-select-wrapper { position: relative; user-select: none; cursor: pointer; }
         .custom-select-trigger { display: flex; align-items: center; justify-content: space-between; background: #151515; border: 1px solid #333; border-radius: 5px; padding: 10px; color: white; transition: 0.3s; }
         .custom-select-trigger:hover { border-color: #555; }
         .flag-icon { width: 24px; height: auto; margin-right: 10px; border-radius: 2px; }
         .arrow { font-size: 0.8rem; color: #00ccff; }
-        .custom-options { position: absolute; top: 100%; left: 0; right: 0; background: #0a0a0a; border: 1px solid #333; border-top: none; border-radius: 0 0 5px 5px; z-index: 100; display: none; max-height: 200px; overflow-y: auto; }
+        
+        /* The Dropdown List */
+        .custom-options { 
+            position: absolute; top: 100%; left: 0; right: 0; 
+            background: #0a0a0a; border: 1px solid #333; border-top: none; 
+            border-radius: 0 0 5px 5px; z-index: 100; 
+            display: none; max-height: 200px; overflow-y: auto; 
+        }
         .custom-options.open { display: block; }
+        
         .custom-option { padding: 10px; display: flex; align-items: center; color: #ccc; transition: 0.2s; }
         .custom-option:hover { background: #151515; color: white; }
         .custom-option img { width: 24px; margin-right: 10px; }
@@ -42,18 +64,6 @@
         .alt-link { display: block; margin-top: 15px; color: #666; text-decoration: none; font-size: 0.9rem; }
         .alt-link span { color: #00ccff; font-weight: bold; }
         .error-msg { color: #ff4444; font-size: 0.85rem; margin-top: 10px; display: none; }
-        /* --- PASSWORD EYE STYLES --- */
-.password-wrapper { position: relative; width: 100%; }
-.toggle-password {
-    position: absolute;
-    right: 15px;
-    top: 50%;
-    transform: translateY(-50%);
-    color: #666;
-    cursor: pointer;
-    z-index: 10;
-}
-.toggle-password:hover { color: #00ccff; }
     </style>
 </head>
 <body>
@@ -89,768 +99,766 @@
                 <input type="hidden" id="su-country" required>
 
                 <div class="custom-select-wrapper" onclick="toggleDropdown()">
-    
-    <div class="custom-select-trigger" id="select-trigger">
-        <span id="trigger-text">Select Nation...</span>
-        <span class="arrow">▼</span>
-    </div>
-    
-    <div class="custom-options" id="custom-options">
-        
-        <div class="custom-option" onclick="selectOption('ABK', 'assets/flags/Abkhazia.png', 'Abkhazia')">
-            <img src="assets/flags/Abkhazia.png" alt="ABK"> Abkhazia
-        </div>
-<div class="custom-option" onclick="selectOption('AFG', 'assets/flags/Afghanistan.png', 'Afghanistan')">
-    <img src="assets/flags/Afghanistan.png" alt="AFG"> Afghanistan
-</div>
-<div class="custom-option" onclick="selectOption('ALA', 'assets/flags/ÅlandIslands.png', 'Åland Islands')">
-    <img src="assets/flags/ÅlandIslands.png" alt="ALA"> Åland Islands
-</div>
-<div class="custom-option" onclick="selectOption('ALB', 'assets/flags/Albania.png', 'Albania')">
-    <img src="assets/flags/Albania.png" alt="ALB"> Albania
-</div>
-<div class="custom-option" onclick="selectOption('DZA', 'assets/flags/Algeria.png', 'Algeria')">
-    <img src="assets/flags/Algeria.png" alt="DZA"> Algeria
-</div>
-<div class="custom-option" onclick="selectOption('ASM', 'assets/flags/AmericanSamoa.png', 'American Samoa')">
-    <img src="assets/flags/AmericanSamoa.png" alt="ASM"> American Samoa
-</div>
-<div class="custom-option" onclick="selectOption('AND', 'assets/flags/Andorra.png', 'Andorra')">
-    <img src="assets/flags/Andorra.png" alt="AND"> Andorra
-</div>
-<div class="custom-option" onclick="selectOption('AGO', 'assets/flags/Angola.png', 'Angola')">
-    <img src="assets/flags/Angola.png" alt="AGO"> Angola
-</div>
-<div class="custom-option" onclick="selectOption('AIA', 'assets/flags/Anguilla.png', 'Anguilla')">
-    <img src="assets/flags/Anguilla.png" alt="AIA"> Anguilla
-</div>
-<div class="custom-option" onclick="selectOption('ATG', 'assets/flags/AntiguaandBarbuda.png', 'Antigua and Barbuda')">
-    <img src="assets/flags/AntiguaandBarbuda.png" alt="ATG"> Antigua and Barbuda
-</div>
-<div class="custom-option" onclick="selectOption('ARG', 'assets/flags/Argentina.png', 'Argentina')">
-    <img src="assets/flags/Argentina.png" alt="ARG"> Argentina
-</div>
-<div class="custom-option" onclick="selectOption('ARM', 'assets/flags/Armenia.png', 'Armenia')">
-    <img src="assets/flags/Armenia.png" alt="ARM"> Armenia
-</div>
-<div class="custom-option" onclick="selectOption('ABW', 'assets/flags/Aruba.png', 'Aruba')">
-    <img src="assets/flags/Aruba.png" alt="ABW"> Aruba
-</div>
-<div class="custom-option" onclick="selectOption('AUS', 'assets/flags/Australia.png', 'Australia')">
-    <img src="assets/flags/Australia.png" alt="AUS"> Australia
-</div>
-<div class="custom-option" onclick="selectOption('AUT', 'assets/flags/Austria.png', 'Austria')">
-    <img src="assets/flags/Austria.png" alt="AUT"> Austria
-</div>
-<div class="custom-option" onclick="selectOption('AZE', 'assets/flags/Azerbaijan.png', 'Azerbaijan')">
-    <img src="assets/flags/Azerbaijan.png" alt="AZE"> Azerbaijan
-</div>
-<div class="custom-option" onclick="selectOption('BHS', 'assets/flags/Bahamas.png', 'Bahamas')">
-    <img src="assets/flags/Bahamas.png" alt="BHS"> Bahamas
-</div>
-<div class="custom-option" onclick="selectOption('BHR', 'assets/flags/Bahrain.png', 'Bahrain')">
-    <img src="assets/flags/Bahrain.png" alt="BHR"> Bahrain
-</div>
-<div class="custom-option" onclick="selectOption('BGD', 'assets/flags/Bangladesh.png', 'Bangladesh')">
-    <img src="assets/flags/Bangladesh.png" alt="BGD"> Bangladesh
-</div>
-<div class="custom-option" onclick="selectOption('BRB', 'assets/flags/Barbados.png', 'Barbados')">
-    <img src="assets/flags/Barbados.png" alt="BRB"> Barbados
-</div>
-<div class="custom-option" onclick="selectOption('BLR', 'assets/flags/Belarus.png', 'Belarus')">
-    <img src="assets/flags/Belarus.png" alt="BLR"> Belarus
-</div>
-<div class="custom-option" onclick="selectOption('BEL', 'assets/flags/Belgium.png', 'Belgium')">
-    <img src="assets/flags/Belgium.png" alt="BEL"> Belgium
-</div>
-<div class="custom-option" onclick="selectOption('BLZ', 'assets/flags/Belize.png', 'Belize')">
-    <img src="assets/flags/Belize.png" alt="BLZ"> Belize
-</div>
-<div class="custom-option" onclick="selectOption('BEN', 'assets/flags/Benin.png', 'Benin')">
-    <img src="assets/flags/Benin.png" alt="BEN"> Benin
-</div>
-<div class="custom-option" onclick="selectOption('BMU', 'assets/flags/Bermuda.png', 'Bermuda')">
-    <img src="assets/flags/Bermuda.png" alt="BMU"> Bermuda
-</div>
-<div class="custom-option" onclick="selectOption('BTN', 'assets/flags/Bhutan.png', 'Bhutan')">
-    <img src="assets/flags/Bhutan.png" alt="BTN"> Bhutan
-</div>
-<div class="custom-option" onclick="selectOption('BOL', 'assets/flags/Bolivia.png', 'Bolivia')">
-    <img src="assets/flags/Bolivia.png" alt="BOL"> Bolivia
-</div>
-<div class="custom-option" onclick="selectOption('BOE', 'assets/flags/Bonaire.png', 'Bonaire')">
-    <img src="assets/flags/Bonaire.png" alt="BOE"> Bonaire
-</div>
-<div class="custom-option" onclick="selectOption('BIH', 'assets/flags/BosniaandHerzegovina.png', 'Bosnia and Herzegovina')">
-    <img src="assets/flags/BosniaandHerzegovina.png" alt="BIH"> Bosnia and Herzegovina
-</div>
-<div class="custom-option" onclick="selectOption('BWA', 'assets/flags/Botswana.png', 'Botswana')">
-    <img src="assets/flags/Botswana.png" alt="BWA"> Botswana
-</div>
-<div class="custom-option" onclick="selectOption('BRA', 'assets/flags/Brazil.png', 'Brazil')">
-    <img src="assets/flags/Brazil.png" alt="BRA"> Brazil
-</div>
-<div class="custom-option" onclick="selectOption('VGB', 'assets/flags/BritishVirginIslands.png', 'British Virgin Islands')">
-    <img src="assets/flags/BritishVirginIslands.png" alt="VGB"> British Virgin Islands
-</div>
-<div class="custom-option" onclick="selectOption('BRN', 'assets/flags/Brunei.png', 'Brunei')">
-    <img src="assets/flags/Brunei.png" alt="BRN"> Brunei
-</div>
-<div class="custom-option" onclick="selectOption('BGR', 'assets/flags/Bulgaria.png', 'Bulgaria')">
-    <img src="assets/flags/Bulgaria.png" alt="BGR"> Bulgaria
-</div>
-<div class="custom-option" onclick="selectOption('BFA', 'assets/flags/BurkinaFaso.png', 'Burkina Faso')">
-    <img src="assets/flags/BurkinaFaso.png" alt="BFA"> Burkina Faso
-</div>
-<div class="custom-option" onclick="selectOption('BDI', 'assets/flags/Burundi.png', 'Burundi')">
-    <img src="assets/flags/Burundi.png" alt="BDI"> Burundi
-</div>
-<div class="custom-option" onclick="selectOption('KHM', 'assets/flags/Cambodia.png', 'Cambodia')">
-    <img src="assets/flags/Cambodia.png" alt="KHM"> Cambodia
-</div>
-<div class="custom-option" onclick="selectOption('CMR', 'assets/flags/Cameroon.png', 'Cameroon')">
-    <img src="assets/flags/Cameroon.png" alt="CMR"> Cameroon
-</div>
-<div class="custom-option" onclick="selectOption('CAN', 'assets/flags/Canada.png', 'Canada')">
-    <img src="assets/flags/Canada.png" alt="CAN"> Canada
-</div>
-<div class="custom-option" onclick="selectOption('CPV', 'assets/flags/CapeVerde.png', 'Cape Verde')">
-    <img src="assets/flags/CapeVerde.png" alt="CPV"> Cape Verde
-</div>
-<div class="custom-option" onclick="selectOption('CYM', 'assets/flags/CaymanIslands.png', 'Cayman Islands')">
-    <img src="assets/flags/CaymanIslands.png" alt="CYM"> Cayman Islands
-</div>
-<div class="custom-option" onclick="selectOption('CAF', 'assets/flags/CentralAfricanRepublic.png', 'Central African Republic')">
-    <img src="assets/flags/CentralAfricanRepublic.png" alt="CAF"> Central African Republic
-</div>
-<div class="custom-option" onclick="selectOption('TCD', 'assets/flags/Chad.png', 'Chad')">
-    <img src="assets/flags/Chad.png" alt="TCD"> Chad
-</div>
-<div class="custom-option" onclick="selectOption('CHL', 'assets/flags/Chile.png', 'Chile')">
-    <img src="assets/flags/Chile.png" alt="CHL"> Chile
-</div>
-<div class="custom-option" onclick="selectOption('CHN', 'assets/flags/China.png', 'China')">
-    <img src="assets/flags/China.png" alt="CHN"> China
-</div>
-<div class="custom-option" onclick="selectOption('CXR', 'assets/flags/ChristmasIsland.png', 'Christmas Island')">
-    <img src="assets/flags/ChristmasIsland.png" alt="CXR"> Christmas Island
-</div>
-<div class="custom-option" onclick="selectOption('CCK', 'assets/flags/CocosIslands.png', 'Cocos Islands')">
-    <img src="assets/flags/CocosIslands.png" alt="CCK"> Cocos Islands
-</div>
-<div class="custom-option" onclick="selectOption('COL', 'assets/flags/Colombia.png', 'Colombia')">
-    <img src="assets/flags/Colombia.png" alt="COL"> Colombia
-</div>
-<div class="custom-option" onclick="selectOption('COM', 'assets/flags/Comoros.png', 'Comoros')">
-    <img src="assets/flags/Comoros.png" alt="COM"> Comoros
-</div>
-<div class="custom-option" onclick="selectOption('COG', 'assets/flags/Congo.png', 'Congo')">
-    <img src="assets/flags/Congo.png" alt="COG"> Congo
-</div>
-<div class="custom-option" onclick="selectOption('COK', 'assets/flags/CookIslands.png', 'Cook Islands')">
-    <img src="assets/flags/CookIslands.png" alt="COK"> Cook Islands
-</div>
-<div class="custom-option" onclick="selectOption('CRI', 'assets/flags/CostaRica.png', 'Costa Rica')">
-    <img src="assets/flags/CostaRica.png" alt="CRI"> Costa Rica
-</div>
-<div class="custom-option" onclick="selectOption('HRV', 'assets/flags/Croatia.png', 'Croatia')">
-    <img src="assets/flags/Croatia.png" alt="HRV"> Croatia
-</div>
-<div class="custom-option" onclick="selectOption('CUB', 'assets/flags/Cuba.png', 'Cuba')">
-    <img src="assets/flags/Cuba.png" alt="CUB"> Cuba
-</div>
-<div class="custom-option" onclick="selectOption('CUW', 'assets/flags/Curaçao.png', 'Curaçao')">
-    <img src="assets/flags/Curaçao.png" alt="CUW"> Curaçao
-</div>
-<div class="custom-option" onclick="selectOption('CYP', 'assets/flags/Cyprus.png', 'Cyprus')">
-    <img src="assets/flags/Cyprus.png" alt="CYP"> Cyprus
-</div>
-<div class="custom-option" onclick="selectOption('CZE', 'assets/flags/Czechia.png', 'Czechia')">
-    <img src="assets/flags/Czechia.png" alt="CZE"> Czechia
-</div>
-<div class="custom-option" onclick="selectOption('COD', 'assets/flags/DemocraticRepublicoftheCongo.png', 'Democratic Republic of the Congo')">
-    <img src="assets/flags/DemocraticRepublicoftheCongo.png" alt="COD"> Democratic Republic of the Congo
-</div>
-<div class="custom-option" onclick="selectOption('DNK', 'assets/flags/Denmark.png', 'Denmark')">
-    <img src="assets/flags/Denmark.png" alt="DNK"> Denmark
-</div>
-<div class="custom-option" onclick="selectOption('DJI', 'assets/flags/Djibouti.png', 'Djibouti')">
-    <img src="assets/flags/Djibouti.png" alt="DJI"> Djibouti
-</div>
-<div class="custom-option" onclick="selectOption('DMA', 'assets/flags/Dominica.png', 'Dominica')">
-    <img src="assets/flags/Dominica.png" alt="DMA"> Dominica
-</div>
-<div class="custom-option" onclick="selectOption('DOM', 'assets/flags/DominicanRepublic.png', 'Dominican Republic')">
-    <img src="assets/flags/DominicanRepublic.png" alt="DOM"> Dominican Republic
-</div>
-<div class="custom-option" onclick="selectOption('ECU', 'assets/flags/Ecuador.png', 'Ecuador')">
-    <img src="assets/flags/Ecuador.png" alt="ECU"> Ecuador
-</div>
-<div class="custom-option" onclick="selectOption('EGY', 'assets/flags/Egypt.png', 'Egypt')">
-    <img src="assets/flags/Egypt.png" alt="EGY"> Egypt
-</div>
-<div class="custom-option" onclick="selectOption('SLV', 'assets/flags/ElSalvador.png', 'El Salvador')">
-    <img src="assets/flags/ElSalvador.png" alt="SLV"> El Salvador
-</div>
-<div class="custom-option" onclick="selectOption('GNQ', 'assets/flags/EquatorialGuinea.png', 'Equatorial Guinea')">
-    <img src="assets/flags/EquatorialGuinea.png" alt="GNQ"> Equatorial Guinea
-</div>
-<div class="custom-option" onclick="selectOption('ERI', 'assets/flags/Eritrea.png', 'Eritrea')">
-    <img src="assets/flags/Eritrea.png" alt="ERI"> Eritrea
-</div>
-<div class="custom-option" onclick="selectOption('EST', 'assets/flags/Estonia.png', 'Estonia')">
-    <img src="assets/flags/Estonia.png" alt="EST"> Estonia
-</div>
-<div class="custom-option" onclick="selectOption('SWZ', 'assets/flags/Eswatini.png', 'Eswatini')">
-    <img src="assets/flags/Eswatini.png" alt="SWZ"> Eswatini
-</div>
-<div class="custom-option" onclick="selectOption('ETH', 'assets/flags/Ethiopia.png', 'Ethiopia')">
-    <img src="assets/flags/Ethiopia.png" alt="ETH"> Ethiopia
-</div>
-<div class="custom-option" onclick="selectOption('FLK', 'assets/flags/FalklandIslands.png', 'Falkland Islands')">
-    <img src="assets/flags/FalklandIslands.png" alt="FLK"> Falkland Islands
-</div>
-<div class="custom-option" onclick="selectOption('FRO', 'assets/flags/FaroeIslands.png', 'Faroe Islands')">
-    <img src="assets/flags/FaroeIslands.png" alt="FRO"> Faroe Islands
-</div>
-<div class="custom-option" onclick="selectOption('FJI', 'assets/flags/Fiji.png', 'Fiji')">
-    <img src="assets/flags/Fiji.png" alt="FJI"> Fiji
-</div>
-<div class="custom-option" onclick="selectOption('FIN', 'assets/flags/Finland.png', 'Finland')">
-    <img src="assets/flags/Finland.png" alt="FIN"> Finland
-</div>
-<div class="custom-option" onclick="selectOption('FRA', 'assets/flags/France.png', 'France')">
-    <img src="assets/flags/France.png" alt="FRA"> France
-</div>
-<div class="custom-option" onclick="selectOption('GUF', 'assets/flags/FrenchGuiana.png', 'French Guiana')">
-    <img src="assets/flags/FrenchGuiana.png" alt="GUF"> French Guiana
-</div>
-<div class="custom-option" onclick="selectOption('PYF', 'assets/flags/FrenchPolynesia.png', 'French Polynesia')">
-    <img src="assets/flags/FrenchPolynesia.png" alt="PYF"> French Polynesia
-</div>
-<div class="custom-option" onclick="selectOption('GAB', 'assets/flags/Gabon.png', 'Gabon')">
-    <img src="assets/flags/Gabon.png" alt="GAB"> Gabon
-</div>
-<div class="custom-option" onclick="selectOption('GMB', 'assets/flags/Gambia.png', 'Gambia')">
-    <img src="assets/flags/Gambia.png" alt="GMB"> Gambia
-</div>
-<div class="custom-option" onclick="selectOption('GEO', 'assets/flags/Georgia.png', 'Georgia')">
-    <img src="assets/flags/Georgia.png" alt="GEO"> Georgia
-</div>
-<div class="custom-option" onclick="selectOption('DEU', 'assets/flags/Germany.png', 'Germany')">
-    <img src="assets/flags/Germany.png" alt="DEU"> Germany
-</div>
-<div class="custom-option" onclick="selectOption('GHA', 'assets/flags/Ghana.png', 'Ghana')">
-    <img src="assets/flags/Ghana.png" alt="GHA"> Ghana
-</div>
-<div class="custom-option" onclick="selectOption('GIB', 'assets/flags/Gibraltar.png', 'Gibraltar')">
-    <img src="assets/flags/Gibraltar.png" alt="GIB"> Gibraltar
-</div>
-<div class="custom-option" onclick="selectOption('GRC', 'assets/flags/Greece.png', 'Greece')">
-    <img src="assets/flags/Greece.png" alt="GRC"> Greece
-</div>
-<div class="custom-option" onclick="selectOption('GRL', 'assets/flags/Greenland.png', 'Greenland')">
-    <img src="assets/flags/Greenland.png" alt="GRL"> Greenland
-</div>
-<div class="custom-option" onclick="selectOption('GRD', 'assets/flags/Grenada.png', 'Grenada')">
-    <img src="assets/flags/Grenada.png" alt="GRD"> Grenada
-</div>
-<div class="custom-option" onclick="selectOption('GLP', 'assets/flags/Guadeloupe.png', 'Guadeloupe')">
-    <img src="assets/flags/Guadeloupe.png" alt="GLP"> Guadeloupe
-</div>
-<div class="custom-option" onclick="selectOption('GUM', 'assets/flags/Guam.png', 'Guam')">
-    <img src="assets/flags/Guam.png" alt="GUM"> Guam
-</div>
-<div class="custom-option" onclick="selectOption('GTM', 'assets/flags/Guatemala.png', 'Guatemala')">
-    <img src="assets/flags/Guatemala.png" alt="GTM"> Guatemala
-</div>
-<div class="custom-option" onclick="selectOption('GGY', 'assets/flags/Guernsey.png', 'Guernsey')">
-    <img src="assets/flags/Guernsey.png" alt="GGY"> Guernsey
-</div>
-<div class="custom-option" onclick="selectOption('GIN', 'assets/flags/Guinea.png', 'Guinea')">
-    <img src="assets/flags/Guinea.png" alt="GIN"> Guinea
-</div>
-<div class="custom-option" onclick="selectOption('GNB', 'assets/flags/Guinea-Bissau.png', 'Guinea-Bissau')">
-    <img src="assets/flags/Guinea-Bissau.png" alt="GNB"> Guinea-Bissau
-</div>
-<div class="custom-option" onclick="selectOption('GUY', 'assets/flags/Guyana.png', 'Guyana')">
-    <img src="assets/flags/Guyana.png" alt="GUY"> Guyana
-</div>
-<div class="custom-option" onclick="selectOption('HTI', 'assets/flags/Haiti.png', 'Haiti')">
-    <img src="assets/flags/Haiti.png" alt="HTI"> Haiti
-</div>
-<div class="custom-option" onclick="selectOption('HND', 'assets/flags/Honduras.png', 'Honduras')">
-    <img src="assets/flags/Honduras.png" alt="HND"> Honduras
-</div>
-<div class="custom-option" onclick="selectOption('HKG', 'assets/flags/HongKong.png', 'Hong Kong')">
-    <img src="assets/flags/HongKong.png" alt="HKG"> Hong Kong
-</div>
-<div class="custom-option" onclick="selectOption('HUN', 'assets/flags/Hungary.png', 'Hungary')">
-    <img src="assets/flags/Hungary.png" alt="HUN"> Hungary
-</div>
-<div class="custom-option" onclick="selectOption('ISL', 'assets/flags/Iceland.png', 'Iceland')">
-    <img src="assets/flags/Iceland.png" alt="ISL"> Iceland
-</div>
-<div class="custom-option" onclick="selectOption('IND', 'assets/flags/India.png', 'India')">
-    <img src="assets/flags/India.png" alt="IND"> India
-</div>
-<div class="custom-option" onclick="selectOption('IDN', 'assets/flags/Indonesia.png', 'Indonesia')">
-    <img src="assets/flags/Indonesia.png" alt="IDN"> Indonesia
-</div>
-<div class="custom-option" onclick="selectOption('IRN', 'assets/flags/Iran.png', 'Iran')">
-    <img src="assets/flags/Iran.png" alt="IRN"> Iran
-</div>
-<div class="custom-option" onclick="selectOption('IRQ', 'assets/flags/Iraq.png', 'Iraq')">
-    <img src="assets/flags/Iraq.png" alt="IRQ"> Iraq
-</div>
-<div class="custom-option" onclick="selectOption('IRL', 'assets/flags/Ireland.png', 'Ireland')">
-    <img src="assets/flags/Ireland.png" alt="IRL"> Ireland
-</div>
-<div class="custom-option" onclick="selectOption('IMN', 'assets/flags/IsleofMan.png', 'Isle of Man')">
-    <img src="assets/flags/IsleofMan.png" alt="IMN"> Isle of Man
-</div>
-<div class="custom-option" onclick="selectOption('ISR', 'assets/flags/Israel.png', 'Israel')">
-    <img src="assets/flags/Israel.png" alt="ISR"> Israel
-</div>
-<div class="custom-option" onclick="selectOption('ITA', 'assets/flags/Italy.png', 'Italy')">
-    <img src="assets/flags/Italy.png" alt="ITA"> Italy
-</div>
-<div class="custom-option" onclick="selectOption('CIV', 'assets/flags/IvoryCoast.png', 'Ivory Coast')">
-    <img src="assets/flags/IvoryCoast.png" alt="CIV"> Ivory Coast
-</div>
-<div class="custom-option" onclick="selectOption('JAM', 'assets/flags/Jamaica.png', 'Jamaica')">
-    <img src="assets/flags/Jamaica.png" alt="JAM"> Jamaica
-</div>
-<div class="custom-option" onclick="selectOption('JPN', 'assets/flags/Japan.png', 'Japan')">
-    <img src="assets/flags/Japan.png" alt="JPN"> Japan
-</div>
-<div class="custom-option" onclick="selectOption('JEY', 'assets/flags/Jersey.png', 'Jersey')">
-    <img src="assets/flags/Jersey.png" alt="JEY"> Jersey
-</div>
-<div class="custom-option" onclick="selectOption('JOR', 'assets/flags/Jordan.png', 'Jordan')">
-    <img src="assets/flags/Jordan.png" alt="JOR"> Jordan
-</div>
-<div class="custom-option" onclick="selectOption('KAZ', 'assets/flags/Kazakhstan.png', 'Kazakhstan')">
-    <img src="assets/flags/Kazakhstan.png" alt="KAZ"> Kazakhstan
-</div>
-<div class="custom-option" onclick="selectOption('KEN', 'assets/flags/Kenya.png', 'Kenya')">
-    <img src="assets/flags/Kenya.png" alt="KEN"> Kenya
-</div>
-<div class="custom-option" onclick="selectOption('KIR', 'assets/flags/Kiribati.png', 'Kiribati')">
-    <img src="assets/flags/Kiribati.png" alt="KIR"> Kiribati
-</div>
-<div class="custom-option" onclick="selectOption('KOS', 'assets/flags/Kosovo.png', 'Kosovo')">
-    <img src="assets/flags/Kosovo.png" alt="KOS"> Kosovo
-</div>
-<div class="custom-option" onclick="selectOption('KWT', 'assets/flags/Kuwait.png', 'Kuwait')">
-    <img src="assets/flags/Kuwait.png" alt="KWT"> Kuwait
-</div>
-<div class="custom-option" onclick="selectOption('KGZ', 'assets/flags/Kyrgyzstan.png', 'Kyrgyzstan')">
-    <img src="assets/flags/Kyrgyzstan.png" alt="KGZ"> Kyrgyzstan
-</div>
-<div class="custom-option" onclick="selectOption('LAO', 'assets/flags/Laos.png', 'Laos')">
-    <img src="assets/flags/Laos.png" alt="LAO"> Laos
-</div>
-<div class="custom-option" onclick="selectOption('LVA', 'assets/flags/Latvia.png', 'Latvia')">
-    <img src="assets/flags/Latvia.png" alt="LVA"> Latvia
-</div>
-<div class="custom-option" onclick="selectOption('LBN', 'assets/flags/Lebanon.png', 'Lebanon')">
-    <img src="assets/flags/Lebanon.png" alt="LBN"> Lebanon
-</div>
-<div class="custom-option" onclick="selectOption('LSO', 'assets/flags/Lesotho.png', 'Lesotho')">
-    <img src="assets/flags/Lesotho.png" alt="LSO"> Lesotho
-</div>
-<div class="custom-option" onclick="selectOption('LBR', 'assets/flags/Liberia.png', 'Liberia')">
-    <img src="assets/flags/Liberia.png" alt="LBR"> Liberia
-</div>
-<div class="custom-option" onclick="selectOption('LBY', 'assets/flags/Libya.png', 'Libya')">
-    <img src="assets/flags/Libya.png" alt="LBY"> Libya
-</div>
-<div class="custom-option" onclick="selectOption('LIE', 'assets/flags/Liechtenstein.png', 'Liechtenstein')">
-    <img src="assets/flags/Liechtenstein.png" alt="LIE"> Liechtenstein
-</div>
-<div class="custom-option" onclick="selectOption('LTU', 'assets/flags/Lithuania.png', 'Lithuania')">
-    <img src="assets/flags/Lithuania.png" alt="LTU"> Lithuania
-</div>
-<div class="custom-option" onclick="selectOption('LUX', 'assets/flags/Luxembourg.png', 'Luxembourg')">
-    <img src="assets/flags/Luxembourg.png" alt="LUX"> Luxembourg
-</div>
-<div class="custom-option" onclick="selectOption('MAC', 'assets/flags/Macau.png', 'Macau')">
-    <img src="assets/flags/Macau.png" alt="MAC"> Macau
-</div>
-<div class="custom-option" onclick="selectOption('MDG', 'assets/flags/Madagascar.png', 'Madagascar')">
-    <img src="assets/flags/Madagascar.png" alt="MDG"> Madagascar
-</div>
-<div class="custom-option" onclick="selectOption('MWI', 'assets/flags/Malawi.png', 'Malawi')">
-    <img src="assets/flags/Malawi.png" alt="MWI"> Malawi
-</div>
-<div class="custom-option" onclick="selectOption('MYS', 'assets/flags/Malaysia.png', 'Malaysia')">
-    <img src="assets/flags/Malaysia.png" alt="MYS"> Malaysia
-</div>
-<div class="custom-option" onclick="selectOption('MDV', 'assets/flags/Maldives.png', 'Maldives')">
-    <img src="assets/flags/Maldives.png" alt="MDV"> Maldives
-</div>
-<div class="custom-option" onclick="selectOption('MLI', 'assets/flags/Mali.png', 'Mali')">
-    <img src="assets/flags/Mali.png" alt="MLI"> Mali
-</div>
-<div class="custom-option" onclick="selectOption('MLT', 'assets/flags/Malta.png', 'Malta')">
-    <img src="assets/flags/Malta.png" alt="MLT"> Malta
-</div>
-<div class="custom-option" onclick="selectOption('MHL', 'assets/flags/MarshallIslands.png', 'Marshall Islands')">
-    <img src="assets/flags/MarshallIslands.png" alt="MHL"> Marshall Islands
-</div>
-<div class="custom-option" onclick="selectOption('MTQ', 'assets/flags/Martinique.png', 'Martinique')">
-    <img src="assets/flags/Martinique.png" alt="MTQ"> Martinique
-</div>
-<div class="custom-option" onclick="selectOption('MRT', 'assets/flags/Mauritania.png', 'Mauritania')">
-    <img src="assets/flags/Mauritania.png" alt="MRT"> Mauritania
-</div>
-<div class="custom-option" onclick="selectOption('MUS', 'assets/flags/Mauritius.png', 'Mauritius')">
-    <img src="assets/flags/Mauritius.png" alt="MUS"> Mauritius
-</div>
-<div class="custom-option" onclick="selectOption('MYT', 'assets/flags/Mayotte.png', 'Mayotte')">
-    <img src="assets/flags/Mayotte.png" alt="MYT"> Mayotte
-</div>
-<div class="custom-option" onclick="selectOption('MEX', 'assets/flags/Mexico.png', 'Mexico')">
-    <img src="assets/flags/Mexico.png" alt="MEX"> Mexico
-</div>
-<div class="custom-option" onclick="selectOption('FSM', 'assets/flags/Micronesia.png', 'Micronesia')">
-    <img src="assets/flags/Micronesia.png" alt="FSM"> Micronesia
-</div>
-<div class="custom-option" onclick="selectOption('MDA', 'assets/flags/Moldova.png', 'Moldova')">
-    <img src="assets/flags/Moldova.png" alt="MDA"> Moldova
-</div>
-<div class="custom-option" onclick="selectOption('MCO', 'assets/flags/Monaco.png', 'Monaco')">
-    <img src="assets/flags/Monaco.png" alt="MCO"> Monaco
-</div>
-<div class="custom-option" onclick="selectOption('MNG', 'assets/flags/Mongolia.png', 'Mongolia')">
-    <img src="assets/flags/Mongolia.png" alt="MNG"> Mongolia
-</div>
-<div class="custom-option" onclick="selectOption('MNE', 'assets/flags/Montenegro.png', 'Montenegro')">
-    <img src="assets/flags/Montenegro.png" alt="MNE"> Montenegro
-</div>
-<div class="custom-option" onclick="selectOption('MSR', 'assets/flags/Montserrat.png', 'Montserrat')">
-    <img src="assets/flags/Montserrat.png" alt="MSR"> Montserrat
-</div>
-<div class="custom-option" onclick="selectOption('MAR', 'assets/flags/Morocco.png', 'Morocco')">
-    <img src="assets/flags/Morocco.png" alt="MAR"> Morocco
-</div>
-<div class="custom-option" onclick="selectOption('MOZ', 'assets/flags/Mozambique.png', 'Mozambique')">
-    <img src="assets/flags/Mozambique.png" alt="MOZ"> Mozambique
-</div>
-<div class="custom-option" onclick="selectOption('MMR', 'assets/flags/Myanmar.png', 'Myanmar')">
-    <img src="assets/flags/Myanmar.png" alt="MMR"> Myanmar
-</div>
-<div class="custom-option" onclick="selectOption('NAM', 'assets/flags/Namibia.png', 'Namibia')">
-    <img src="assets/flags/Namibia.png" alt="NAM"> Namibia
-</div>
-<div class="custom-option" onclick="selectOption('NRU', 'assets/flags/Nauru.png', 'Nauru')">
-    <img src="assets/flags/Nauru.png" alt="NRU"> Nauru
-</div>
-<div class="custom-option" onclick="selectOption('NPL', 'assets/flags/Nepal.png', 'Nepal')">
-    <img src="assets/flags/Nepal.png" alt="NPL"> Nepal
-</div>
-<div class="custom-option" onclick="selectOption('NLD', 'assets/flags/Netherlands.png', 'Netherlands')">
-    <img src="assets/flags/Netherlands.png" alt="NLD"> Netherlands
-</div>
-<div class="custom-option" onclick="selectOption('NCL', 'assets/flags/NewCaledonia.png', 'New Caledonia')">
-    <img src="assets/flags/NewCaledonia.png" alt="NCL"> New Caledonia
-</div>
-<div class="custom-option" onclick="selectOption('NZL', 'assets/flags/NewZealand.png', 'New Zealand')">
-    <img src="assets/flags/NewZealand.png" alt="NZL"> New Zealand
-</div>
-<div class="custom-option" onclick="selectOption('NIC', 'assets/flags/Nicaragua.png', 'Nicaragua')">
-    <img src="assets/flags/Nicaragua.png" alt="NIC"> Nicaragua
-</div>
-<div class="custom-option" onclick="selectOption('NER', 'assets/flags/Niger.png', 'Niger')">
-    <img src="assets/flags/Niger.png" alt="NER"> Niger
-</div>
-<div class="custom-option" onclick="selectOption('NGA', 'assets/flags/Nigeria.png', 'Nigeria')">
-    <img src="assets/flags/Nigeria.png" alt="NGA"> Nigeria
-</div>
-<div class="custom-option" onclick="selectOption('NIU', 'assets/flags/Niue.png', 'Niue')">
-    <img src="assets/flags/Niue.png" alt="NIU"> Niue
-</div>
-<div class="custom-option" onclick="selectOption('NFK', 'assets/flags/NorfolkIsland.png', 'Norfolk Island')">
-    <img src="assets/flags/NorfolkIsland.png" alt="NFK"> Norfolk Island
-</div>
-<div class="custom-option" onclick="selectOption('PRK', 'assets/flags/NorthKorea.png', 'North Korea')">
-    <img src="assets/flags/NorthKorea.png" alt="PRK"> North Korea
-</div>
-<div class="custom-option" onclick="selectOption('MKD', 'assets/flags/NorthMacedonia.png', 'North Macedonia')">
-    <img src="assets/flags/NorthMacedonia.png" alt="MKD"> North Macedonia
-</div>
-<div class="custom-option" onclick="selectOption('NCY', 'assets/flags/NorthernCyprus.png', 'Northern Cyprus')">
-    <img src="assets/flags/NorthernCyprus.png" alt="NCY"> Northern Cyprus
-</div>
-<div class="custom-option" onclick="selectOption('MNP', 'assets/flags/NorthernMarianaIslands.png', 'Northern Mariana Islands')">
-    <img src="assets/flags/NorthernMarianaIslands.png" alt="MNP"> Northern Mariana Islands
-</div>
-<div class="custom-option" onclick="selectOption('NOR', 'assets/flags/Norway.png', 'Norway')">
-    <img src="assets/flags/Norway.png" alt="NOR"> Norway
-</div>
-<div class="custom-option" onclick="selectOption('OMN', 'assets/flags/Oman.png', 'Oman')">
-    <img src="assets/flags/Oman.png" alt="OMN"> Oman
-</div>
-<div class="custom-option" onclick="selectOption('PAK', 'assets/flags/Pakistan.png', 'Pakistan')">
-    <img src="assets/flags/Pakistan.png" alt="PAK"> Pakistan
-</div>
-<div class="custom-option" onclick="selectOption('PLW', 'assets/flags/Palau.png', 'Palau')">
-    <img src="assets/flags/Palau.png" alt="PLW"> Palau
-</div>
-<div class="custom-option" onclick="selectOption('PSE', 'assets/flags/Palestine.png', 'Palestine')">
-    <img src="assets/flags/Palestine.png" alt="PSE"> Palestine
-</div>
-<div class="custom-option" onclick="selectOption('PAN', 'assets/flags/Panama.png', 'Panama')">
-    <img src="assets/flags/Panama.png" alt="PAN"> Panama
-</div>
-<div class="custom-option" onclick="selectOption('PNG', 'assets/flags/PapuaNewGuinea.png', 'Papua New Guinea')">
-    <img src="assets/flags/PapuaNewGuinea.png" alt="PNG"> Papua New Guinea
-</div>
-<div class="custom-option" onclick="selectOption('PRY', 'assets/flags/Paraguay.png', 'Paraguay')">
-    <img src="assets/flags/Paraguay.png" alt="PRY"> Paraguay
-</div>
-<div class="custom-option" onclick="selectOption('PER', 'assets/flags/Peru.png', 'Peru')">
-    <img src="assets/flags/Peru.png" alt="PER"> Peru
-</div>
-<div class="custom-option" onclick="selectOption('PHL', 'assets/flags/Philippines.png', 'Philippines')">
-    <img src="assets/flags/Philippines.png" alt="PHL"> Philippines
-</div>
-<div class="custom-option" onclick="selectOption('PCN', 'assets/flags/PitcairnIslands.png', 'Pitcairn Islands')">
-    <img src="assets/flags/PitcairnIslands.png" alt="PCN"> Pitcairn Islands
-</div>
-<div class="custom-option" onclick="selectOption('POL', 'assets/flags/Poland.png', 'Poland')">
-    <img src="assets/flags/Poland.png" alt="POL"> Poland
-</div>
-<div class="custom-option" onclick="selectOption('PRT', 'assets/flags/Portugal.png', 'Portugal')">
-    <img src="assets/flags/Portugal.png" alt="PRT"> Portugal
-</div>
-<div class="custom-option" onclick="selectOption('PRI', 'assets/flags/PuertoRico.png', 'Puerto Rico')">
-    <img src="assets/flags/PuertoRico.png" alt="PRI"> Puerto Rico
-</div>
-<div class="custom-option" onclick="selectOption('QAT', 'assets/flags/Qatar.png', 'Qatar')">
-    <img src="assets/flags/Qatar.png" alt="QAT"> Qatar
-</div>
-<div class="custom-option" onclick="selectOption('REU', 'assets/flags/Réunion.png', 'Réunion')">
-    <img src="assets/flags/Réunion.png" alt="REU"> Réunion
-</div>
-<div class="custom-option" onclick="selectOption('ROU', 'assets/flags/Romania.png', 'Romania')">
-    <img src="assets/flags/Romania.png" alt="ROU"> Romania
-</div>
-<div class="custom-option" onclick="selectOption('RUS', 'assets/flags/Russia.png', 'Russia')">
-    <img src="assets/flags/Russia.png" alt="RUS"> Russia
-</div>
-<div class="custom-option" onclick="selectOption('RWA', 'assets/flags/Rwanda.png', 'Rwanda')">
-    <img src="assets/flags/Rwanda.png" alt="RWA"> Rwanda
-</div>
-<div class="custom-option" onclick="selectOption('SAB', 'assets/flags/Saba.png', 'Saba')">
-    <img src="assets/flags/Saba.png" alt="SAB"> Saba
-</div>
-<div class="custom-option" onclick="selectOption('BLM', 'assets/flags/SaintBarthélemy.png', 'Saint Barthélemy')">
-    <img src="assets/flags/SaintBarthélemy.png" alt="BLM"> Saint Barthélemy
-</div>
-<div class="custom-option" onclick="selectOption('KNA', 'assets/flags/SaintKittsandNevis.png', 'Saint Kitts and Nevis')">
-    <img src="assets/flags/SaintKittsandNevis.png" alt="KNA"> Saint Kitts and Nevis
-</div>
-<div class="custom-option" onclick="selectOption('LCA', 'assets/flags/SaintLucia.png', 'Saint Lucia')">
-    <img src="assets/flags/SaintLucia.png" alt="LCA"> Saint Lucia
-</div>
-<div class="custom-option" onclick="selectOption('MAF', 'assets/flags/SaintMartin.png', 'Saint Martin')">
-    <img src="assets/flags/SaintMartin.png" alt="MAF"> Saint Martin
-</div>
-<div class="custom-option" onclick="selectOption('VCT', 'assets/flags/SaintVincentandtheGrenadines.png', 'Saint Vincent and the Grenadines')">
-    <img src="assets/flags/SaintVincentandtheGrenadines.png" alt="VCT"> Saint Vincent and the Grenadines
-</div>
-<div class="custom-option" onclick="selectOption('WSM', 'assets/flags/Samoa.png', 'Samoa')">
-    <img src="assets/flags/Samoa.png" alt="WSM"> Samoa
-</div>
-<div class="custom-option" onclick="selectOption('SMR', 'assets/flags/SanMarino.png', 'San Marino')">
-    <img src="assets/flags/SanMarino.png" alt="SMR"> San Marino
-</div>
-<div class="custom-option" onclick="selectOption('STP', 'assets/flags/SãoToméandPríncipe.png', 'São Tomé and Príncipe')">
-    <img src="assets/flags/SãoToméandPríncipe.png" alt="STP"> São Tomé and Príncipe
-</div>
-<div class="custom-option" onclick="selectOption('SAU', 'assets/flags/SaudiArabia.png', 'Saudi Arabia')">
-    <img src="assets/flags/SaudiArabia.png" alt="SAU"> Saudi Arabia
-</div>
-<div class="custom-option" onclick="selectOption('SEN', 'assets/flags/Senegal.png', 'Senegal')">
-    <img src="assets/flags/Senegal.png" alt="SEN"> Senegal
-</div>
-<div class="custom-option" onclick="selectOption('SRB', 'assets/flags/Serbia.png', 'Serbia')">
-    <img src="assets/flags/Serbia.png" alt="SRB"> Serbia
-</div>
-<div class="custom-option" onclick="selectOption('SYC', 'assets/flags/Seychelles.png', 'Seychelles')">
-    <img src="assets/flags/Seychelles.png" alt="SYC"> Seychelles
-</div>
-<div class="custom-option" onclick="selectOption('SLE', 'assets/flags/SierraLeone.png', 'Sierra Leone')">
-    <img src="assets/flags/SierraLeone.png" alt="SLE"> Sierra Leone
-</div>
-<div class="custom-option" onclick="selectOption('SGP', 'assets/flags/Singapore.png', 'Singapore')">
-    <img src="assets/flags/Singapore.png" alt="SGP"> Singapore
-</div>
-<div class="custom-option" onclick="selectOption('EUX', 'assets/flags/SintEustatius.png', 'Sint Eustatius')">
-    <img src="assets/flags/SintEustatius.png" alt="EUX"> Sint Eustatius
-</div>
-<div class="custom-option" onclick="selectOption('SXM', 'assets/flags/SintMaarten.png', 'Sint Maarten')">
-    <img src="assets/flags/SintMaarten.png" alt="SXM"> Sint Maarten
-</div>
-<div class="custom-option" onclick="selectOption('SVK', 'assets/flags/Slovakia.png', 'Slovakia')">
-    <img src="assets/flags/Slovakia.png" alt="SVK"> Slovakia
-</div>
-<div class="custom-option" onclick="selectOption('SVN', 'assets/flags/Slovenia.png', 'Slovenia')">
-    <img src="assets/flags/Slovenia.png" alt="SVN"> Slovenia
-</div>
-<div class="custom-option" onclick="selectOption('SLB', 'assets/flags/SolomonIslands.png', 'Solomon Islands')">
-    <img src="assets/flags/SolomonIslands.png" alt="SLB"> Solomon Islands
-</div>
-<div class="custom-option" onclick="selectOption('SOM', 'assets/flags/Somalia.png', 'Somalia')">
-    <img src="assets/flags/Somalia.png" alt="SOM"> Somalia
-</div>
-<div class="custom-option" onclick="selectOption('ZAF', 'assets/flags/SouthAfrica.png', 'South Africa')">
-    <img src="assets/flags/SouthAfrica.png" alt="ZAF"> South Africa
-</div>
-<div class="custom-option" onclick="selectOption('KOR', 'assets/flags/SouthKorea.png', 'South Korea')">
-    <img src="assets/flags/SouthKorea.png" alt="KOR"> South Korea
-</div>
-<div class="custom-option" onclick="selectOption('OST', 'assets/flags/SouthOssetia.png', 'South Ossetia')">
-    <img src="assets/flags/SouthOssetia.png" alt="OST"> South Ossetia
-</div>
-<div class="custom-option" onclick="selectOption('SSD', 'assets/flags/SouthSudan.png', 'South Sudan')">
-    <img src="assets/flags/SouthSudan.png" alt="SSD"> South Sudan
-</div>
-<div class="custom-option" onclick="selectOption('ESP', 'assets/flags/Spain.png', 'Spain')">
-    <img src="assets/flags/Spain.png" alt="ESP"> Spain
-</div>
-<div class="custom-option" onclick="selectOption('LKA', 'assets/flags/SriLanka.png', 'Sri Lanka')">
-    <img src="assets/flags/SriLanka.png" alt="LKA"> Sri Lanka
-</div>
-<div class="custom-option" onclick="selectOption('SDN', 'assets/flags/Sudan.png', 'Sudan')">
-    <img src="assets/flags/Sudan.png" alt="SDN"> Sudan
-</div>
-<div class="custom-option" onclick="selectOption('SUR', 'assets/flags/Suriname.png', 'Suriname')">
-    <img src="assets/flags/Suriname.png" alt="SUR"> Suriname
-</div>
-<div class="custom-option" onclick="selectOption('SWE', 'assets/flags/Sweden.png', 'Sweden')">
-    <img src="assets/flags/Sweden.png" alt="SWE"> Sweden
-</div>
-<div class="custom-option" onclick="selectOption('CHE', 'assets/flags/Switzerland.png', 'Switzerland')">
-    <img src="assets/flags/Switzerland.png" alt="CHE"> Switzerland
-</div>
-<div class="custom-option" onclick="selectOption('SYR', 'assets/flags/Syria.png', 'Syria')">
-    <img src="assets/flags/Syria.png" alt="SYR"> Syria
-</div>
-<div class="custom-option" onclick="selectOption('TWN', 'assets/flags/Taiwan.png', 'Taiwan')">
-    <img src="assets/flags/Taiwan.png" alt="TWN"> Taiwan
-</div>
-<div class="custom-option" onclick="selectOption('TJK', 'assets/flags/Tajikistan.png', 'Tajikistan')">
-    <img src="assets/flags/Tajikistan.png" alt="TJK"> Tajikistan
-</div>
-<div class="custom-option" onclick="selectOption('TZA', 'assets/flags/Tanzania.png', 'Tanzania')">
-    <img src="assets/flags/Tanzania.png" alt="TZA"> Tanzania
-</div>
-<div class="custom-option" onclick="selectOption('THA', 'assets/flags/Thailand.png', 'Thailand')">
-    <img src="assets/flags/Thailand.png" alt="THA"> Thailand
-</div>
-<div class="custom-option" onclick="selectOption('TLS', 'assets/flags/Timor-Leste.png', 'Timor-Leste')">
-    <img src="assets/flags/Timor-Leste.png" alt="TLS"> Timor-Leste
-</div>
-<div class="custom-option" onclick="selectOption('TGO', 'assets/flags/Togo.png', 'Togo')">
-    <img src="assets/flags/Togo.png" alt="TGO"> Togo
-</div>
-<div class="custom-option" onclick="selectOption('TKL', 'assets/flags/Tokelau.png', 'Tokelau')">
-    <img src="assets/flags/Tokelau.png" alt="TKL"> Tokelau
-</div>
-<div class="custom-option" onclick="selectOption('TON', 'assets/flags/Tonga.png', 'Tonga')">
-    <img src="assets/flags/Tonga.png" alt="TON"> Tonga
-</div>
-<div class="custom-option" onclick="selectOption('PMR', 'assets/flags/Transnistria.png', 'Transnistria')">
-    <img src="assets/flags/Transnistria.png" alt="PMR"> Transnistria
-</div>
-<div class="custom-option" onclick="selectOption('TTO', 'assets/flags/TrinidadandTobago.png', 'Trinidad and Tobago')">
-    <img src="assets/flags/TrinidadandTobago.png" alt="TTO"> Trinidad and Tobago
-</div>
-<div class="custom-option" onclick="selectOption('TUN', 'assets/flags/Tunisia.png', 'Tunisia')">
-    <img src="assets/flags/Tunisia.png" alt="TUN"> Tunisia
-</div>
-<div class="custom-option" onclick="selectOption('TUR', 'assets/flags/Türkiye.png', 'Türkiye')">
-    <img src="assets/flags/Türkiye.png" alt="TUR"> Türkiye
-</div>
-<div class="custom-option" onclick="selectOption('TKM', 'assets/flags/Turkmenistan.png', 'Turkmenistan')">
-    <img src="assets/flags/Turkmenistan.png" alt="TKM"> Turkmenistan
-</div>
-<div class="custom-option" onclick="selectOption('TCA', 'assets/flags/TurksandCaicosIslands.png', 'Turks and Caicos Islands')">
-    <img src="assets/flags/TurksandCaicosIslands.png" alt="TCA"> Turks and Caicos Islands
-</div>
-<div class="custom-option" onclick="selectOption('TUV', 'assets/flags/Tuvalu.png', 'Tuvalu')">
-    <img src="assets/flags/Tuvalu.png" alt="TUV"> Tuvalu
-</div>
-<div class="custom-option" onclick="selectOption('VIR', 'assets/flags/U.S.VirginIslands.png', 'U.S. Virgin Islands')">
-    <img src="assets/flags/U.S.VirginIslands.png" alt="VIR"> U.S. Virgin Islands
-</div>
-<div class="custom-option" onclick="selectOption('UGA', 'assets/flags/Uganda.png', 'Uganda')">
-    <img src="assets/flags/Uganda.png" alt="UGA"> Uganda
-</div>
-<div class="custom-option" onclick="selectOption('UKR', 'assets/flags/Ukraine.png', 'Ukraine')">
-    <img src="assets/flags/Ukraine.png" alt="UKR"> Ukraine
-</div>
-<div class="custom-option" onclick="selectOption('ARE', 'assets/flags/UnitedArabEmirates.png', 'United Arab Emirates')">
-    <img src="assets/flags/UnitedArabEmirates.png" alt="ARE"> United Arab Emirates
-</div>
-<div class="custom-option" onclick="selectOption('GBR', 'assets/flags/UnitedKingdom.png', 'United Kingdom')">
-    <img src="assets/flags/UnitedKingdom.png" alt="GBR"> United Kingdom
-</div>
-<div class="custom-option" onclick="selectOption('USA', 'assets/flags/UnitedStatesofAmerica.png', 'United States of America')">
-    <img src="assets/flags/UnitedStatesofAmerica.png" alt="USA"> United States of America
-</div>
-<div class="custom-option" onclick="selectOption('URY', 'assets/flags/Uruguay.png', 'Uruguay')">
-    <img src="assets/flags/Uruguay.png" alt="URY"> Uruguay
-</div>
-<div class="custom-option" onclick="selectOption('UZB', 'assets/flags/Uzbekistan.png', 'Uzbekistan')">
-    <img src="assets/flags/Uzbekistan.png" alt="UZB"> Uzbekistan
-</div>
-<div class="custom-option" onclick="selectOption('VUT', 'assets/flags/Vanuatu.png', 'Vanuatu')">
-    <img src="assets/flags/Vanuatu.png" alt="VUT"> Vanuatu
-</div>
-<div class="custom-option" onclick="selectOption('VAT', 'assets/flags/VaticanCity.png', 'Vatican City')">
-    <img src="assets/flags/VaticanCity.png" alt="VAT"> Vatican City
-</div>
-<div class="custom-option" onclick="selectOption('VEN', 'assets/flags/Venezuela.png', 'Venezuela')">
-    <img src="assets/flags/Venezuela.png" alt="VEN"> Venezuela
-</div>
-<div class="custom-option" onclick="selectOption('VNM', 'assets/flags/Vietnam.png', 'Vietnam')">
-    <img src="assets/flags/Vietnam.png" alt="VNM"> Vietnam
-</div>
-<div class="custom-option" onclick="selectOption('WLF', 'assets/flags/WallisandFutuna.png', 'Wallis and Futuna')">
-    <img src="assets/flags/WallisandFutuna.png" alt="WLF"> Wallis and Futuna
-</div>
-<div class="custom-option" onclick="selectOption('ESH', 'assets/flags/WesternSahara.png', 'Western Sahara')">
-    <img src="assets/flags/WesternSahara.png" alt="ESH"> Western Sahara
-</div>
-<div class="custom-option" onclick="selectOption('YEM', 'assets/flags/Yemen.png', 'Yemen')">
-    <img src="assets/flags/Yemen.png" alt="YEM"> Yemen
-</div>
-<div class="custom-option" onclick="selectOption('ZMB', 'assets/flags/Zambia.png', 'Zambia')">
-    <img src="assets/flags/Zambia.png" alt="ZMB"> Zambia
-</div>
-<div class="custom-option" onclick="selectOption('ZWE', 'assets/flags/Zimbabwe.png', 'Zimbabwe')">
-    <img src="assets/flags/Zimbabwe.png" alt="ZWE"> Zimbabwe
-</div>
+                    <div class="custom-select-trigger" id="select-trigger">
+                        <span id="trigger-text">Select Nation...</span>
+                        <span class="arrow">▼</span>
+                    </div>
+                    
+                    <div class="custom-options" id="custom-options">
+                        <div class="custom-option" onclick="selectOption('ABK', 'assets/flags/Abkhazia.png', 'Abkhazia')">
+                            <img src="assets/flags/Abkhazia.png" alt="ABK"> Abkhazia
+                        </div>
+                        <div class="custom-option" onclick="selectOption('AFG', 'assets/flags/Afghanistan.png', 'Afghanistan')">
+                            <img src="assets/flags/Afghanistan.png" alt="AFG"> Afghanistan
+                        </div>
+                        <div class="custom-option" onclick="selectOption('ALA', 'assets/flags/ÅlandIslands.png', 'Åland Islands')">
+                            <img src="assets/flags/ÅlandIslands.png" alt="ALA"> Åland Islands
+                        </div>
+                        <div class="custom-option" onclick="selectOption('ALB', 'assets/flags/Albania.png', 'Albania')">
+                            <img src="assets/flags/Albania.png" alt="ALB"> Albania
+                        </div>
+                        <div class="custom-option" onclick="selectOption('DZA', 'assets/flags/Algeria.png', 'Algeria')">
+                            <img src="assets/flags/Algeria.png" alt="DZA"> Algeria
+                        </div>
+                        <div class="custom-option" onclick="selectOption('ASM', 'assets/flags/AmericanSamoa.png', 'American Samoa')">
+                            <img src="assets/flags/AmericanSamoa.png" alt="ASM"> American Samoa
+                        </div>
+                        <div class="custom-option" onclick="selectOption('AND', 'assets/flags/Andorra.png', 'Andorra')">
+                            <img src="assets/flags/Andorra.png" alt="AND"> Andorra
+                        </div>
+                        <div class="custom-option" onclick="selectOption('AGO', 'assets/flags/Angola.png', 'Angola')">
+                            <img src="assets/flags/Angola.png" alt="AGO"> Angola
+                        </div>
+                        <div class="custom-option" onclick="selectOption('AIA', 'assets/flags/Anguilla.png', 'Anguilla')">
+                            <img src="assets/flags/Anguilla.png" alt="AIA"> Anguilla
+                        </div>
+                        <div class="custom-option" onclick="selectOption('ATG', 'assets/flags/AntiguaandBarbuda.png', 'Antigua and Barbuda')">
+                            <img src="assets/flags/AntiguaandBarbuda.png" alt="ATG"> Antigua and Barbuda
+                        </div>
+                        <div class="custom-option" onclick="selectOption('ARG', 'assets/flags/Argentina.png', 'Argentina')">
+                            <img src="assets/flags/Argentina.png" alt="ARG"> Argentina
+                        </div>
+                        <div class="custom-option" onclick="selectOption('ARM', 'assets/flags/Armenia.png', 'Armenia')">
+                            <img src="assets/flags/Armenia.png" alt="ARM"> Armenia
+                        </div>
+                        <div class="custom-option" onclick="selectOption('ABW', 'assets/flags/Aruba.png', 'Aruba')">
+                            <img src="assets/flags/Aruba.png" alt="ABW"> Aruba
+                        </div>
+                        <div class="custom-option" onclick="selectOption('AUS', 'assets/flags/Australia.png', 'Australia')">
+                            <img src="assets/flags/Australia.png" alt="AUS"> Australia
+                        </div>
+                        <div class="custom-option" onclick="selectOption('AUT', 'assets/flags/Austria.png', 'Austria')">
+                            <img src="assets/flags/Austria.png" alt="AUT"> Austria
+                        </div>
+                        <div class="custom-option" onclick="selectOption('AZE', 'assets/flags/Azerbaijan.png', 'Azerbaijan')">
+                            <img src="assets/flags/Azerbaijan.png" alt="AZE"> Azerbaijan
+                        </div>
+                        <div class="custom-option" onclick="selectOption('BHS', 'assets/flags/Bahamas.png', 'Bahamas')">
+                            <img src="assets/flags/Bahamas.png" alt="BHS"> Bahamas
+                        </div>
+                        <div class="custom-option" onclick="selectOption('BHR', 'assets/flags/Bahrain.png', 'Bahrain')">
+                            <img src="assets/flags/Bahrain.png" alt="BHR"> Bahrain
+                        </div>
+                        <div class="custom-option" onclick="selectOption('BGD', 'assets/flags/Bangladesh.png', 'Bangladesh')">
+                            <img src="assets/flags/Bangladesh.png" alt="BGD"> Bangladesh
+                        </div>
+                        <div class="custom-option" onclick="selectOption('BRB', 'assets/flags/Barbados.png', 'Barbados')">
+                            <img src="assets/flags/Barbados.png" alt="BRB"> Barbados
+                        </div>
+                        <div class="custom-option" onclick="selectOption('BLR', 'assets/flags/Belarus.png', 'Belarus')">
+                            <img src="assets/flags/Belarus.png" alt="BLR"> Belarus
+                        </div>
+                        <div class="custom-option" onclick="selectOption('BEL', 'assets/flags/Belgium.png', 'Belgium')">
+                            <img src="assets/flags/Belgium.png" alt="BEL"> Belgium
+                        </div>
+                        <div class="custom-option" onclick="selectOption('BLZ', 'assets/flags/Belize.png', 'Belize')">
+                            <img src="assets/flags/Belize.png" alt="BLZ"> Belize
+                        </div>
+                        <div class="custom-option" onclick="selectOption('BEN', 'assets/flags/Benin.png', 'Benin')">
+                            <img src="assets/flags/Benin.png" alt="BEN"> Benin
+                        </div>
+                        <div class="custom-option" onclick="selectOption('BMU', 'assets/flags/Bermuda.png', 'Bermuda')">
+                            <img src="assets/flags/Bermuda.png" alt="BMU"> Bermuda
+                        </div>
+                        <div class="custom-option" onclick="selectOption('BTN', 'assets/flags/Bhutan.png', 'Bhutan')">
+                            <img src="assets/flags/Bhutan.png" alt="BTN"> Bhutan
+                        </div>
+                        <div class="custom-option" onclick="selectOption('BOL', 'assets/flags/Bolivia.png', 'Bolivia')">
+                            <img src="assets/flags/Bolivia.png" alt="BOL"> Bolivia
+                        </div>
+                        <div class="custom-option" onclick="selectOption('BOE', 'assets/flags/Bonaire.png', 'Bonaire')">
+                            <img src="assets/flags/Bonaire.png" alt="BOE"> Bonaire
+                        </div>
+                        <div class="custom-option" onclick="selectOption('BIH', 'assets/flags/BosniaandHerzegovina.png', 'Bosnia and Herzegovina')">
+                            <img src="assets/flags/BosniaandHerzegovina.png" alt="BIH"> Bosnia and Herzegovina
+                        </div>
+                        <div class="custom-option" onclick="selectOption('BWA', 'assets/flags/Botswana.png', 'Botswana')">
+                            <img src="assets/flags/Botswana.png" alt="BWA"> Botswana
+                        </div>
+                        <div class="custom-option" onclick="selectOption('BRA', 'assets/flags/Brazil.png', 'Brazil')">
+                            <img src="assets/flags/Brazil.png" alt="BRA"> Brazil
+                        </div>
+                        <div class="custom-option" onclick="selectOption('VGB', 'assets/flags/BritishVirginIslands.png', 'British Virgin Islands')">
+                            <img src="assets/flags/BritishVirginIslands.png" alt="VGB"> British Virgin Islands
+                        </div>
+                        <div class="custom-option" onclick="selectOption('BRN', 'assets/flags/Brunei.png', 'Brunei')">
+                            <img src="assets/flags/Brunei.png" alt="BRN"> Brunei
+                        </div>
+                        <div class="custom-option" onclick="selectOption('BGR', 'assets/flags/Bulgaria.png', 'Bulgaria')">
+                            <img src="assets/flags/Bulgaria.png" alt="BGR"> Bulgaria
+                        </div>
+                        <div class="custom-option" onclick="selectOption('BFA', 'assets/flags/BurkinaFaso.png', 'Burkina Faso')">
+                            <img src="assets/flags/BurkinaFaso.png" alt="BFA"> Burkina Faso
+                        </div>
+                        <div class="custom-option" onclick="selectOption('BDI', 'assets/flags/Burundi.png', 'Burundi')">
+                            <img src="assets/flags/Burundi.png" alt="BDI"> Burundi
+                        </div>
+                        <div class="custom-option" onclick="selectOption('KHM', 'assets/flags/Cambodia.png', 'Cambodia')">
+                            <img src="assets/flags/Cambodia.png" alt="KHM"> Cambodia
+                        </div>
+                        <div class="custom-option" onclick="selectOption('CMR', 'assets/flags/Cameroon.png', 'Cameroon')">
+                            <img src="assets/flags/Cameroon.png" alt="CMR"> Cameroon
+                        </div>
+                        <div class="custom-option" onclick="selectOption('CAN', 'assets/flags/Canada.png', 'Canada')">
+                            <img src="assets/flags/Canada.png" alt="CAN"> Canada
+                        </div>
+                        <div class="custom-option" onclick="selectOption('CPV', 'assets/flags/CapeVerde.png', 'Cape Verde')">
+                            <img src="assets/flags/CapeVerde.png" alt="CPV"> Cape Verde
+                        </div>
+                        <div class="custom-option" onclick="selectOption('CYM', 'assets/flags/CaymanIslands.png', 'Cayman Islands')">
+                            <img src="assets/flags/CaymanIslands.png" alt="CYM"> Cayman Islands
+                        </div>
+                        <div class="custom-option" onclick="selectOption('CAF', 'assets/flags/CentralAfricanRepublic.png', 'Central African Republic')">
+                            <img src="assets/flags/CentralAfricanRepublic.png" alt="CAF"> Central African Republic
+                        </div>
+                        <div class="custom-option" onclick="selectOption('TCD', 'assets/flags/Chad.png', 'Chad')">
+                            <img src="assets/flags/Chad.png" alt="TCD"> Chad
+                        </div>
+                        <div class="custom-option" onclick="selectOption('CHL', 'assets/flags/Chile.png', 'Chile')">
+                            <img src="assets/flags/Chile.png" alt="CHL"> Chile
+                        </div>
+                        <div class="custom-option" onclick="selectOption('CHN', 'assets/flags/China.png', 'China')">
+                            <img src="assets/flags/China.png" alt="CHN"> China
+                        </div>
+                        <div class="custom-option" onclick="selectOption('CXR', 'assets/flags/ChristmasIsland.png', 'Christmas Island')">
+                            <img src="assets/flags/ChristmasIsland.png" alt="CXR"> Christmas Island
+                        </div>
+                        <div class="custom-option" onclick="selectOption('CCK', 'assets/flags/CocosIslands.png', 'Cocos Islands')">
+                            <img src="assets/flags/CocosIslands.png" alt="CCK"> Cocos Islands
+                        </div>
+                        <div class="custom-option" onclick="selectOption('COL', 'assets/flags/Colombia.png', 'Colombia')">
+                            <img src="assets/flags/Colombia.png" alt="COL"> Colombia
+                        </div>
+                        <div class="custom-option" onclick="selectOption('COM', 'assets/flags/Comoros.png', 'Comoros')">
+                            <img src="assets/flags/Comoros.png" alt="COM"> Comoros
+                        </div>
+                        <div class="custom-option" onclick="selectOption('COG', 'assets/flags/Congo.png', 'Congo')">
+                            <img src="assets/flags/Congo.png" alt="COG"> Congo
+                        </div>
+                        <div class="custom-option" onclick="selectOption('COK', 'assets/flags/CookIslands.png', 'Cook Islands')">
+                            <img src="assets/flags/CookIslands.png" alt="COK"> Cook Islands
+                        </div>
+                        <div class="custom-option" onclick="selectOption('CRI', 'assets/flags/CostaRica.png', 'Costa Rica')">
+                            <img src="assets/flags/CostaRica.png" alt="CRI"> Costa Rica
+                        </div>
+                        <div class="custom-option" onclick="selectOption('HRV', 'assets/flags/Croatia.png', 'Croatia')">
+                            <img src="assets/flags/Croatia.png" alt="HRV"> Croatia
+                        </div>
+                        <div class="custom-option" onclick="selectOption('CUB', 'assets/flags/Cuba.png', 'Cuba')">
+                            <img src="assets/flags/Cuba.png" alt="CUB"> Cuba
+                        </div>
+                        <div class="custom-option" onclick="selectOption('CUW', 'assets/flags/Curaçao.png', 'Curaçao')">
+                            <img src="assets/flags/Curaçao.png" alt="CUW"> Curaçao
+                        </div>
+                        <div class="custom-option" onclick="selectOption('CYP', 'assets/flags/Cyprus.png', 'Cyprus')">
+                            <img src="assets/flags/Cyprus.png" alt="CYP"> Cyprus
+                        </div>
+                        <div class="custom-option" onclick="selectOption('CZE', 'assets/flags/Czechia.png', 'Czechia')">
+                            <img src="assets/flags/Czechia.png" alt="CZE"> Czechia
+                        </div>
+                        <div class="custom-option" onclick="selectOption('COD', 'assets/flags/DemocraticRepublicoftheCongo.png', 'Democratic Republic of the Congo')">
+                            <img src="assets/flags/DemocraticRepublicoftheCongo.png" alt="COD"> Democratic Republic of the Congo
+                        </div>
+                        <div class="custom-option" onclick="selectOption('DNK', 'assets/flags/Denmark.png', 'Denmark')">
+                            <img src="assets/flags/Denmark.png" alt="DNK"> Denmark
+                        </div>
+                        <div class="custom-option" onclick="selectOption('DJI', 'assets/flags/Djibouti.png', 'Djibouti')">
+                            <img src="assets/flags/Djibouti.png" alt="DJI"> Djibouti
+                        </div>
+                        <div class="custom-option" onclick="selectOption('DMA', 'assets/flags/Dominica.png', 'Dominica')">
+                            <img src="assets/flags/Dominica.png" alt="DMA"> Dominica
+                        </div>
+                        <div class="custom-option" onclick="selectOption('DOM', 'assets/flags/DominicanRepublic.png', 'Dominican Republic')">
+                            <img src="assets/flags/DominicanRepublic.png" alt="DOM"> Dominican Republic
+                        </div>
+                        <div class="custom-option" onclick="selectOption('ECU', 'assets/flags/Ecuador.png', 'Ecuador')">
+                            <img src="assets/flags/Ecuador.png" alt="ECU"> Ecuador
+                        </div>
+                        <div class="custom-option" onclick="selectOption('EGY', 'assets/flags/Egypt.png', 'Egypt')">
+                            <img src="assets/flags/Egypt.png" alt="EGY"> Egypt
+                        </div>
+                        <div class="custom-option" onclick="selectOption('SLV', 'assets/flags/ElSalvador.png', 'El Salvador')">
+                            <img src="assets/flags/ElSalvador.png" alt="SLV"> El Salvador
+                        </div>
+                        <div class="custom-option" onclick="selectOption('GNQ', 'assets/flags/EquatorialGuinea.png', 'Equatorial Guinea')">
+                            <img src="assets/flags/EquatorialGuinea.png" alt="GNQ"> Equatorial Guinea
+                        </div>
+                        <div class="custom-option" onclick="selectOption('ERI', 'assets/flags/Eritrea.png', 'Eritrea')">
+                            <img src="assets/flags/Eritrea.png" alt="ERI"> Eritrea
+                        </div>
+                        <div class="custom-option" onclick="selectOption('EST', 'assets/flags/Estonia.png', 'Estonia')">
+                            <img src="assets/flags/Estonia.png" alt="EST"> Estonia
+                        </div>
+                        <div class="custom-option" onclick="selectOption('SWZ', 'assets/flags/Eswatini.png', 'Eswatini')">
+                            <img src="assets/flags/Eswatini.png" alt="SWZ"> Eswatini
+                        </div>
+                        <div class="custom-option" onclick="selectOption('ETH', 'assets/flags/Ethiopia.png', 'Ethiopia')">
+                            <img src="assets/flags/Ethiopia.png" alt="ETH"> Ethiopia
+                        </div>
+                        <div class="custom-option" onclick="selectOption('FLK', 'assets/flags/FalklandIslands.png', 'Falkland Islands')">
+                            <img src="assets/flags/FalklandIslands.png" alt="FLK"> Falkland Islands
+                        </div>
+                        <div class="custom-option" onclick="selectOption('FRO', 'assets/flags/FaroeIslands.png', 'Faroe Islands')">
+                            <img src="assets/flags/FaroeIslands.png" alt="FRO"> Faroe Islands
+                        </div>
+                        <div class="custom-option" onclick="selectOption('FJI', 'assets/flags/Fiji.png', 'Fiji')">
+                            <img src="assets/flags/Fiji.png" alt="FJI"> Fiji
+                        </div>
+                        <div class="custom-option" onclick="selectOption('FIN', 'assets/flags/Finland.png', 'Finland')">
+                            <img src="assets/flags/Finland.png" alt="FIN"> Finland
+                        </div>
+                        <div class="custom-option" onclick="selectOption('FRA', 'assets/flags/France.png', 'France')">
+                            <img src="assets/flags/France.png" alt="FRA"> France
+                        </div>
+                        <div class="custom-option" onclick="selectOption('GUF', 'assets/flags/FrenchGuiana.png', 'French Guiana')">
+                            <img src="assets/flags/FrenchGuiana.png" alt="GUF"> French Guiana
+                        </div>
+                        <div class="custom-option" onclick="selectOption('PYF', 'assets/flags/FrenchPolynesia.png', 'French Polynesia')">
+                            <img src="assets/flags/FrenchPolynesia.png" alt="PYF"> French Polynesia
+                        </div>
+                        <div class="custom-option" onclick="selectOption('GAB', 'assets/flags/Gabon.png', 'Gabon')">
+                            <img src="assets/flags/Gabon.png" alt="GAB"> Gabon
+                        </div>
+                        <div class="custom-option" onclick="selectOption('GMB', 'assets/flags/Gambia.png', 'Gambia')">
+                            <img src="assets/flags/Gambia.png" alt="GMB"> Gambia
+                        </div>
+                        <div class="custom-option" onclick="selectOption('GEO', 'assets/flags/Georgia.png', 'Georgia')">
+                            <img src="assets/flags/Georgia.png" alt="GEO"> Georgia
+                        </div>
+                        <div class="custom-option" onclick="selectOption('DEU', 'assets/flags/Germany.png', 'Germany')">
+                            <img src="assets/flags/Germany.png" alt="DEU"> Germany
+                        </div>
+                        <div class="custom-option" onclick="selectOption('GHA', 'assets/flags/Ghana.png', 'Ghana')">
+                            <img src="assets/flags/Ghana.png" alt="GHA"> Ghana
+                        </div>
+                        <div class="custom-option" onclick="selectOption('GIB', 'assets/flags/Gibraltar.png', 'Gibraltar')">
+                            <img src="assets/flags/Gibraltar.png" alt="GIB"> Gibraltar
+                        </div>
+                        <div class="custom-option" onclick="selectOption('GRC', 'assets/flags/Greece.png', 'Greece')">
+                            <img src="assets/flags/Greece.png" alt="GRC"> Greece
+                        </div>
+                        <div class="custom-option" onclick="selectOption('GRL', 'assets/flags/Greenland.png', 'Greenland')">
+                            <img src="assets/flags/Greenland.png" alt="GRL"> Greenland
+                        </div>
+                        <div class="custom-option" onclick="selectOption('GRD', 'assets/flags/Grenada.png', 'Grenada')">
+                            <img src="assets/flags/Grenada.png" alt="GRD"> Grenada
+                        </div>
+                        <div class="custom-option" onclick="selectOption('GLP', 'assets/flags/Guadeloupe.png', 'Guadeloupe')">
+                            <img src="assets/flags/Guadeloupe.png" alt="GLP"> Guadeloupe
+                        </div>
+                        <div class="custom-option" onclick="selectOption('GUM', 'assets/flags/Guam.png', 'Guam')">
+                            <img src="assets/flags/Guam.png" alt="GUM"> Guam
+                        </div>
+                        <div class="custom-option" onclick="selectOption('GTM', 'assets/flags/Guatemala.png', 'Guatemala')">
+                            <img src="assets/flags/Guatemala.png" alt="GTM"> Guatemala
+                        </div>
+                        <div class="custom-option" onclick="selectOption('GGY', 'assets/flags/Guernsey.png', 'Guernsey')">
+                            <img src="assets/flags/Guernsey.png" alt="GGY"> Guernsey
+                        </div>
+                        <div class="custom-option" onclick="selectOption('GIN', 'assets/flags/Guinea.png', 'Guinea')">
+                            <img src="assets/flags/Guinea.png" alt="GIN"> Guinea
+                        </div>
+                        <div class="custom-option" onclick="selectOption('GNB', 'assets/flags/Guinea-Bissau.png', 'Guinea-Bissau')">
+                            <img src="assets/flags/Guinea-Bissau.png" alt="GNB"> Guinea-Bissau
+                        </div>
+                        <div class="custom-option" onclick="selectOption('GUY', 'assets/flags/Guyana.png', 'Guyana')">
+                            <img src="assets/flags/Guyana.png" alt="GUY"> Guyana
+                        </div>
+                        <div class="custom-option" onclick="selectOption('HTI', 'assets/flags/Haiti.png', 'Haiti')">
+                            <img src="assets/flags/Haiti.png" alt="HTI"> Haiti
+                        </div>
+                        <div class="custom-option" onclick="selectOption('HND', 'assets/flags/Honduras.png', 'Honduras')">
+                            <img src="assets/flags/Honduras.png" alt="HND"> Honduras
+                        </div>
+                        <div class="custom-option" onclick="selectOption('HKG', 'assets/flags/HongKong.png', 'Hong Kong')">
+                            <img src="assets/flags/HongKong.png" alt="HKG"> Hong Kong
+                        </div>
+                        <div class="custom-option" onclick="selectOption('HUN', 'assets/flags/Hungary.png', 'Hungary')">
+                            <img src="assets/flags/Hungary.png" alt="HUN"> Hungary
+                        </div>
+                        <div class="custom-option" onclick="selectOption('ISL', 'assets/flags/Iceland.png', 'Iceland')">
+                            <img src="assets/flags/Iceland.png" alt="ISL"> Iceland
+                        </div>
+                        <div class="custom-option" onclick="selectOption('IND', 'assets/flags/India.png', 'India')">
+                            <img src="assets/flags/India.png" alt="IND"> India
+                        </div>
+                        <div class="custom-option" onclick="selectOption('IDN', 'assets/flags/Indonesia.png', 'Indonesia')">
+                            <img src="assets/flags/Indonesia.png" alt="IDN"> Indonesia
+                        </div>
+                        <div class="custom-option" onclick="selectOption('IRN', 'assets/flags/Iran.png', 'Iran')">
+                            <img src="assets/flags/Iran.png" alt="IRN"> Iran
+                        </div>
+                        <div class="custom-option" onclick="selectOption('IRQ', 'assets/flags/Iraq.png', 'Iraq')">
+                            <img src="assets/flags/Iraq.png" alt="IRQ"> Iraq
+                        </div>
+                        <div class="custom-option" onclick="selectOption('IRL', 'assets/flags/Ireland.png', 'Ireland')">
+                            <img src="assets/flags/Ireland.png" alt="IRL"> Ireland
+                        </div>
+                        <div class="custom-option" onclick="selectOption('IMN', 'assets/flags/IsleofMan.png', 'Isle of Man')">
+                            <img src="assets/flags/IsleofMan.png" alt="IMN"> Isle of Man
+                        </div>
+                        <div class="custom-option" onclick="selectOption('ISR', 'assets/flags/Israel.png', 'Israel')">
+                            <img src="assets/flags/Israel.png" alt="ISR"> Israel
+                        </div>
+                        <div class="custom-option" onclick="selectOption('ITA', 'assets/flags/Italy.png', 'Italy')">
+                            <img src="assets/flags/Italy.png" alt="ITA"> Italy
+                        </div>
+                        <div class="custom-option" onclick="selectOption('CIV', 'assets/flags/IvoryCoast.png', 'Ivory Coast')">
+                            <img src="assets/flags/IvoryCoast.png" alt="CIV"> Ivory Coast
+                        </div>
+                        <div class="custom-option" onclick="selectOption('JAM', 'assets/flags/Jamaica.png', 'Jamaica')">
+                            <img src="assets/flags/Jamaica.png" alt="JAM"> Jamaica
+                        </div>
+                        <div class="custom-option" onclick="selectOption('JPN', 'assets/flags/Japan.png', 'Japan')">
+                            <img src="assets/flags/Japan.png" alt="JPN"> Japan
+                        </div>
+                        <div class="custom-option" onclick="selectOption('JEY', 'assets/flags/Jersey.png', 'Jersey')">
+                            <img src="assets/flags/Jersey.png" alt="JEY"> Jersey
+                        </div>
+                        <div class="custom-option" onclick="selectOption('JOR', 'assets/flags/Jordan.png', 'Jordan')">
+                            <img src="assets/flags/Jordan.png" alt="JOR"> Jordan
+                        </div>
+                        <div class="custom-option" onclick="selectOption('KAZ', 'assets/flags/Kazakhstan.png', 'Kazakhstan')">
+                            <img src="assets/flags/Kazakhstan.png" alt="KAZ"> Kazakhstan
+                        </div>
+                        <div class="custom-option" onclick="selectOption('KEN', 'assets/flags/Kenya.png', 'Kenya')">
+                            <img src="assets/flags/Kenya.png" alt="KEN"> Kenya
+                        </div>
+                        <div class="custom-option" onclick="selectOption('KIR', 'assets/flags/Kiribati.png', 'Kiribati')">
+                            <img src="assets/flags/Kiribati.png" alt="KIR"> Kiribati
+                        </div>
+                        <div class="custom-option" onclick="selectOption('KOS', 'assets/flags/Kosovo.png', 'Kosovo')">
+                            <img src="assets/flags/Kosovo.png" alt="KOS"> Kosovo
+                        </div>
+                        <div class="custom-option" onclick="selectOption('KWT', 'assets/flags/Kuwait.png', 'Kuwait')">
+                            <img src="assets/flags/Kuwait.png" alt="KWT"> Kuwait
+                        </div>
+                        <div class="custom-option" onclick="selectOption('KGZ', 'assets/flags/Kyrgyzstan.png', 'Kyrgyzstan')">
+                            <img src="assets/flags/Kyrgyzstan.png" alt="KGZ"> Kyrgyzstan
+                        </div>
+                        <div class="custom-option" onclick="selectOption('LAO', 'assets/flags/Laos.png', 'Laos')">
+                            <img src="assets/flags/Laos.png" alt="LAO"> Laos
+                        </div>
+                        <div class="custom-option" onclick="selectOption('LVA', 'assets/flags/Latvia.png', 'Latvia')">
+                            <img src="assets/flags/Latvia.png" alt="LVA"> Latvia
+                        </div>
+                        <div class="custom-option" onclick="selectOption('LBN', 'assets/flags/Lebanon.png', 'Lebanon')">
+                            <img src="assets/flags/Lebanon.png" alt="LBN"> Lebanon
+                        </div>
+                        <div class="custom-option" onclick="selectOption('LSO', 'assets/flags/Lesotho.png', 'Lesotho')">
+                            <img src="assets/flags/Lesotho.png" alt="LSO"> Lesotho
+                        </div>
+                        <div class="custom-option" onclick="selectOption('LBR', 'assets/flags/Liberia.png', 'Liberia')">
+                            <img src="assets/flags/Liberia.png" alt="LBR"> Liberia
+                        </div>
+                        <div class="custom-option" onclick="selectOption('LBY', 'assets/flags/Libya.png', 'Libya')">
+                            <img src="assets/flags/Libya.png" alt="LBY"> Libya
+                        </div>
+                        <div class="custom-option" onclick="selectOption('LIE', 'assets/flags/Liechtenstein.png', 'Liechtenstein')">
+                            <img src="assets/flags/Liechtenstein.png" alt="LIE"> Liechtenstein
+                        </div>
+                        <div class="custom-option" onclick="selectOption('LTU', 'assets/flags/Lithuania.png', 'Lithuania')">
+                            <img src="assets/flags/Lithuania.png" alt="LTU"> Lithuania
+                        </div>
+                        <div class="custom-option" onclick="selectOption('LUX', 'assets/flags/Luxembourg.png', 'Luxembourg')">
+                            <img src="assets/flags/Luxembourg.png" alt="LUX"> Luxembourg
+                        </div>
+                        <div class="custom-option" onclick="selectOption('MAC', 'assets/flags/Macau.png', 'Macau')">
+                            <img src="assets/flags/Macau.png" alt="MAC"> Macau
+                        </div>
+                        <div class="custom-option" onclick="selectOption('MDG', 'assets/flags/Madagascar.png', 'Madagascar')">
+                            <img src="assets/flags/Madagascar.png" alt="MDG"> Madagascar
+                        </div>
+                        <div class="custom-option" onclick="selectOption('MWI', 'assets/flags/Malawi.png', 'Malawi')">
+                            <img src="assets/flags/Malawi.png" alt="MWI"> Malawi
+                        </div>
+                        <div class="custom-option" onclick="selectOption('MYS', 'assets/flags/Malaysia.png', 'Malaysia')">
+                            <img src="assets/flags/Malaysia.png" alt="MYS"> Malaysia
+                        </div>
+                        <div class="custom-option" onclick="selectOption('MDV', 'assets/flags/Maldives.png', 'Maldives')">
+                            <img src="assets/flags/Maldives.png" alt="MDV"> Maldives
+                        </div>
+                        <div class="custom-option" onclick="selectOption('MLI', 'assets/flags/Mali.png', 'Mali')">
+                            <img src="assets/flags/Mali.png" alt="MLI"> Mali
+                        </div>
+                        <div class="custom-option" onclick="selectOption('MLT', 'assets/flags/Malta.png', 'Malta')">
+                            <img src="assets/flags/Malta.png" alt="MLT"> Malta
+                        </div>
+                        <div class="custom-option" onclick="selectOption('MHL', 'assets/flags/MarshallIslands.png', 'Marshall Islands')">
+                            <img src="assets/flags/MarshallIslands.png" alt="MHL"> Marshall Islands
+                        </div>
+                        <div class="custom-option" onclick="selectOption('MTQ', 'assets/flags/Martinique.png', 'Martinique')">
+                            <img src="assets/flags/Martinique.png" alt="MTQ"> Martinique
+                        </div>
+                        <div class="custom-option" onclick="selectOption('MRT', 'assets/flags/Mauritania.png', 'Mauritania')">
+                            <img src="assets/flags/Mauritania.png" alt="MRT"> Mauritania
+                        </div>
+                        <div class="custom-option" onclick="selectOption('MUS', 'assets/flags/Mauritius.png', 'Mauritius')">
+                            <img src="assets/flags/Mauritius.png" alt="MUS"> Mauritius
+                        </div>
+                        <div class="custom-option" onclick="selectOption('MYT', 'assets/flags/Mayotte.png', 'Mayotte')">
+                            <img src="assets/flags/Mayotte.png" alt="MYT"> Mayotte
+                        </div>
+                        <div class="custom-option" onclick="selectOption('MEX', 'assets/flags/Mexico.png', 'Mexico')">
+                            <img src="assets/flags/Mexico.png" alt="MEX"> Mexico
+                        </div>
+                        <div class="custom-option" onclick="selectOption('FSM', 'assets/flags/Micronesia.png', 'Micronesia')">
+                            <img src="assets/flags/Micronesia.png" alt="FSM"> Micronesia
+                        </div>
+                        <div class="custom-option" onclick="selectOption('MDA', 'assets/flags/Moldova.png', 'Moldova')">
+                            <img src="assets/flags/Moldova.png" alt="MDA"> Moldova
+                        </div>
+                        <div class="custom-option" onclick="selectOption('MCO', 'assets/flags/Monaco.png', 'Monaco')">
+                            <img src="assets/flags/Monaco.png" alt="MCO"> Monaco
+                        </div>
+                        <div class="custom-option" onclick="selectOption('MNG', 'assets/flags/Mongolia.png', 'Mongolia')">
+                            <img src="assets/flags/Mongolia.png" alt="MNG"> Mongolia
+                        </div>
+                        <div class="custom-option" onclick="selectOption('MNE', 'assets/flags/Montenegro.png', 'Montenegro')">
+                            <img src="assets/flags/Montenegro.png" alt="MNE"> Montenegro
+                        </div>
+                        <div class="custom-option" onclick="selectOption('MSR', 'assets/flags/Montserrat.png', 'Montserrat')">
+                            <img src="assets/flags/Montserrat.png" alt="MSR"> Montserrat
+                        </div>
+                        <div class="custom-option" onclick="selectOption('MAR', 'assets/flags/Morocco.png', 'Morocco')">
+                            <img src="assets/flags/Morocco.png" alt="MAR"> Morocco
+                        </div>
+                        <div class="custom-option" onclick="selectOption('MOZ', 'assets/flags/Mozambique.png', 'Mozambique')">
+                            <img src="assets/flags/Mozambique.png" alt="MOZ"> Mozambique
+                        </div>
+                        <div class="custom-option" onclick="selectOption('MMR', 'assets/flags/Myanmar.png', 'Myanmar')">
+                            <img src="assets/flags/Myanmar.png" alt="MMR"> Myanmar
+                        </div>
+                        <div class="custom-option" onclick="selectOption('NAM', 'assets/flags/Namibia.png', 'Namibia')">
+                            <img src="assets/flags/Namibia.png" alt="NAM"> Namibia
+                        </div>
+                        <div class="custom-option" onclick="selectOption('NRU', 'assets/flags/Nauru.png', 'Nauru')">
+                            <img src="assets/flags/Nauru.png" alt="NRU"> Nauru
+                        </div>
+                        <div class="custom-option" onclick="selectOption('NPL', 'assets/flags/Nepal.png', 'Nepal')">
+                            <img src="assets/flags/Nepal.png" alt="NPL"> Nepal
+                        </div>
+                        <div class="custom-option" onclick="selectOption('NLD', 'assets/flags/Netherlands.png', 'Netherlands')">
+                            <img src="assets/flags/Netherlands.png" alt="NLD"> Netherlands
+                        </div>
+                        <div class="custom-option" onclick="selectOption('NCL', 'assets/flags/NewCaledonia.png', 'New Caledonia')">
+                            <img src="assets/flags/NewCaledonia.png" alt="NCL"> New Caledonia
+                        </div>
+                        <div class="custom-option" onclick="selectOption('NZL', 'assets/flags/NewZealand.png', 'New Zealand')">
+                            <img src="assets/flags/NewZealand.png" alt="NZL"> New Zealand
+                        </div>
+                        <div class="custom-option" onclick="selectOption('NIC', 'assets/flags/Nicaragua.png', 'Nicaragua')">
+                            <img src="assets/flags/Nicaragua.png" alt="NIC"> Nicaragua
+                        </div>
+                        <div class="custom-option" onclick="selectOption('NER', 'assets/flags/Niger.png', 'Niger')">
+                            <img src="assets/flags/Niger.png" alt="NER"> Niger
+                        </div>
+                        <div class="custom-option" onclick="selectOption('NGA', 'assets/flags/Nigeria.png', 'Nigeria')">
+                            <img src="assets/flags/Nigeria.png" alt="NGA"> Nigeria
+                        </div>
+                        <div class="custom-option" onclick="selectOption('NIU', 'assets/flags/Niue.png', 'Niue')">
+                            <img src="assets/flags/Niue.png" alt="NIU"> Niue
+                        </div>
+                        <div class="custom-option" onclick="selectOption('NFK', 'assets/flags/NorfolkIsland.png', 'Norfolk Island')">
+                            <img src="assets/flags/NorfolkIsland.png" alt="NFK"> Norfolk Island
+                        </div>
+                        <div class="custom-option" onclick="selectOption('PRK', 'assets/flags/NorthKorea.png', 'North Korea')">
+                            <img src="assets/flags/NorthKorea.png" alt="PRK"> North Korea
+                        </div>
+                        <div class="custom-option" onclick="selectOption('MKD', 'assets/flags/NorthMacedonia.png', 'North Macedonia')">
+                            <img src="assets/flags/NorthMacedonia.png" alt="MKD"> North Macedonia
+                        </div>
+                        <div class="custom-option" onclick="selectOption('NCY', 'assets/flags/NorthernCyprus.png', 'Northern Cyprus')">
+                            <img src="assets/flags/NorthernCyprus.png" alt="NCY"> Northern Cyprus
+                        </div>
+                        <div class="custom-option" onclick="selectOption('MNP', 'assets/flags/NorthernMarianaIslands.png', 'Northern Mariana Islands')">
+                            <img src="assets/flags/NorthernMarianaIslands.png" alt="MNP"> Northern Mariana Islands
+                        </div>
+                        <div class="custom-option" onclick="selectOption('NOR', 'assets/flags/Norway.png', 'Norway')">
+                            <img src="assets/flags/Norway.png" alt="NOR"> Norway
+                        </div>
+                        <div class="custom-option" onclick="selectOption('OMN', 'assets/flags/Oman.png', 'Oman')">
+                            <img src="assets/flags/Oman.png" alt="OMN"> Oman
+                        </div>
+                        <div class="custom-option" onclick="selectOption('PAK', 'assets/flags/Pakistan.png', 'Pakistan')">
+                            <img src="assets/flags/Pakistan.png" alt="PAK"> Pakistan
+                        </div>
+                        <div class="custom-option" onclick="selectOption('PLW', 'assets/flags/Palau.png', 'Palau')">
+                            <img src="assets/flags/Palau.png" alt="PLW"> Palau
+                        </div>
+                        <div class="custom-option" onclick="selectOption('PSE', 'assets/flags/Palestine.png', 'Palestine')">
+                            <img src="assets/flags/Palestine.png" alt="PSE"> Palestine
+                        </div>
+                        <div class="custom-option" onclick="selectOption('PAN', 'assets/flags/Panama.png', 'Panama')">
+                            <img src="assets/flags/Panama.png" alt="PAN"> Panama
+                        </div>
+                        <div class="custom-option" onclick="selectOption('PNG', 'assets/flags/PapuaNewGuinea.png', 'Papua New Guinea')">
+                            <img src="assets/flags/PapuaNewGuinea.png" alt="PNG"> Papua New Guinea
+                        </div>
+                        <div class="custom-option" onclick="selectOption('PRY', 'assets/flags/Paraguay.png', 'Paraguay')">
+                            <img src="assets/flags/Paraguay.png" alt="PRY"> Paraguay
+                        </div>
+                        <div class="custom-option" onclick="selectOption('PER', 'assets/flags/Peru.png', 'Peru')">
+                            <img src="assets/flags/Peru.png" alt="PER"> Peru
+                        </div>
+                        <div class="custom-option" onclick="selectOption('PHL', 'assets/flags/Philippines.png', 'Philippines')">
+                            <img src="assets/flags/Philippines.png" alt="PHL"> Philippines
+                        </div>
+                        <div class="custom-option" onclick="selectOption('PCN', 'assets/flags/PitcairnIslands.png', 'Pitcairn Islands')">
+                            <img src="assets/flags/PitcairnIslands.png" alt="PCN"> Pitcairn Islands
+                        </div>
+                        <div class="custom-option" onclick="selectOption('POL', 'assets/flags/Poland.png', 'Poland')">
+                            <img src="assets/flags/Poland.png" alt="POL"> Poland
+                        </div>
+                        <div class="custom-option" onclick="selectOption('PRT', 'assets/flags/Portugal.png', 'Portugal')">
+                            <img src="assets/flags/Portugal.png" alt="PRT"> Portugal
+                        </div>
+                        <div class="custom-option" onclick="selectOption('PRI', 'assets/flags/PuertoRico.png', 'Puerto Rico')">
+                            <img src="assets/flags/PuertoRico.png" alt="PRI"> Puerto Rico
+                        </div>
+                        <div class="custom-option" onclick="selectOption('QAT', 'assets/flags/Qatar.png', 'Qatar')">
+                            <img src="assets/flags/Qatar.png" alt="QAT"> Qatar
+                        </div>
+                        <div class="custom-option" onclick="selectOption('REU', 'assets/flags/Réunion.png', 'Réunion')">
+                            <img src="assets/flags/Réunion.png" alt="REU"> Réunion
+                        </div>
+                        <div class="custom-option" onclick="selectOption('ROU', 'assets/flags/Romania.png', 'Romania')">
+                            <img src="assets/flags/Romania.png" alt="ROU"> Romania
+                        </div>
+                        <div class="custom-option" onclick="selectOption('RUS', 'assets/flags/Russia.png', 'Russia')">
+                            <img src="assets/flags/Russia.png" alt="RUS"> Russia
+                        </div>
+                        <div class="custom-option" onclick="selectOption('RWA', 'assets/flags/Rwanda.png', 'Rwanda')">
+                            <img src="assets/flags/Rwanda.png" alt="RWA"> Rwanda
+                        </div>
+                        <div class="custom-option" onclick="selectOption('SAB', 'assets/flags/Saba.png', 'Saba')">
+                            <img src="assets/flags/Saba.png" alt="SAB"> Saba
+                        </div>
+                        <div class="custom-option" onclick="selectOption('BLM', 'assets/flags/SaintBarthélemy.png', 'Saint Barthélemy')">
+                            <img src="assets/flags/SaintBarthélemy.png" alt="BLM"> Saint Barthélemy
+                        </div>
+                        <div class="custom-option" onclick="selectOption('KNA', 'assets/flags/SaintKittsandNevis.png', 'Saint Kitts and Nevis')">
+                            <img src="assets/flags/SaintKittsandNevis.png" alt="KNA"> Saint Kitts and Nevis
+                        </div>
+                        <div class="custom-option" onclick="selectOption('LCA', 'assets/flags/SaintLucia.png', 'Saint Lucia')">
+                            <img src="assets/flags/SaintLucia.png" alt="LCA"> Saint Lucia
+                        </div>
+                        <div class="custom-option" onclick="selectOption('MAF', 'assets/flags/SaintMartin.png', 'Saint Martin')">
+                            <img src="assets/flags/SaintMartin.png" alt="MAF"> Saint Martin
+                        </div>
+                        <div class="custom-option" onclick="selectOption('VCT', 'assets/flags/SaintVincentandtheGrenadines.png', 'Saint Vincent and the Grenadines')">
+                            <img src="assets/flags/SaintVincentandtheGrenadines.png" alt="VCT"> Saint Vincent and the Grenadines
+                        </div>
+                        <div class="custom-option" onclick="selectOption('WSM', 'assets/flags/Samoa.png', 'Samoa')">
+                            <img src="assets/flags/Samoa.png" alt="WSM"> Samoa
+                        </div>
+                        <div class="custom-option" onclick="selectOption('SMR', 'assets/flags/SanMarino.png', 'San Marino')">
+                            <img src="assets/flags/SanMarino.png" alt="SMR"> San Marino
+                        </div>
+                        <div class="custom-option" onclick="selectOption('STP', 'assets/flags/SãoToméandPríncipe.png', 'São Tomé and Príncipe')">
+                            <img src="assets/flags/SãoToméandPríncipe.png" alt="STP"> São Tomé and Príncipe
+                        </div>
+                        <div class="custom-option" onclick="selectOption('SAU', 'assets/flags/SaudiArabia.png', 'Saudi Arabia')">
+                            <img src="assets/flags/SaudiArabia.png" alt="SAU"> Saudi Arabia
+                        </div>
+                        <div class="custom-option" onclick="selectOption('SEN', 'assets/flags/Senegal.png', 'Senegal')">
+                            <img src="assets/flags/Senegal.png" alt="SEN"> Senegal
+                        </div>
+                        <div class="custom-option" onclick="selectOption('SRB', 'assets/flags/Serbia.png', 'Serbia')">
+                            <img src="assets/flags/Serbia.png" alt="SRB"> Serbia
+                        </div>
+                        <div class="custom-option" onclick="selectOption('SYC', 'assets/flags/Seychelles.png', 'Seychelles')">
+                            <img src="assets/flags/Seychelles.png" alt="SYC"> Seychelles
+                        </div>
+                        <div class="custom-option" onclick="selectOption('SLE', 'assets/flags/SierraLeone.png', 'Sierra Leone')">
+                            <img src="assets/flags/SierraLeone.png" alt="SLE"> Sierra Leone
+                        </div>
+                        <div class="custom-option" onclick="selectOption('SGP', 'assets/flags/Singapore.png', 'Singapore')">
+                            <img src="assets/flags/Singapore.png" alt="SGP"> Singapore
+                        </div>
+                        <div class="custom-option" onclick="selectOption('EUX', 'assets/flags/SintEustatius.png', 'Sint Eustatius')">
+                            <img src="assets/flags/SintEustatius.png" alt="EUX"> Sint Eustatius
+                        </div>
+                        <div class="custom-option" onclick="selectOption('SXM', 'assets/flags/SintMaarten.png', 'Sint Maarten')">
+                            <img src="assets/flags/SintMaarten.png" alt="SXM"> Sint Maarten
+                        </div>
+                        <div class="custom-option" onclick="selectOption('SVK', 'assets/flags/Slovakia.png', 'Slovakia')">
+                            <img src="assets/flags/Slovakia.png" alt="SVK"> Slovakia
+                        </div>
+                        <div class="custom-option" onclick="selectOption('SVN', 'assets/flags/Slovenia.png', 'Slovenia')">
+                            <img src="assets/flags/Slovenia.png" alt="SVN"> Slovenia
+                        </div>
+                        <div class="custom-option" onclick="selectOption('SLB', 'assets/flags/SolomonIslands.png', 'Solomon Islands')">
+                            <img src="assets/flags/SolomonIslands.png" alt="SLB"> Solomon Islands
+                        </div>
+                        <div class="custom-option" onclick="selectOption('SOM', 'assets/flags/Somalia.png', 'Somalia')">
+                            <img src="assets/flags/Somalia.png" alt="SOM"> Somalia
+                        </div>
+                        <div class="custom-option" onclick="selectOption('ZAF', 'assets/flags/SouthAfrica.png', 'South Africa')">
+                            <img src="assets/flags/SouthAfrica.png" alt="ZAF"> South Africa
+                        </div>
+                        <div class="custom-option" onclick="selectOption('KOR', 'assets/flags/SouthKorea.png', 'South Korea')">
+                            <img src="assets/flags/SouthKorea.png" alt="KOR"> South Korea
+                        </div>
+                        <div class="custom-option" onclick="selectOption('OST', 'assets/flags/SouthOssetia.png', 'South Ossetia')">
+                            <img src="assets/flags/SouthOssetia.png" alt="OST"> South Ossetia
+                        </div>
+                        <div class="custom-option" onclick="selectOption('SSD', 'assets/flags/SouthSudan.png', 'South Sudan')">
+                            <img src="assets/flags/SouthSudan.png" alt="SSD"> South Sudan
+                        </div>
+                        <div class="custom-option" onclick="selectOption('ESP', 'assets/flags/Spain.png', 'Spain')">
+                            <img src="assets/flags/Spain.png" alt="ESP"> Spain
+                        </div>
+                        <div class="custom-option" onclick="selectOption('LKA', 'assets/flags/SriLanka.png', 'Sri Lanka')">
+                            <img src="assets/flags/SriLanka.png" alt="LKA"> Sri Lanka
+                        </div>
+                        <div class="custom-option" onclick="selectOption('SDN', 'assets/flags/Sudan.png', 'Sudan')">
+                            <img src="assets/flags/Sudan.png" alt="SDN"> Sudan
+                        </div>
+                        <div class="custom-option" onclick="selectOption('SUR', 'assets/flags/Suriname.png', 'Suriname')">
+                            <img src="assets/flags/Suriname.png" alt="SUR"> Suriname
+                        </div>
+                        <div class="custom-option" onclick="selectOption('SWE', 'assets/flags/Sweden.png', 'Sweden')">
+                            <img src="assets/flags/Sweden.png" alt="SWE"> Sweden
+                        </div>
+                        <div class="custom-option" onclick="selectOption('CHE', 'assets/flags/Switzerland.png', 'Switzerland')">
+                            <img src="assets/flags/Switzerland.png" alt="CHE"> Switzerland
+                        </div>
+                        <div class="custom-option" onclick="selectOption('SYR', 'assets/flags/Syria.png', 'Syria')">
+                            <img src="assets/flags/Syria.png" alt="SYR"> Syria
+                        </div>
+                        <div class="custom-option" onclick="selectOption('TWN', 'assets/flags/Taiwan.png', 'Taiwan')">
+                            <img src="assets/flags/Taiwan.png" alt="TWN"> Taiwan
+                        </div>
+                        <div class="custom-option" onclick="selectOption('TJK', 'assets/flags/Tajikistan.png', 'Tajikistan')">
+                            <img src="assets/flags/Tajikistan.png" alt="TJK"> Tajikistan
+                        </div>
+                        <div class="custom-option" onclick="selectOption('TZA', 'assets/flags/Tanzania.png', 'Tanzania')">
+                            <img src="assets/flags/Tanzania.png" alt="TZA"> Tanzania
+                        </div>
+                        <div class="custom-option" onclick="selectOption('THA', 'assets/flags/Thailand.png', 'Thailand')">
+                            <img src="assets/flags/Thailand.png" alt="THA"> Thailand
+                        </div>
+                        <div class="custom-option" onclick="selectOption('TLS', 'assets/flags/Timor-Leste.png', 'Timor-Leste')">
+                            <img src="assets/flags/Timor-Leste.png" alt="TLS"> Timor-Leste
+                        </div>
+                        <div class="custom-option" onclick="selectOption('TGO', 'assets/flags/Togo.png', 'Togo')">
+                            <img src="assets/flags/Togo.png" alt="TGO"> Togo
+                        </div>
+                        <div class="custom-option" onclick="selectOption('TKL', 'assets/flags/Tokelau.png', 'Tokelau')">
+                            <img src="assets/flags/Tokelau.png" alt="TKL"> Tokelau
+                        </div>
+                        <div class="custom-option" onclick="selectOption('TON', 'assets/flags/Tonga.png', 'Tonga')">
+                            <img src="assets/flags/Tonga.png" alt="TON"> Tonga
+                        </div>
+                        <div class="custom-option" onclick="selectOption('PMR', 'assets/flags/Transnistria.png', 'Transnistria')">
+                            <img src="assets/flags/Transnistria.png" alt="PMR"> Transnistria
+                        </div>
+                        <div class="custom-option" onclick="selectOption('TTO', 'assets/flags/TrinidadandTobago.png', 'Trinidad and Tobago')">
+                            <img src="assets/flags/TrinidadandTobago.png" alt="TTO"> Trinidad and Tobago
+                        </div>
+                        <div class="custom-option" onclick="selectOption('TUN', 'assets/flags/Tunisia.png', 'Tunisia')">
+                            <img src="assets/flags/Tunisia.png" alt="TUN"> Tunisia
+                        </div>
+                        <div class="custom-option" onclick="selectOption('TUR', 'assets/flags/Türkiye.png', 'Türkiye')">
+                            <img src="assets/flags/Türkiye.png" alt="TUR"> Türkiye
+                        </div>
+                        <div class="custom-option" onclick="selectOption('TKM', 'assets/flags/Turkmenistan.png', 'Turkmenistan')">
+                            <img src="assets/flags/Turkmenistan.png" alt="TKM"> Turkmenistan
+                        </div>
+                        <div class="custom-option" onclick="selectOption('TCA', 'assets/flags/TurksandCaicosIslands.png', 'Turks and Caicos Islands')">
+                            <img src="assets/flags/TurksandCaicosIslands.png" alt="TCA"> Turks and Caicos Islands
+                        </div>
+                        <div class="custom-option" onclick="selectOption('TUV', 'assets/flags/Tuvalu.png', 'Tuvalu')">
+                            <img src="assets/flags/Tuvalu.png" alt="TUV"> Tuvalu
+                        </div>
+                        <div class="custom-option" onclick="selectOption('VIR', 'assets/flags/U.S.VirginIslands.png', 'U.S. Virgin Islands')">
+                            <img src="assets/flags/U.S.VirginIslands.png" alt="VIR"> U.S. Virgin Islands
+                        </div>
+                        <div class="custom-option" onclick="selectOption('UGA', 'assets/flags/Uganda.png', 'Uganda')">
+                            <img src="assets/flags/Uganda.png" alt="UGA"> Uganda
+                        </div>
+                        <div class="custom-option" onclick="selectOption('UKR', 'assets/flags/Ukraine.png', 'Ukraine')">
+                            <img src="assets/flags/Ukraine.png" alt="UKR"> Ukraine
+                        </div>
+                        <div class="custom-option" onclick="selectOption('ARE', 'assets/flags/UnitedArabEmirates.png', 'United Arab Emirates')">
+                            <img src="assets/flags/UnitedArabEmirates.png" alt="ARE"> United Arab Emirates
+                        </div>
+                        <div class="custom-option" onclick="selectOption('GBR', 'assets/flags/UnitedKingdom.png', 'United Kingdom')">
+                            <img src="assets/flags/UnitedKingdom.png" alt="GBR"> United Kingdom
+                        </div>
+                        <div class="custom-option" onclick="selectOption('USA', 'assets/flags/UnitedStatesofAmerica.png', 'United States of America')">
+                            <img src="assets/flags/UnitedStatesofAmerica.png" alt="USA"> United States of America
+                        </div>
+                        <div class="custom-option" onclick="selectOption('URY', 'assets/flags/Uruguay.png', 'Uruguay')">
+                            <img src="assets/flags/Uruguay.png" alt="URY"> Uruguay
+                        </div>
+                        <div class="custom-option" onclick="selectOption('UZB', 'assets/flags/Uzbekistan.png', 'Uzbekistan')">
+                            <img src="assets/flags/Uzbekistan.png" alt="UZB"> Uzbekistan
+                        </div>
+                        <div class="custom-option" onclick="selectOption('VUT', 'assets/flags/Vanuatu.png', 'Vanuatu')">
+                            <img src="assets/flags/Vanuatu.png" alt="VUT"> Vanuatu
+                        </div>
+                        <div class="custom-option" onclick="selectOption('VAT', 'assets/flags/VaticanCity.png', 'Vatican City')">
+                            <img src="assets/flags/VaticanCity.png" alt="VAT"> Vatican City
+                        </div>
+                        <div class="custom-option" onclick="selectOption('VEN', 'assets/flags/Venezuela.png', 'Venezuela')">
+                            <img src="assets/flags/Venezuela.png" alt="VEN"> Venezuela
+                        </div>
+                        <div class="custom-option" onclick="selectOption('VNM', 'assets/flags/Vietnam.png', 'Vietnam')">
+                            <img src="assets/flags/Vietnam.png" alt="VNM"> Vietnam
+                        </div>
+                        <div class="custom-option" onclick="selectOption('WLF', 'assets/flags/WallisandFutuna.png', 'Wallis and Futuna')">
+                            <img src="assets/flags/WallisandFutuna.png" alt="WLF"> Wallis and Futuna
+                        </div>
+                        <div class="custom-option" onclick="selectOption('ESH', 'assets/flags/WesternSahara.png', 'Western Sahara')">
+                            <img src="assets/flags/WesternSahara.png" alt="ESH"> Western Sahara
+                        </div>
+                        <div class="custom-option" onclick="selectOption('YEM', 'assets/flags/Yemen.png', 'Yemen')">
+                            <img src="assets/flags/Yemen.png" alt="YEM"> Yemen
+                        </div>
+                        <div class="custom-option" onclick="selectOption('ZMB', 'assets/flags/Zambia.png', 'Zambia')">
+                            <img src="assets/flags/Zambia.png" alt="ZMB"> Zambia
+                        </div>
+                        <div class="custom-option" onclick="selectOption('ZWE', 'assets/flags/Zimbabwe.png', 'Zimbabwe')">
+                            <img src="assets/flags/Zimbabwe.png" alt="ZWE"> Zimbabwe
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
+
             <div class="input-group">
                 <label class="input-label">Email</label>
                 <input type="email" id="su-email" class="auth-input" placeholder="name@example.com" required>
             </div>
 
             <div class="input-group">
-    <label class="input-label">Password</label>
-    <div class="password-wrapper">
-        <input type="password" id="su-pass" class="auth-input" placeholder="••••••••" required>
-        <i class="fa-solid fa-eye toggle-password" onclick="togglePasswordVisibility()"></i>
-    </div>
-</div>
+                <label class="input-label">Password</label>
+                <div class="password-wrapper">
+                    <input type="password" id="su-pass" class="auth-input" placeholder="••••••••" required>
+                    <i class="fa-solid fa-eye toggle-password" onclick="togglePasswordVisibility()"></i>
+                </div>
+            </div>
             
             <p id="error-text" class="error-msg">Error message here</p>
 
@@ -862,22 +870,39 @@
     </div>
 
     <script>
+        // --- TOGGLE PASSWORD VISIBILITY ---
+        function togglePasswordVisibility() {
+            const passInput = document.getElementById('su-pass');
+            const icon = document.querySelector('.toggle-password');
+            
+            if (passInput.type === "password") {
+                passInput.type = "text";
+                icon.classList.remove('fa-eye');
+                icon.classList.add('fa-eye-slash');
+            } else {
+                passInput.type = "password";
+                icon.classList.remove('fa-eye-slash');
+                icon.classList.add('fa-eye');
+            }
+        }
+
         // --- DROPDOWN LOGIC ---
         function toggleDropdown() {
             document.getElementById('custom-options').classList.toggle('open');
         }
 
         function selectOption(value, imgSrc, text) {
-    // Update the UI
-    const trigger = document.getElementById('select-trigger');
-    trigger.innerHTML = `<div style="display:flex; align-items:center;"><img src="${imgSrc}" class="flag-icon"> ${text}</div><span class="arrow">▼</span>`;
-    
-    // Set the hidden value
-    document.getElementById('su-country').value = value;
-    
-    // ADD THIS LINE HERE TO CLOSE IT:
-    document.getElementById('custom-options').classList.remove('open');
-}
+            // Update the UI
+            const trigger = document.getElementById('select-trigger');
+            trigger.innerHTML = `<div style="display:flex; align-items:center;"><img src="${imgSrc}" class="flag-icon"> ${text}</div><span class="arrow">▼</span>`;
+            
+            // Set the hidden value
+            document.getElementById('su-country').value = value;
+            
+            // Close dropdown
+            document.getElementById('custom-options').classList.remove('open');
+        }
+
         // Close dropdown if clicking outside
         window.addEventListener('click', function(e) {
             const wrapper = document.querySelector('.custom-select-wrapper');
@@ -915,7 +940,7 @@
                         username: username,
                         firstName: fname,
                         lastName: lname,
-                        country: country, // Saves 'UK', 'USA', etc.
+                        country: country, // Saves 'USA', 'GBR', etc.
                         email: email,
                         elo: 1000,
                         wins: 0,
@@ -938,20 +963,6 @@
             el.innerText = msg;
             el.style.display = "block";
         }
-        function togglePasswordVisibility() {
-    const passInput = document.getElementById('su-pass');
-    const icon = document.querySelector('.toggle-password');
-    
-    if (passInput.type === "password") {
-        passInput.type = "text";
-        icon.classList.remove('fa-eye');
-        icon.classList.add('fa-eye-slash');
-    } else {
-        passInput.type = "password";
-        icon.classList.remove('fa-eye-slash');
-        icon.classList.add('fa-eye');
-    }
-}
     </script>
 </body>
 </html>
