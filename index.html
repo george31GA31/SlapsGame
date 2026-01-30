@@ -3,9 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ISF Online - Arena</title>
+    <title>ISF Online - Home</title>
     <link rel="stylesheet" href="style.css">
-    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&family=Cinzel:wght@700&display=swap" rel="stylesheet">
+
     <script>
         if (!localStorage.getItem('isf_username')) {
             window.location.href = 'login.html';
@@ -18,159 +20,159 @@
     <script src="firebase-init.js"></script>
 
     <style>
-        /* --- LAYOUT STYLES --- */
-        body { 
-            background-color: #050505; 
-            color: white; 
-            font-family: 'Roboto', sans-serif; 
-            margin: 0; 
-            padding: 0; 
-            display: flex;
-            flex-direction: column;
-            height: 100vh;
-        }
-        
-        /* TOP HUD (STATS BAR) */
-        .hud-bar { 
-            background: #0a0a0a; 
-            border-bottom: 2px solid #00ccff; 
-            padding: 15px 30px; 
-            display: flex; 
-            justify-content: space-between; 
-            align-items: center; 
-            box-shadow: 0 0 20px rgba(0, 204, 255, 0.1);
-            z-index: 100;
-        }
-
-        .hud-left { display: flex; align-items: center; gap: 20px; }
-        .logo-small { height: 30px; }
-        .player-tag { font-weight: 900; font-size: 1.2rem; color: white; text-transform: uppercase; font-style: italic; }
-        
-        .hud-stats { display: flex; gap: 30px; }
-        .stat-item { text-align: center; }
-        .stat-label { font-size: 0.65rem; color: #666; text-transform: uppercase; letter-spacing: 1px; display: block; }
-        .stat-val { font-size: 1.2rem; font-weight: bold; color: #00ccff; }
-        .stat-val.loss { color: #ff4444; }
-
-        .btn-logout { 
-            background: transparent; border: 1px solid #333; color: #666; 
-            padding: 5px 15px; cursor: pointer; font-size: 0.7rem; 
-            text-transform: uppercase; transition: 0.3s; 
-        }
-        .btn-logout:hover { border-color: #ff4444; color: #ff4444; }
-
-        /* GAME AREA */
-        .game-container {
-            flex: 1; /* Takes up remaining space */
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            padding: 20px;
-            background-image: radial-gradient(circle at center, #111 0%, #000 100%);
-            overflow: auto; /* Scroll if game is too big */
-        }
-
-        /* Placeholder style for the game area */
-        .game-placeholder {
+        /* Extra styles for the new User Panel in the sidebar */
+        .user-panel {
+            background: #111;
+            border: 1px solid #00ccff;
+            padding: 15px;
+            border-radius: 8px;
             text-align: center;
-            border: 1px dashed #333;
-            padding: 50px;
-            border-radius: 10px;
-            color: #444;
+            margin-bottom: 20px;
+            box-shadow: 0 0 15px rgba(0, 204, 255, 0.1);
         }
+        .user-welcome { color: #888; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; }
+        .user-name-display { color: white; font-size: 1.4rem; font-weight: 900; margin: 5px 0; text-transform: uppercase; font-style: italic; }
+        .user-stats-row { display: flex; justify-content: center; gap: 15px; margin: 10px 0; border-top: 1px solid #333; border-bottom: 1px solid #333; padding: 10px 0; }
+        .stat-box { text-align: center; }
+        .stat-box span { display: block; }
+        .sb-label { font-size: 0.65rem; color: #666; }
+        .sb-val { font-size: 1.1rem; font-weight: bold; color: #00ccff; }
+        
+        .btn-logout-small {
+            background: transparent; border: 1px solid #333; color: #555;
+            font-size: 0.7rem; padding: 5px 12px; cursor: pointer;
+            text-transform: uppercase; transition: 0.2s;
+        }
+        .btn-logout-small:hover { color: #ff4444; border-color: #ff4444; }
     </style>
 </head>
 <body>
 
-    <div class="hud-bar">
-        <div class="hud-left">
-            <img src="assets/ISF_ONLINE.png" class="logo-small" alt="ISF">
-            <span class="player-tag" id="display-name">PLAYER</span>
-        </div>
+    <div class="app-container">
+        
+        <nav class="sidebar-left">
+            <div class="logo-area-sidebar">
+                <img src="assets/ISF_ONLINE.png" alt="ISF Online" class="sidebar-logo">
+            </div>
 
-        <div class="hud-stats">
-            <div class="stat-item">
-                <span class="stat-label">Rating</span>
-                <span class="stat-val" id="stat-elo">1000</span>
-            </div>
-            <div class="stat-item">
-                <span class="stat-label">Wins</span>
-                <span class="stat-val" id="stat-wins">0</span>
-            </div>
-            <div class="stat-item">
-                <span class="stat-label">Losses</span>
-                <span class="stat-val loss" id="stat-losses">0</span>
-            </div>
-            <div class="stat-item">
-                <span class="stat-label">Nation</span>
-                <span class="stat-val" id="stat-country" style="font-size:1rem; padding-top:2px;">---</span>
-            </div>
-        </div>
+            <ul class="nav-links">
+                <li class="active"><a href="#">Home</a></li>
+                <li><a href="how-to-play.html">How to Play</a></li>
+                <li><a href="https://sprucewilliams.github.io/Slaps-Online/matchtable.html">Game History</a></li>
+                <li><a href="https://sprucewilliams.github.io/Slaps-Online/ratingtable.html">Leaderboard</a></li>
+                <li><a href="assets/SLAPS rules and regs v1.2-compressed.pdf" target="_blank">Rules & Regs</a></li>
+            </ul>
 
-        <button class="btn-logout" onclick="logout()">Log Out</button>
+            <div class="sidebar-footer">
+                <li><a href="#">Settings</a></li>
+                <li><a href="#" onclick="logout()">Log Out</a></li>
+            </div>
+        </nav>
+
+        <main class="hero-area">
+            <div class="card-display">
+                <img src="assets/cards/ace_of_hearts.png" alt="Ace of Hearts" class="hero-card-img">
+            </div>
+        </main>
+
+        <aside class="sidebar-right">
+            
+            <div class="user-panel">
+                <div class="user-welcome">Welcome Back</div>
+                <div class="user-name-display" id="disp-username">LOADING...</div>
+                
+                <div class="user-stats-row">
+                    <div class="stat-box">
+                        <span class="sb-val" id="disp-elo">---</span>
+                        <span class="sb-label">RATING</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="sb-val" id="disp-wins">---</span>
+                        <span class="sb-label">WINS</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="sb-val" id="disp-country">---</span>
+                        <span class="sb-label">NATION</span>
+                    </div>
+                </div>
+
+                <button class="btn-logout-small" onclick="logout()">Log Out</button>
+            </div>
+
+            <div class="modes-grid">
+                
+                <div class="mode-box" onclick="window.location.href='multiplayer-setup.html'">
+                    <div class="mode-icon">
+                        <i class="fa-solid fa-handshake"></i>
+                    </div>
+                    <h3>PLAY A<br>FRIEND</h3>
+                    <button class="btn-mode-play">PLAY</button>
+                </div>
+
+                <div class="mode-box" onclick="window.location.href='setup.html'">
+                    <div class="mode-icon">
+                        <i class="fa-solid fa-robot"></i>
+                    </div>
+                    <h3>PLAY AI<br>BOT</h3>
+                    <button class="btn-mode-play">PLAY</button>
+                </div>
+
+                <div class="mode-box" onclick="window.location.href='matchmaking.html'">
+                    <div class="mode-icon">
+                        <i class="fa-solid fa-globe"></i>
+                    </div>
+                    <h3>PLAY<br>ONLINE</h3>
+                    <button class="btn-mode-play">PLAY</button>
+                </div>
+
+                <div class="mode-box" onclick="window.location.href='tournament-setup.html'">
+                    <div class="mode-icon">
+                        <i class="fa-solid fa-trophy"></i>
+                    </div>
+                    <h3>PLAY<br>TOURNAMENT</h3>
+                    <button class="btn-mode-play">PLAY</button>
+                </div>
+
+                <div class="mode-box disabled">
+                    <div class="mode-icon">
+                        <i class="fa-solid fa-medal"></i>
+                    </div>
+                    <h3>PLAY<br>LEAGUE</h3>
+                    <button class="btn-mode-coming">COMING SOON</button>
+                </div>
+
+            </div>
+        </aside>
+
     </div>
 
-    <div class="game-container" id="main-game-area">
-        
-        <div class="game-placeholder">
-            <h2>GAME ARENA</h2>
-            <p>Paste your match simulation code inside the "game-container" div in index.html</p>
-            <br>
-            <button style="padding: 15px 30px; background: #00ccff; border:none; font-weight:bold; cursor:pointer;">START MATCH (Example)</button>
-        </div>
-
-        </div>
-
     <script>
-        // 1. LOAD USER DATA
-        const storedName = localStorage.getItem('isf_username');
-        if(storedName) document.getElementById('display-name').innerText = storedName;
+        // 1. Load Username immediately from storage
+        const localName = localStorage.getItem('isf_username');
+        if(localName) document.getElementById('disp-username').innerText = localName;
 
-        // 2. LIVE FIREBASE CONNECTION (Updates stats automatically)
+        // 2. Fetch Live Stats from Firebase
         auth.onAuthStateChanged((user) => {
             if (user) {
                 const userRef = db.ref('users/' + user.uid);
                 userRef.on('value', (snapshot) => {
                     const data = snapshot.val();
                     if(data) {
-                        document.getElementById('stat-elo').innerText = data.elo || 1000;
-                        document.getElementById('stat-wins').innerText = data.wins || 0;
-                        document.getElementById('stat-losses').innerText = data.losses || 0;
-                        document.getElementById('stat-country').innerText = data.country || "---";
+                        document.getElementById('disp-elo').innerText = data.elo || 1000;
+                        document.getElementById('disp-wins').innerText = data.wins || 0;
+                        document.getElementById('disp-country').innerText = data.country || "---";
                     }
                 });
             }
         });
 
-        // 3. LOGOUT
+        // 3. Logout Logic
         function logout() {
             auth.signOut().then(() => {
                 localStorage.clear();
                 window.location.href = 'login.html';
             });
         }
-        
-        // 4. FUNCTION TO UPDATE STATS AFTER A GAME (Call this from your game code!)
-        function recordGameResult(isWin) {
-            const user = auth.currentUser;
-            if(!user) return;
-
-            const userRef = db.ref('users/' + user.uid);
-            
-            // Use a transaction to safely update stats
-            userRef.transaction((currentData) => {
-                if (currentData) {
-                    if (isWin) {
-                        currentData.wins = (currentData.wins || 0) + 1;
-                        currentData.elo = (currentData.elo || 1000) + 25; // Gain points
-                    } else {
-                        currentData.losses = (currentData.losses || 0) + 1;
-                        currentData.elo = (currentData.elo || 1000) - 25; // Lose points
-                    }
-                }
-                return currentData;
-            });
-        }
-    </script>
+    </script> 
 </body>
 </html>
