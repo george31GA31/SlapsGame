@@ -24,13 +24,11 @@
             overflow: hidden;
         }
 
-        .hidden {
-            display: none !important;
-        }
+        .hidden { display: none !important; }
 
         /* The Main Card Container */
         .menu-card {
-            background-color: #0f0f0f; /* Very dark grey matching screenshot */
+            background-color: #0f0f0f;
             border-radius: 12px;
             padding: 40px 30px;
             width: 320px;
@@ -40,7 +38,6 @@
             position: relative;
         }
 
-        /* The Blue Icon Group */
         .icon-group {
             color: #00ccff;
             font-size: 2.5rem;
@@ -48,47 +45,27 @@
             text-shadow: 0 0 15px rgba(0, 204, 255, 0.4);
         }
 
-        /* The Header Text */
         .menu-title {
             font-family: 'Montserrat', sans-serif;
-            font-weight: 800; /* Bold/Italic style */
+            font-weight: 800;
             font-style: italic;
             font-size: 1.8rem;
-            margin: 0 0 30px 0;
+            margin: 0 0 10px 0;
             color: white;
             letter-spacing: 0.5px;
         }
 
-        /* The Grey Input Box */
-        .input-group {
-            margin-bottom: 20px;
-        }
-
-        .styled-input {
-            background-color: #222; /* Grey box */
-            border: 1px solid #2a2a2a;
-            border-radius: 6px;
-            padding: 14px;
-            width: 100%;
-            box-sizing: border-box;
-            color: #ccc;
-            font-family: 'Montserrat', sans-serif;
-            font-weight: 600;
-            text-transform: uppercase;
-            text-align: center;
+        .user-display {
+            color: #888;
             font-size: 0.9rem;
-            outline: none;
-            transition: all 0.3s;
+            margin-bottom: 30px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
         }
 
-        .styled-input::placeholder {
-            color: #555;
-        }
-
-        .styled-input:focus {
-            background-color: #2a2a2a;
-            border-color: #444;
-            color: white;
+        .user-display span {
+            color: #fff;
         }
 
         /* The Blue Gradient Button */
@@ -127,13 +104,9 @@
             transition: color 0.2s;
         }
 
-        .link-back:hover {
-            color: #888;
-        }
+        .link-back:hover { color: #888; }
 
         /* --- SEARCHING UI STYLES --- */
-        /* Reusing the card style, but specific tweaks */
-        
         .timer-text {
             font-family: 'Montserrat', sans-serif;
             font-size: 2rem;
@@ -169,7 +142,6 @@
             color: white;
         }
 
-        /* Success State */
         .match-found .timer-text {
             color: #00ff00;
             text-shadow: 0 0 15px rgba(0, 255, 0, 0.5);
@@ -188,8 +160,8 @@
 
         <h1 class="menu-title">FIND MATCH</h1>
 
-        <div class="input-group">
-            <input type="text" id="nickname-input" class="styled-input" placeholder="ENTER NICKNAME" maxlength="12">
+        <div class="user-display" id="user-label">
+            Playing as: <span>Player</span>
         </div>
 
         <button class="btn-blue-gradient" onclick="startSearch()">
@@ -231,23 +203,18 @@
         const LOBBY_ID_BASE = "isf-public-match-v1-"; 
 
         window.onload = function() {
-            const savedName = localStorage.getItem('isf_my_name');
-            const inputField = document.getElementById('nickname-input');
-            if (savedName && inputField) {
-                inputField.value = savedName;
+            // AUTOMATICALLY GET USERNAME FROM LOGIN
+            const savedName = localStorage.getItem('isf_username');
+            if (savedName) {
+                myName = savedName;
             }
+            // Update the display text
+            const label = document.getElementById('user-label');
+            if(label) label.innerHTML = `Playing as: <span style="color:#00ccff">${myName}</span>`;
         };
 
         function startSearch() {
-            const inputField = document.getElementById('nickname-input');
-            const enteredName = inputField.value.trim();
-
-            if (!enteredName) {
-                alert("Please enter a nickname!");
-                return;
-            }
-
-            myName = enteredName;
+            // No need to check input, we use the variable
             localStorage.setItem('isf_my_name', myName); 
 
             // Switch Screens
