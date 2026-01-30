@@ -63,23 +63,23 @@
 
     <script>
         const listContainer = document.getElementById('lb-list');
-        const myUsername = localStorage.getItem('isf_username'); // To highlight yourself
+        const myUsername = localStorage.getItem('isf_username'); 
 
         // 1. QUERY FIREBASE (Sort by ELO, Get Top 50)
-        // Note: Firebase sorts Ascending (Low to High), so "limitToLast" gets the highest scores.
         const leaderboardQuery = db.ref('users').orderByChild('elo').limitToLast(50);
 
         leaderboardQuery.on('value', (snapshot) => {
-            listContainer.innerHTML = ''; // Clear old list
+            listContainer.innerHTML = ''; 
             
             let players = [];
 
-            // 2. CONVERT SNAPSHOT TO ARRAY
             snapshot.forEach((child) => {
                 const data = child.val();
                 players.push({
-                    name: data.username || "Unknown",
-                    country: data.country || "USA", // Default fallback
+                    username: data.username || "Unknown",
+                    realName: (data.firstName || "") + " " + (data.lastName || ""), // Combine names
+                    // Use the saved flag, or fallback to USA if missing
+                    flagSrc: data.flag || "assets/flags/UnitedStatesofAmerica.png",
                     elo: data.elo || 1000,
                     wins: data.wins || 0,
                     losses: data.losses || 0,
@@ -87,34 +87,29 @@
                 });
             });
 
-            // 3. REVERSE THE ARRAY (Because Firebase gave us Low -> High)
+            // Reverse to show Highest ELO first
             players.reverse(); 
 
-            // 4. RENDER THE LIST
             players.forEach((p, index) => {
                 const rank = index + 1;
                 const isTop3 = rank <= 3 ? 'top3' : '';
                 const isMeClass = p.isMe ? 'me' : '';
                 
-                // Construct the flag path based on your assets folder structure
-                // Assuming you saved country codes like 'USA', 'GBR' which match your filenames
-                // OR if you saved Full Names, make sure images match those names.
-                // Adjustable logic:
-                let flagSrc = `assets/flags/${p.country}.png`; 
-                
-                // If you saved country codes (e.g. 'USA') but filenames are 'UnitedStates.png', 
-                // you might need a mapper here. For now, assuming direct match.
-
+                // HTML for the Row
                 const html = `
                     <div class="lb-row ${isMeClass}">
                         <div class="rank ${isTop3}">#${rank}</div>
+                        
                         <div class="country">
-                            <img src="${flagSrc}" onerror="this.src='assets/flags/UnitedStatesofAmerica.png'">
+                            <img src="${p.flagSrc}" alt="Flag" onerror="this.src='assets/flags/UnitedStatesofAmerica.png'">
                         </div>
+                        
                         <div class="player-info">
-                            <span class="p-name">${p.name}</span>
+                            <span class="p-name">${p.username}</span>
+                            <span style="display:block; font-size:0.75rem; color:#888; margin-top:2px;">${p.realName}</span>
                             <span class="p-stats">${p.wins} Wins - ${p.losses} Losses</span>
                         </div>
+                        
                         <div class="elo-score">${p.elo}</div>
                     </div>
                 `;
