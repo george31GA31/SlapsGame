@@ -48,20 +48,25 @@ function fetchEnemyStats(enemyId) {
 }
 
 // --- 3. REPORT RESULT TO FIREBASE ---
-function reportMatchResultInternal(isWin, onComplete) {
-    // 1. SAFETY CHECK: PREVENT DOUBLE COUNTING
+function reportMatchResultInternal(isWin, onComplete, proofToken) {
+    // 1. SAFETY CHECK
     if (matchResultReported) {
-        console.warn("⚠️ Match result already reported. Skipping duplicate update.");
         if (onComplete) onComplete();
         return;
     }
-    matchResultReported = true; // Lock it immediately
+    
+    // SECURITY CHECK: If I claim a win, I MUST have a proof token from the loser
+    // (Unless it's a disconnect win, which is a special case)
+    if (isWin && !proofToken && !gameState.opponentDisconnected) {
+        console.warn("⚠️ SECURITY: Attempted to claim win without proof token. Ignored.");
+        return; 
+    }
 
-    console.log("🚀 STARTING ELO UPDATE...");
+    matchResultReported = true; 
+    console.log(`🚀 REPORTING ${isWin ? 'WIN' : 'LOSS'} to Database...`);
 
     const user = firebase.auth().currentUser;
     if (!user) {
-        console.error("❌ ERROR: You are not logged in.");
         if (onComplete) onComplete();
         return;
     }
@@ -75,17 +80,10 @@ function reportMatchResultInternal(isWin, onComplete) {
             const losses = userData.losses || 0;
             const myGameCount = wins + losses;
 
-            if (typeof calculateNewElo !== 'function') {
-                return userData;
-            }
+            if (typeof calculateNewElo !== 'function') return userData;
 
-            const newElo = calculateNewElo(
-                currentElo, 
-                enemyElo, 
-                isWin, 
-                myGameCount, 
-                enemyGameCount 
-            );
+            // Calculate ELO
+            const newElo = calculateNewElo(currentElo, enemyElo, isWin, myGameCount, enemyGameCount);
 
             userData.elo = newElo;
             if (isWin) userData.wins = wins + 1;
@@ -162,6 +160,7 @@ const gameState = {
 
     handshakeDone: false,
     roundStarted: false,
+   opponentDisconnected: false,
 
     // For snapping back on reject
     lastDraggedCard: null,
@@ -304,6 +303,12 @@ function handleNet(msg) {
         if (gameState.isHost && !gameState.roundStarted) {
             gameState.roundStarted = true;
             startRoundHostAuthoritative();
+        // --- SECURITY: HANDLE CONCESSION TOKEN ---
+    if (msg.type === 'CONCESSION_TOKEN') {
+        console.log("✅ Received Concession Token:", msg.token);
+        // Now I have proof I won. I can report the win.
+        if (isRanked && !matchResultReported) {
+            reportMatchResultInternal(true, null, msg.token);
         }
         return;
     }
@@ -385,6 +390,7 @@ function handleNet(msg) {
     // --- 3. DISCONNECT HANDLER ---
     if (msg.type === 'OPPONENT_LEFT') {
         if (gameState.matchEnded) return;
+       gameState.opponentDisconnected = true;
 
         // 1. FORCE CLOSE ALL MODALS IMMEDIATELY
         // This prevents you from clicking "Decline" if they left mid-request
@@ -1896,18 +1902,27 @@ function applyMatchOver(data) {
     
     const iAmHost = gameState.isHost;
     const hostWon = (data.winner === 'player');
-    
-    // DID I WIN?
     const iWon = (iAmHost && hostWon) || (!iAmHost && !hostWon);
 
     const title = iWon ? "YOU WON THE MATCH!" : "OPPONENT WINS THE MATCH!";
     showEndGame(title, iWon);
 
-    // --- ELO TRIGGER ---
+    // --- SECURITY UPGRADE ---
     if (isRanked) {
-        console.log(`🏆 Match Over. I Won? ${iWon}`);
-        // Call the internal function we wrote at the top
-        reportMatchResultInternal(iWon);
+        if (iWon) {
+            console.log("I won! Waiting for opponent's concession token...");
+            // Do NOT report yet. Wait for the token via network.
+        } else {
+            console.log("I lost. Sending concession token to winner...");
+            // Generate a random token to "sign" the loss
+            const token = Math.random().toString(36).substring(2) + Date.now().toString(36);
+            
+            // Send this token to the winner so THEY can report
+            sendNet({ type: 'CONCESSION_TOKEN', token: token });
+            
+            // Report my own loss locally
+            reportMatchResultInternal(false, null, token); 
+        }
     }
 }
 function quitMatch() {
