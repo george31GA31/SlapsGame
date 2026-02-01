@@ -303,7 +303,11 @@ function handleNet(msg) {
         if (gameState.isHost && !gameState.roundStarted) {
             gameState.roundStarted = true;
             startRoundHostAuthoritative();
-        // --- SECURITY: HANDLE CONCESSION TOKEN ---
+        }
+        return;
+    }
+
+    // --- SECURITY: HANDLE CONCESSION TOKEN ---
     if (msg.type === 'CONCESSION_TOKEN') {
         console.log("✅ Received Concession Token:", msg.token);
         // Now I have proof I won. I can report the win.
