@@ -1292,12 +1292,17 @@ function adjudicateMove(m, moverOverride) {
     sendNet({ type: 'MOVE_APPLY', apply: applyPayload });
 }
 function applyMoveAuthoritative(mover, cardObj, side, reqId) {
-   gameState.lastActionType = 'move';
-    // 1. Ghost cleanup
-    gameState.opponentDragGhosts.forEach((ghostEl, key) => {
-        const parts = key.split(':'); 
-        if (parts[0] === cardObj.suit && parts[1] === cardObj.rank && parseInt(parts[2]) === cardObj.value) {
-            ghostEl.remove();
+    gameState.lastActionType = 'move';
+
+    // 1. AGGRESSIVE GHOST CLEANUP (The Fix)
+    // Instead of checking specific keys, we find ANY ghost matching this card's face.
+    const cardIdentity = `${cardObj.suit}:${cardObj.rank}:${cardObj.value}`;
+    
+    // Convert keys to array to avoid modification issues while iterating
+    Array.from(gameState.opponentDragGhosts.keys()).forEach(key => {
+        if (key.startsWith(cardIdentity)) {
+            const el = gameState.opponentDragGhosts.get(key);
+            if (el) el.remove();
             gameState.opponentDragGhosts.delete(key);
         }
     });
@@ -1321,19 +1326,14 @@ function applyMoveAuthoritative(mover, cardObj, side, reqId) {
     updateScoreboard();
     checkSlapCondition();
 
-    // 5. [DELETED AUTO-REVEAL LOGIC]
-    // We do NOT reveal the next card automatically. 
-    // The player must click it to flip it.
-
-    // 6. CHECK FOR SIMULTANEOUS SHORTAGE TRIGGER
-    // We grab fresh references to length after the update
+    // 5. CHECK FOR SIMULTANEOUS SHORTAGE TRIGGER
     if (gameState.playerDeck.length === 0 && gameState.aiDeck.length === 0) {
         if (gameState.centerPileLeft.length > 0 || gameState.centerPileRight.length > 0) {
             triggerSuddenDeathSplit(); 
         }
     }
 
-    // 7. WIN / END ROUND LOGIC
+    // 6. WIN / END ROUND LOGIC
     const currentHand = (mover === 'player') ? gameState.playerHand : gameState.aiHand;
     const handEmpty = (currentHand.length === 0);
     
@@ -1343,7 +1343,6 @@ function applyMoveAuthoritative(mover, cardObj, side, reqId) {
 
     if (handEmpty) {
         if (isSimultaneousPhase) {
-            // Penalty Survival Logic
             let hasPenalty = false;
             if (mover === 'player') hasPenalty = (gameState.playerReds > 0 || gameState.playerYellows > 0);
             else hasPenalty = (gameState.aiReds > 0 || gameState.aiYellows > 0);
@@ -1368,7 +1367,6 @@ function applyMoveAuthoritative(mover, cardObj, side, reqId) {
                 applyRoundOver(payload);
             }
         } else {
-            // Standard Gameplay
             if ((mover === 'player' && gameState.playerTotal <= 0) || (mover === 'ai' && gameState.aiTotal <= 0)) {
                 const payload = { type: 'MATCH_OVER', winner: mover };
                 sendNet(payload);
@@ -1379,7 +1377,6 @@ function applyMoveAuthoritative(mover, cardObj, side, reqId) {
         }
     }
 
-    // Return the clean object (No newTopCard data)
     return {
         reqId,
         mover,
@@ -1390,15 +1387,18 @@ function applyMoveAuthoritative(mover, cardObj, side, reqId) {
     };
 }
 function applyMoveFromHost(a) {
-   gameState.lastActionType = 'move';
+    gameState.lastActionType = 'move';
     const localMover = (a.mover === 'player') ? 'ai' : 'player';
     const localSide = (a.side === 'left') ? 'right' : 'left';
 
-    // Cleanup ghosts for the moved card
-    gameState.opponentDragGhosts.forEach((ghostEl, key) => {
-        const parts = key.split(':'); 
-        if (parts[0] === a.card.suit && parts[1] === a.card.rank && parts[2] == a.card.value) {
-            ghostEl.remove();
+    // 1. AGGRESSIVE GHOST CLEANUP (The Fix)
+    // Matches the Host logic above: Find ANY ghost for this card and kill it.
+    const cardIdentity = `${a.card.suit}:${a.card.rank}:${a.card.value}`;
+
+    Array.from(gameState.opponentDragGhosts.keys()).forEach(key => {
+        if (key.startsWith(cardIdentity)) {
+            const el = gameState.opponentDragGhosts.get(key);
+            if (el) el.remove();
             gameState.opponentDragGhosts.delete(key);
         }
     });
@@ -1422,13 +1422,11 @@ function applyMoveFromHost(a) {
         cardObj = unpackCard(a.card);
     }
 
-    // Remove the card from the lane (visually)
     if (cardObj.element) {
         cardObj.element.remove();
         cardObj.element = null; 
     }
     
-    // Safety cleanup for duplicates
     if (localMover === 'ai') {
         const container = document.getElementById('ai-foundation-area');
         if (container) {
@@ -1438,19 +1436,13 @@ function applyMoveFromHost(a) {
         }
     }
 
-    // Add to center pile
     const pile = (localSide === 'left') ? gameState.centerPileLeft : gameState.centerPileRight;
     pile.push(cardObj);
     renderCenterPile(localSide, cardObj);
 
     updateScoreboard();
     checkSlapCondition();
-
-    // [DELETED AUTO-REVEAL LISTENER]
-    // We no longer flip the next card automatically.
-    // The opponent must click it, sending an 'OPPONENT_FLIP' message.
 }
-
 function handlePlayerDeckClick() {
     if (!gameState.gameActive) {
         if (gameState.playerReady) return;
