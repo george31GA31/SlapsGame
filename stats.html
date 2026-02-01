@@ -51,15 +51,43 @@
             text-shadow: 0 0 15px rgba(255, 255, 255, 0.2);
         }
 
+        /* --- UPDATED ELO BADGE STYLES --- */
         .elo-badge {
             display: inline-block;
-            background: linear-gradient(135deg, #ffd700, #b8860b);
-            color: black;
-            padding: 5px 20px;
+            padding: 5px 25px;
             border-radius: 50px;
-            font-weight: 800;
+            font-weight: 900;
+            font-size: 1.2rem;
             margin-top: 10px;
-            box-shadow: 0 0 15px rgba(255, 215, 0, 0.4);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            border: 2px solid rgba(255,255,255,0.2);
+            transition: all 0.3s ease;
+        }
+
+        /* 0 - 750: BRONZE */
+        .elo-badge.bronze {
+            background: linear-gradient(135deg, #cd7f32, #8b4513);
+            color: #fff;
+            box-shadow: 0 0 15px rgba(205, 127, 50, 0.4);
+            border-color: #cd7f32;
+        }
+
+        /* 751 - 1100: SILVER */
+        .elo-badge.silver {
+            background: linear-gradient(135deg, #e0e0e0, #7f8c8d);
+            color: #000;
+            box-shadow: 0 0 15px rgba(192, 192, 192, 0.4);
+            border-color: #bdc3c7;
+        }
+
+        /* 1101+: GOLD */
+        .elo-badge.gold {
+            background: linear-gradient(135deg, #ffd700, #b8860b);
+            color: #000;
+            box-shadow: 0 0 20px rgba(255, 215, 0, 0.6);
+            border-color: #ffffaa;
         }
 
         /* STATS GRID */
@@ -208,16 +236,33 @@
 
         function renderStats(data) {
             // Basic Info
-            document.getElementById('p-name').innerText = data.username || "UNKNOWN";
-            document.getElementById('p-flag').src = data.flag || "assets/flags/United Nations.png";
-            document.getElementById('p-elo').innerText = `${Math.floor(data.elo || 1000)} ELO`;
+            const username = data.username || "UNKNOWN";
+            const flag = data.flag || "assets/flags/United Nations.png";
+            const elo = Math.floor(data.elo || 1000);
+
+            document.getElementById('p-name').innerText = username;
+            document.getElementById('p-flag').src = flag;
+            
+            // --- ELO BADGE LOGIC (UPDATED) ---
+            const eloBadge = document.getElementById('p-elo');
+            eloBadge.innerText = `${elo} ELO`;
+            
+            // Reset classes to base
+            eloBadge.className = 'elo-badge';
+
+            if (elo <= 750) {
+                eloBadge.classList.add('bronze');
+            } else if (elo <= 1100) {
+                eloBadge.classList.add('silver');
+            } else {
+                eloBadge.classList.add('gold');
+            }
 
             // Metrics
             const wins = data.wins || 0;
             const losses = data.losses || 0;
             const matches = wins + losses;
             
-            // New Metrics (These will be 0 until we update game.js)
             const slapsWon = data.stats_slaps_won || 0;
             const slapsLost = data.stats_slaps_lost || 0;
             const roundsWon = data.stats_rounds_won || 0;
