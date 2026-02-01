@@ -1380,3 +1380,15 @@ body:has(.setup-card) .top-bar {
 #sidebar-display-name {
     text-shadow: 0 0 10px rgba(0, 204, 255, 0.4);
 }
+.timer-display {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    font-family: 'Montserrat', sans-serif; /* Or 'Roboto' if you prefer */
+    font-size: 1.5rem;
+    font-weight: 900;
+    color: rgba(255, 255, 255, 0.3); /* Subtle transparent white */
+    pointer-events: none; /* Let clicks pass through it */
+    z-index: 100;
+    text-shadow: 0 0 5px rgba(0,0,0,0.5);
+}
