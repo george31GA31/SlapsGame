@@ -47,31 +47,27 @@ function fetchEnemyStats(enemyId) {
         .catch(err => console.error("Error fetching stats:", err));
 }
 
-// --- 3. REPORT RESULT TO FIREBASE ---
+// --- 3. REPORT RESULT TO FIREBASE (WITH ADVANCED STATS) ---
 function reportMatchResultInternal(isWin, onComplete, proofToken) {
-    // 1. SAFETY CHECK
-    if (matchResultReported) {
-        if (onComplete) onComplete();
-        return;
-    }
+    if (matchResultReported) { if (onComplete) onComplete(); return; }
     
-    // SECURITY CHECK: If I claim a win, I MUST have a proof token from the loser
-    // (Unless it's a disconnect win, which is a special case)
     if (isWin && !proofToken && !gameState.opponentDisconnected) {
-        console.warn("⚠️ SECURITY: Attempted to claim win without proof token. Ignored.");
+        console.warn("⚠️ SECURITY: Attempted to claim win without proof token.");
         return; 
     }
 
     matchResultReported = true; 
-    console.log(`🚀 REPORTING ${isWin ? 'WIN' : 'LOSS'} to Database...`);
+    console.log("🚀 REPORTING STATS to Database...");
 
     const user = firebase.auth().currentUser;
-    if (!user) {
-        if (onComplete) onComplete();
-        return;
-    }
+    if (!user) { if (onComplete) onComplete(); return; }
 
     const userRef = firebase.database().ref('users/' + user.uid);
+
+    // -- NEW: CALCULATE MATCH DURATION --
+    // Assuming you set gameState.matchStartTime = Date.now() when the game started
+    // If not, set it to 0 for now.
+    const durationSec = gameState.matchStartTime ? Math.floor((Date.now() - gameState.matchStartTime) / 1000) : 0;
 
     userRef.transaction((userData) => {
         if (userData) {
@@ -80,14 +76,27 @@ function reportMatchResultInternal(isWin, onComplete, proofToken) {
             const losses = userData.losses || 0;
             const myGameCount = wins + losses;
 
+            // -- NEW: GET EXISTING EXTENDED STATS --
+            const exSlapsWon = userData.stats_slaps_won || 0;
+            const exSlapsLost = userData.stats_slaps_lost || 0;
+            const exRoundsWon = userData.stats_rounds_won || 0;
+            const exRoundsLost = userData.stats_rounds_lost || 0;
+            const exTotalTime = userData.stats_total_time_sec || 0;
+
             if (typeof calculateNewElo !== 'function') return userData;
 
-            // Calculate ELO
             const newElo = calculateNewElo(currentElo, enemyElo, isWin, myGameCount, enemyGameCount);
 
             userData.elo = newElo;
             if (isWin) userData.wins = wins + 1;
             else userData.losses = losses + 1;
+
+            // -- NEW: SAVE EXTENDED STATS --
+            userData.stats_slaps_won = exSlapsWon + gameState.p1Slaps;
+            userData.stats_slaps_lost = exSlapsLost + gameState.aiSlaps; // Enemy slaps = my lost slaps
+            userData.stats_rounds_won = exRoundsWon + gameState.p1Rounds;
+            userData.stats_rounds_lost = exRoundsLost + gameState.aiRounds;
+            userData.stats_total_time_sec = exTotalTime + durationSec;
             
             return userData;
         }
@@ -133,6 +142,9 @@ const gameState = {
     gameActive: false,
     lastActionType: 'none',
     matchEnded: false,
+
+    matchStartTime: null,
+    timerInterval: null,
 
     playerReady: false,
     aiReady: false,         // REUSED AS OPPONENT READY
@@ -785,6 +797,9 @@ function applyPenaltyUpdate(data) {
 
 async function startRoundHostAuthoritative(oddCard = null) {
     gameState.matchEnded = false;
+
+   startVisualTimer();
+   await preloadCardImages([...gameState.playerHand, ...gameState.aiHand]);
 
     let fullDeck = createDeck();
     shuffle(fullDeck);
@@ -1903,7 +1918,7 @@ function applyRoundOver(data) {
 function applyMatchOver(data) {
     gameState.gameActive = false;
     gameState.matchEnded = true; 
-    
+    stopVisualTimer();
     const iAmHost = gameState.isHost;
     const hostWon = (data.winner === 'player');
     const iWon = (iAmHost && hostWon) || (!iAmHost && !hostWon);
@@ -2237,3 +2252,34 @@ window.addEventListener('beforeunload', () => {
         while (Date.now() - start < 50) { /* busy wait */ }
     }
 });
+// --- VISUAL TIMER LOGIC ---
+function startVisualTimer() {
+    // Don't restart if already running
+    if (gameState.timerInterval) return;
+
+    // Set the start time if not already set
+    if (!gameState.matchStartTime) {
+        gameState.matchStartTime = Date.now();
+    }
+
+    const timerEl = document.getElementById('match-timer');
+    
+    gameState.timerInterval = setInterval(() => {
+        if (!gameState.matchStartTime) return;
+        
+        const now = Date.now();
+        const diff = Math.floor((now - gameState.matchStartTime) / 1000);
+        
+        const mins = Math.floor(diff / 60).toString().padStart(2, '0');
+        const secs = (diff % 60).toString().padStart(2, '0');
+        
+        if (timerEl) timerEl.innerText = `${mins}:${secs}`;
+    }, 1000);
+}
+
+function stopVisualTimer() {
+    if (gameState.timerInterval) {
+        clearInterval(gameState.timerInterval);
+        gameState.timerInterval = null;
+    }
+}
