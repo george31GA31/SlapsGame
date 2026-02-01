@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Player Stats - ISF</title>
+    <link rel="icon" type="image/png" href="assets/ISF_favicon.png">
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700;900&display=swap" rel="stylesheet">
+
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+    <script src="firebase-init.js"></script>
+
+    <style>
+        body {
+            background-color: #050505;
+            background-image: radial-gradient(circle at top, #1a1a1a 0%, #000000 100%);
+            color: white;
+            font-family: 'Montserrat', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .profile-header {
+            text-align: center;
+            margin-bottom: 40px;
+            animation: fadeIn 0.5s ease;
+        }
+
+        .flag-large {
+            width: 80px;
+            height: auto;
+            border-radius: 6px;
+            box-shadow: 0 0 20px rgba(0, 204, 255, 0.3);
+            margin-bottom: 15px;
+        }
+
+        .player-name {
+            font-size: 2.5rem;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin: 0;
+            text-shadow: 0 0 15px rgba(255, 255, 255, 0.2);
+        }
+
+        .elo-badge {
+            display: inline-block;
+            background: linear-gradient(135deg, #ffd700, #b8860b);
+            color: black;
+            padding: 5px 20px;
+            border-radius: 50px;
+            font-weight: 800;
+            margin-top: 10px;
+            box-shadow: 0 0 15px rgba(255, 215, 0, 0.4);
+        }
+
+        /* STATS GRID */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            width: 100%;
+            max-width: 1000px;
+        }
+
+        .stat-card {
+            background: #111;
+            border: 1px solid #222;
+            border-radius: 15px;
+            padding: 25px;
+            text-align: center;
+            transition: transform 0.2s, border-color 0.2s;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+            border-color: #00ccff;
+        }
+
+        .stat-icon {
+            font-size: 2rem;
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .stat-value {
+            font-size: 2.5rem;
+            font-weight: 900;
+            color: white;
+            margin: 5px 0;
+        }
+
+        .stat-label {
+            color: #888;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: 700;
+        }
+
+        .sub-stat {
+            font-size: 0.9rem;
+            color: #555;
+            margin-top: 5px;
+        }
+        .highlight-green { color: #00ff00; }
+        .highlight-red { color: #ff4444; }
+        .highlight-blue { color: #00ccff; }
+
+        .btn-back {
+            margin-top: 40px;
+            background: transparent;
+            border: 2px solid #333;
+            color: #888;
+            padding: 10px 30px;
+            border-radius: 50px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: 0.2s;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .btn-back:hover { border-color: white; color: white; }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body>
+
+    <div id="loading" style="margin-top: 100px;">
+        <i class="fa-solid fa-spinner fa-spin fa-2x"></i>
+    </div>
+
+    <div id="content" class="hidden" style="width: 100%; display: flex; flex-direction: column; align-items: center;">
+        
+        <div class="profile-header">
+            <img id="p-flag" src="" class="flag-large" alt="Flag">
+            <h1 id="p-name" class="player-name">LOADING...</h1>
+            <div id="p-elo" class="elo-badge">1000 ELO</div>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <i class="fa-solid fa-trophy stat-icon" style="color: #ffd700;"></i>
+                <div class="stat-label">Matches Played</div>
+                <div id="s-matches" class="stat-value">0</div>
+                <div class="sub-stat">
+                    <span id="s-wins" class="highlight-green">0 W</span> - 
+                    <span id="s-losses" class="highlight-red">0 L</span>
+                </div>
+            </div>
+
+            <div class="stat-card">
+                <i class="fa-solid fa-hand-paper stat-icon" style="color: #00ccff;"></i>
+                <div class="stat-label">Total Slaps Won</div>
+                <div id="s-slaps-won" class="stat-value highlight-blue">0</div>
+                <div class="sub-stat">Vs <span id="s-slaps-lost">0</span> Lost</div>
+            </div>
+
+            <div class="stat-card">
+                <i class="fa-solid fa-layer-group stat-icon" style="color: #ff00ff;"></i>
+                <div class="stat-label">Rounds Won</div>
+                <div id="s-rounds-won" class="stat-value">0</div>
+                <div class="sub-stat">Win Rate: <span id="s-round-rate">0%</span></div>
+            </div>
+
+            <div class="stat-card">
+                <i class="fa-regular fa-clock stat-icon" style="color: #888;"></i>
+                <div class="stat-label">Avg Match Length</div>
+                <div id="s-avg-time" class="stat-value">0m 0s</div>
+                <div class="sub-stat">Total Playtime: <span id="s-total-time">0h</span></div>
+            </div>
+        </div>
+
+        <a href="leaderboard.html" class="btn-back">BACK TO LEADERBOARD</a>
+    </div>
+
+    <script>
+        // 1. Get User ID from URL (e.g., stats.html?uid=xyz123)
+        const urlParams = new URLSearchParams(window.location.search);
+        const targetUid = urlParams.get('uid');
+
+        if (!targetUid) {
+            alert("No player selected.");
+            window.location.href = 'leaderboard.html';
+        }
+
+        // 2. Fetch Data
+        db.ref('users/' + targetUid).once('value').then(snapshot => {
+            if (snapshot.exists()) {
+                const data = snapshot.val();
+                renderStats(data);
+            } else {
+                document.getElementById('p-name').innerText = "PLAYER NOT FOUND";
+                document.getElementById('loading').classList.add('hidden');
+            }
+        });
+
+        function renderStats(data) {
+            // Basic Info
+            document.getElementById('p-name').innerText = data.username || "UNKNOWN";
+            document.getElementById('p-flag').src = data.flag || "assets/flags/United Nations.png";
+            document.getElementById('p-elo').innerText = `${Math.floor(data.elo || 1000)} ELO`;
+
+            // Metrics
+            const wins = data.wins || 0;
+            const losses = data.losses || 0;
+            const matches = wins + losses;
+            
+            // New Metrics (These will be 0 until we update game.js)
+            const slapsWon = data.stats_slaps_won || 0;
+            const slapsLost = data.stats_slaps_lost || 0;
+            const roundsWon = data.stats_rounds_won || 0;
+            const roundsLost = data.stats_rounds_lost || 0;
+            const totalTimeSec = data.stats_total_time_sec || 0;
+
+            // Calculations
+            const roundRate = (roundsWon + roundsLost) > 0 
+                ? Math.round((roundsWon / (roundsWon + roundsLost)) * 100) 
+                : 0;
+
+            const avgTimeSec = matches > 0 ? Math.floor(totalTimeSec / matches) : 0;
+            const avgMin = Math.floor(avgTimeSec / 60);
+            const avgSec = avgTimeSec % 60;
+
+            const totalHours = (totalTimeSec / 3600).toFixed(1);
+
+            // Render
+            document.getElementById('s-matches').innerText = matches;
+            document.getElementById('s-wins').innerText = `${wins} W`;
+            document.getElementById('s-losses').innerText = `${losses} L`;
+
+            document.getElementById('s-slaps-won').innerText = slapsWon;
+            document.getElementById('s-slaps-lost').innerText = slapsLost;
+
+            document.getElementById('s-rounds-won').innerText = roundsWon;
+            document.getElementById('s-round-rate').innerText = `${roundRate}%`;
+
+            document.getElementById('s-avg-time').innerText = `${avgMin}m ${avgSec}s`;
+            document.getElementById('s-total-time').innerText = `${totalHours}h`;
+
+            // Show UI
+            document.getElementById('loading').classList.add('hidden');
+            document.getElementById('content').classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>
