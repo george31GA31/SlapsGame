@@ -77,6 +77,10 @@
             snapshot.forEach((child) => {
                 const data = child.val();
                 
+                // --- UPDATE 1: GET THE UID ---
+                const uid = child.key; 
+                // -----------------------------
+
                 // Construct Real Name safely
                 const fName = data.firstName || "";
                 const lName = data.lastName || "";
@@ -86,12 +90,10 @@
                 if (!fullName) fullName = data.username; 
 
                 players.push({
+                    uid: uid, // Save the ID here
                     username: data.username || "Unknown",
-                    realName: fullName, // No longer forced to Uppercase
-                    
-                    // FIX: If data.flag is missing (old account), use the USA flag
+                    realName: fullName, 
                     flagSrc: data.flag || "assets/flags/UnitedStatesofAmerica.png",
-                    
                     elo: data.elo || 1000,
                     wins: data.wins || 0,
                     losses: data.losses || 0,
@@ -107,7 +109,7 @@
                 const isTop3 = rank <= 3 ? 'top3' : '';
                 const isMeClass = p.isMe ? 'me' : '';
                 
-                // HTML for the Row
+                // --- UPDATE 2: MAKE THE NAME A LINK ---
                 const html = `
                     <div class="lb-row ${isMeClass}">
                         <div class="rank ${isTop3}">#${rank}</div>
@@ -117,7 +119,9 @@
                         </div>
                         
                         <div class="player-info">
-                            <span class="p-name">${p.realName}</span>
+                            <a href="stats.html?uid=${p.uid}" class="p-name" style="text-decoration:none; color:white;">
+                                ${p.realName}
+                            </a>
                             
                             <span style="display:block; font-size:0.75rem; color:#888; margin-top:2px;">
                                 @${p.username}
