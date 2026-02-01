@@ -4,8 +4,9 @@
 
 // --- 1. ELO VARIABLES ---
 let isRanked = true; 
-let enemyElo = 1000;      // Default
-let enemyGameCount = 0;   // Default
+let enemyElo = 1000; 
+let enemyGameCount = 0;
+let matchResultReported = false;
 
 // --- 2. FETCH ENEMY STATS ---
 function fetchEnemyStats(enemyId) {
@@ -47,14 +48,21 @@ function fetchEnemyStats(enemyId) {
 }
 
 // --- 3. REPORT RESULT TO FIREBASE ---
-// --- 3. REPORT RESULT TO FIREBASE ---
 function reportMatchResultInternal(isWin, onComplete) {
+    // 1. SAFETY CHECK: PREVENT DOUBLE COUNTING
+    if (matchResultReported) {
+        console.warn("⚠️ Match result already reported. Skipping duplicate update.");
+        if (onComplete) onComplete();
+        return;
+    }
+    matchResultReported = true; // Lock it immediately
+
     console.log("🚀 STARTING ELO UPDATE...");
 
     const user = firebase.auth().currentUser;
     if (!user) {
         console.error("❌ ERROR: You are not logged in.");
-        if (onComplete) onComplete(); // Run callback anyway so game doesn't hang
+        if (onComplete) onComplete();
         return;
     }
 
@@ -67,9 +75,7 @@ function reportMatchResultInternal(isWin, onComplete) {
             const losses = userData.losses || 0;
             const myGameCount = wins + losses;
 
-            // Safety check for the math engine
             if (typeof calculateNewElo !== 'function') {
-                console.error("❌ CRITICAL: Missing math engine.");
                 return userData;
             }
 
@@ -81,8 +87,6 @@ function reportMatchResultInternal(isWin, onComplete) {
                 enemyGameCount 
             );
 
-            console.log(`📈 New ELO: ${newElo} (Win: ${isWin})`);
-
             userData.elo = newElo;
             if (isWin) userData.wins = wins + 1;
             else userData.losses = losses + 1;
@@ -91,16 +95,9 @@ function reportMatchResultInternal(isWin, onComplete) {
         }
         return userData;
     }, (error, committed, snapshot) => {
-        if (error) {
-            console.error("❌ Transaction Failed:", error);
-        } else if (committed) {
-            console.log("✅ SUCCESS! Database updated.");
-        }
-        // CRITICAL: Run the "Go Home" code now that we are finished
         if (onComplete) onComplete();
     });
 }
-// --- 4. INITIALIZATION ---
 window.onload = function () {
     document.addEventListener('keydown', handleInput);
     const pDeck = document.getElementById('player-draw-deck');
@@ -136,6 +133,7 @@ const gameState = {
     aiTotal: 26,            // REUSED AS OPPONENT TOTAL
 
     gameActive: false,
+    lastActionType: 'none',
     matchEnded: false,
 
     playerReady: false,
@@ -384,15 +382,18 @@ function handleNet(msg) {
     }
 
     // --- 3. DISCONNECT HANDLER (The Rude Way) ---
+    // --- 3. DISCONNECT HANDLER ---
     if (msg.type === 'OPPONENT_LEFT') {
         if (gameState.matchEnded) return;
 
-        // Force close any waiting screens
+        // 1. FORCE CLOSE ALL MODALS IMMEDIATELY
+        // This prevents you from clicking "Decline" if they left mid-request
         document.getElementById('concession-waiting-overlay')?.classList.add('hidden');
         document.getElementById('concession-modal')?.classList.add('hidden');
         document.getElementById('rematch-modal')?.classList.add('hidden');
 
-        // Automatic Win
+        // 2. REPORT THE WIN 
+        // (The safety flag at the top will prevent this if it already happened)
         if (isRanked) reportMatchResultInternal(true);
 
         const name = (gameState.opponentName || "OPPONENT").toUpperCase();
@@ -412,7 +413,6 @@ function handleNet(msg) {
         }
         return;
     }
-
     // --- 4. REMATCH HANDLERS ---
     if (msg.type === 'REMATCH_REQ') {
         document.getElementById('rematch-modal').classList.remove('hidden');
@@ -438,11 +438,26 @@ function handleNet(msg) {
 function handleInput(e) {
     if (e.code === 'Space') {
         e.preventDefault();
+        
+        // Prevent holding the key down from spamming
+        if (e.repeat) return; 
+
         if (!gameState.gameActive) return;
 
         const now = Date.now();
-        if (now - gameState.lastSpacebarTime < 400) { return; }
+        
+        // --- DYNAMIC DEBOUNCE ---
+        // If it was a 'reveal' (auto-deal), use 50ms safety buffer.
+        // If it was a 'move' (player action), use 0ms (INSTANT).
+        const cooldown = (gameState.lastActionType === 'reveal') ? 50 : 0;
+
+        if (now - gameState.lastSpacebarTime < cooldown) { 
+            console.log(`Ignored Spacebar: Cooldown active (${cooldown}ms)`); 
+            return; 
+        }
         gameState.lastSpacebarTime = now;
+
+        console.log("Spacebar Registered!"); 
 
         if (gameState.isHost) {
             adjudicateSlap('player'); 
@@ -451,7 +466,6 @@ function handleInput(e) {
         }
     }
 }
-
 function updatePenaltyUI() {
     renderBadges('player', gameState.playerYellows, gameState.playerReds);
     renderBadges('ai', gameState.aiYellows, gameState.aiReds);
@@ -1278,6 +1292,7 @@ function adjudicateMove(m, moverOverride) {
     sendNet({ type: 'MOVE_APPLY', apply: applyPayload });
 }
 function applyMoveAuthoritative(mover, cardObj, side, reqId) {
+   gameState.lastActionType = 'move';
     // 1. Ghost cleanup
     gameState.opponentDragGhosts.forEach((ghostEl, key) => {
         const parts = key.split(':'); 
@@ -1375,6 +1390,7 @@ function applyMoveAuthoritative(mover, cardObj, side, reqId) {
     };
 }
 function applyMoveFromHost(a) {
+   gameState.lastActionType = 'move';
     const localMover = (a.mover === 'player') ? 'ai' : 'player';
     const localSide = (a.side === 'left') ? 'right' : 'left';
 
@@ -1903,21 +1919,35 @@ function applyMatchOver(data) {
     }
 }
 function quitMatch() {
-    console.log("Requesting concession...");
+    // 1. IF GAME IS ALREADY OVER (Win/Loss screen is visible)
+    // Don't ask for concession. Just go home.
+    if (gameState.matchEnded) {
+        window.location.href = 'index.html';
+        return;
+    }
+
+    console.log("Requesting concession (Mid-Game)...");
     
     if (!gameState.conn || !gameState.conn.open) {
         window.location.href = 'index.html';
         return;
     }
 
-    // 1. FREEZE THE GAME (No going back)
+    // 2. FREEZE THE GAME (Point of No Return)
     gameState.gameActive = false; 
 
-    // 2. SHOW BLOCKING OVERLAY
+    // 3. SHOW WAITING OVERLAY
     const overlay = document.getElementById('concession-waiting-overlay');
     if (overlay) overlay.classList.remove('hidden');
 
-    // 3. SEND REQUEST
+    // 4. DISABLE THE BUTTON
+    const btn = document.querySelector('.btn-quit');
+    if (btn) {
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Waiting...';
+        btn.disabled = true;
+    }
+
+    // 5. SEND REQUEST
     sendNet({ type: 'CONCESSION_REQ' });
 }
 function respondConcession(accepted) {
@@ -2019,6 +2049,9 @@ function applyRevealShow() {
     gameState.gameActive = true;
     gameState.playerReady = false;
     gameState.aiReady = false;
+    
+    // --- SET ACTION TYPE TO REVEAL ---
+    gameState.lastActionType = 'reveal';
     
     checkSlapCondition();
 }
