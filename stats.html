@@ -51,7 +51,7 @@
             text-shadow: 0 0 15px rgba(255, 255, 255, 0.2);
         }
 
-        /* --- UPDATED ELO BADGE STYLES --- */
+        /* --- UPDATED ELO BADGE STYLES (Based on Image) --- */
         .elo-badge {
             display: inline-block;
             padding: 5px 25px;
@@ -64,30 +64,81 @@
             box-shadow: 0 4px 15px rgba(0,0,0,0.5);
             border: 2px solid rgba(255,255,255,0.2);
             transition: all 0.3s ease;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
         }
 
-        /* 0 - 750: BRONZE */
-        .elo-badge.bronze {
-            background: linear-gradient(135deg, #cd7f32, #8b4513);
+        /* 0 - 599: IRON */
+        .elo-badge.iron {
+            background: linear-gradient(135deg, #434343, #2b2b2b);
             color: #fff;
+            border-color: #666;
+            box-shadow: 0 0 15px rgba(100, 100, 100, 0.4);
+        }
+
+        /* 600 - 774: COPPER */
+        .elo-badge.copper {
+            background: linear-gradient(135deg, #b87333, #8a5a2b);
+            color: #fff;
+            border-color: #d28c47;
+            box-shadow: 0 0 15px rgba(184, 115, 51, 0.4);
+        }
+
+        /* 775 - 874: BRONZE */
+        .elo-badge.bronze {
+            background: linear-gradient(135deg, #cd7f32, #a05a2c);
+            color: #fff;
+            border-color: #e69b5c;
             box-shadow: 0 0 15px rgba(205, 127, 50, 0.4);
-            border-color: #cd7f32;
         }
 
-        /* 751 - 1100: SILVER */
+        /* 875 - 999: SILVER */
         .elo-badge.silver {
-            background: linear-gradient(135deg, #e0e0e0, #7f8c8d);
+            background: linear-gradient(135deg, #e0e0e0, #95a5a6);
             color: #000;
-            box-shadow: 0 0 15px rgba(192, 192, 192, 0.4);
             border-color: #bdc3c7;
+            text-shadow: none;
+            box-shadow: 0 0 15px rgba(192, 192, 192, 0.4);
         }
 
-        /* 1101+: GOLD */
+        /* 1000 - 1099: GOLD */
         .elo-badge.gold {
             background: linear-gradient(135deg, #ffd700, #b8860b);
             color: #000;
-            box-shadow: 0 0 20px rgba(255, 215, 0, 0.6);
             border-color: #ffffaa;
+            text-shadow: none;
+            box-shadow: 0 0 20px rgba(255, 215, 0, 0.6);
+        }
+
+        /* 1100 - 1249: PLATINUM */
+        .elo-badge.platinum {
+            background: linear-gradient(135deg, #e5e4e2, #5a6e7c);
+            color: #fff;
+            border-color: #ecf0f1;
+            box-shadow: 0 0 20px rgba(229, 228, 226, 0.5);
+        }
+
+        /* 1250 - 1399: EMERALD */
+        .elo-badge.emerald {
+            background: linear-gradient(135deg, #2ecc71, #1e8449);
+            color: #fff;
+            border-color: #58d68d;
+            box-shadow: 0 0 20px rgba(46, 204, 113, 0.6);
+        }
+
+        /* 1400 - 1599: DIAMOND */
+        .elo-badge.diamond {
+            background: linear-gradient(135deg, #3498db, #2980b9);
+            color: #fff;
+            border-color: #5dade2;
+            box-shadow: 0 0 25px rgba(52, 152, 219, 0.7);
+        }
+
+        /* 1600+: OBSIDIAN */
+        .elo-badge.obsidian {
+            background: linear-gradient(135deg, #000000, #1c1c1c);
+            color: #ff9900;
+            border: 2px solid #ff9900;
+            box-shadow: 0 0 30px rgba(0, 0, 0, 0.9), inset 0 0 10px rgba(255, 153, 0, 0.2);
         }
 
         /* STATS GRID */
@@ -235,27 +286,55 @@
         });
 
         function renderStats(data) {
-            // Basic Info
-            const username = data.username || "UNKNOWN";
+            // 1. Full Name Logic
+            const fName = data.firstName || "";
+            const lName = data.lastName || "";
+            let displayName = (fName + " " + lName).trim();
+            
+            // Fallback to username if full name is missing
+            if (!displayName) displayName = (data.username || "UNKNOWN").toUpperCase(); 
+            else displayName = displayName.toUpperCase(); // Ensure it matches the style
+
+            document.getElementById('p-name').innerText = displayName;
+            
+            // 2. Rank Logic
             const flag = data.flag || "assets/flags/United Nations.png";
             const elo = Math.floor(data.elo || 1000);
-
-            document.getElementById('p-name').innerText = username;
-            document.getElementById('p-flag').src = flag;
             
-            // --- ELO BADGE LOGIC (UPDATED) ---
+            document.getElementById('p-flag').src = flag;
             const eloBadge = document.getElementById('p-elo');
             eloBadge.innerText = `${elo} ELO`;
             
-            // Reset classes to base
+            // Reset classes
             eloBadge.className = 'elo-badge';
 
-            if (elo <= 750) {
+            if (elo < 600) {
+                eloBadge.classList.add('iron');
+                eloBadge.innerText += " (IRON)";
+            } else if (elo < 775) {
+                eloBadge.classList.add('copper');
+                eloBadge.innerText += " (COPPER)";
+            } else if (elo < 875) {
                 eloBadge.classList.add('bronze');
-            } else if (elo <= 1100) {
+                eloBadge.innerText += " (BRONZE)";
+            } else if (elo < 1000) {
                 eloBadge.classList.add('silver');
-            } else {
+                eloBadge.innerText += " (SILVER)";
+            } else if (elo < 1100) {
                 eloBadge.classList.add('gold');
+                eloBadge.innerText += " (GOLD)";
+            } else if (elo < 1250) {
+                eloBadge.classList.add('platinum');
+                eloBadge.innerText += " (PLATINUM)";
+            } else if (elo < 1400) {
+                eloBadge.classList.add('emerald');
+                eloBadge.innerText += " (EMERALD)";
+            } else if (elo < 1600) {
+                eloBadge.classList.add('diamond');
+                eloBadge.innerText += " (DIAMOND)";
+            } else {
+                eloBadge.classList.add('obsidian');
+                eloBadge.innerText += " (OBSIDIAN)";
             }
 
             // Metrics
