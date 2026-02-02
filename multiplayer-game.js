@@ -126,6 +126,8 @@ const gameState = {
     lastActionType: 'none',
     matchEnded: false,
 
+    matchLive: false,
+
     matchStartTime: null,
     timerInterval: null,
 
@@ -227,10 +229,13 @@ function initMultiplayer() {
     gameState.roomCode = hostId;
 
     if (!hostId) {
+        // Keep this one, it's a logic error not a connection error
         showRoundMessage("NO MATCH DATA", "Return to matchmaking and create or join a match.");
         return;
     }
 
+    // Initialize Peer
+    if (gameState.peer) gameState.peer.destroy();
     gameState.peer = gameState.isHost ? new Peer(hostId) : new Peer();
 
     gameState.peer.on('open', (id) => {
@@ -238,15 +243,31 @@ function initMultiplayer() {
         if (gameState.isHost) {
             gameState.peer.on('connection', (conn) => bindConnection(conn));
         } else {
-            const conn = gameState.peer.connect(hostId, { reliable: true });
-            bindConnection(conn);
+            connectToHost(hostId); // Extracted function for retrying
         }
     });
 
     gameState.peer.on('error', (err) => {
-        console.error(err);
-        showRoundMessage("CONNECTION ERROR", "Return to matchmaking and try again.");
+        console.error("Peer Error:", err.type);
+        // --- NO POPUP HERE ---
+        // We just let it fail silently or retry in the connectToHost loop.
     });
+}
+
+// Helper function to handle the "Patience"
+function connectToHost(hostId) {
+    console.log("Attempting connection to:", hostId);
+    const conn = gameState.peer.connect(hostId, { reliable: true });
+    
+    // If it fails immediately (peer-unavailable), retry in 2s
+    gameState.peer.once('error', (err) => {
+        if (err.type === 'peer-unavailable') {
+            console.log("Host not ready yet. Retrying in 2s...");
+            setTimeout(() => connectToHost(hostId), 2000);
+        }
+    });
+
+    bindConnection(conn);
 }
 
 function bindConnection(conn) {
@@ -382,27 +403,33 @@ function handleNet(msg) {
         document.getElementById('concession-modal')?.classList.add('hidden');
         document.getElementById('rematch-modal')?.classList.add('hidden');
 
-        if (isRanked) reportMatchResultInternal(true);
-
-        const name = (gameState.opponentName || "OPPONENT").toUpperCase();
-        showEndGame(`${name} DISCONNECTED`, true);
-        
-        const contentArea = document.querySelector('#game-message p');
-        if(contentArea) {
-            contentArea.innerHTML = `
-                Connection lost.<br>
-                <strong>VICTORY IS YOURS!</strong>
-                <div style="display:flex; gap:10px; justify-content:center; margin-top:20px;">
-                    <button class="btn-action-small" onclick="window.location.href='index.html'" style="background:#ff4444; width:auto;">
-                        MAIN MENU
-                    </button>
-                </div>
-            `;
+        // --- CRITICAL FIX: CHECK IF MATCH IS LIVE ---
+        if (gameState.matchLive && isRanked) {
+            // Game was actually playing -> Count it as a Win
+            reportMatchResultInternal(true);
+            showEndGame(`${(gameState.opponentName || "OPPONENT").toUpperCase()} DISCONNECTED`, true);
+        } else {
+            // Game hadn't started yet -> VOID IT (No stats)
+            console.log("Opponent disconnected before match start. Match Voided.");
+            const modal = document.getElementById('game-message');
+            if (modal) {
+                modal.querySelector('h1').innerText = "CONNECTION LOST";
+                modal.querySelector('h1').style.color = "#fff"; // Neutral color
+                modal.querySelector('p').innerHTML = `
+                    The opponent failed to connect or left before the game started.<br>
+                    <strong>No stats have been recorded.</strong>
+                    <div style="margin-top:20px;">
+                        <button class="btn-action-small" onclick="window.location.href='index.html'" style="background:#444; width:auto;">
+                            MAIN MENU
+                        </button>
+                    </div>
+                `;
+                modal.classList.remove('hidden');
+            }
         }
         return;
     }
 
-    // --- REMATCH HANDLERS ---
     if (msg.type === 'REMATCH_REQ') {
         document.getElementById('rematch-modal').classList.remove('hidden');
         return;
@@ -730,6 +757,7 @@ function applyPenaltyUpdate(data) {
 
 async function startRoundHostAuthoritative(oddCard = null) {
     gameState.matchEnded = false;
+    gameState.matchLive = true;
     startVisualTimer();
     
     await preloadCardImages([...gameState.playerHand, ...gameState.aiHand]);
@@ -819,7 +847,8 @@ async function startRoundHostAuthoritative(oddCard = null) {
 
 async function startRoundJoinerFromState(state) {
     importState(state);
-    startVisualTimer(); // ADDED GUEST TIMER START
+   gameState.matchLive = true;
+    startVisualTimer();
 
     await preloadCardImages([...gameState.playerHand, ...gameState.aiHand]);
     dealSmartHand(gameState.playerHand, 'player');
