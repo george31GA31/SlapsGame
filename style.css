@@ -431,3 +431,26 @@ img { pointer-events: none; }
     .rules-visual { height: 300px; flex: none; }
     .rules-content { width: 100%; height: auto; border-left: none; }
 }
+/* =========================================
+   8. SCROLLING FIXES (Auto-Detect)
+   ========================================= */
+
+/* If the page contains a Leaderboard (.lb-container) 
+   OR a Stats Profile (.profile-header), 
+   we unlock the page so the browser can scroll normally.
+*/
+body:has(.lb-container), 
+body:has(.profile-header) {
+    height: auto !important;       /* Allow page to grow endlessly */
+    min-height: 100vh !important;  /* Ensure it covers at least full screen */
+    overflow-y: auto !important;   /* ENABLE BROWSER SCROLLBAR */
+    overflow-x: hidden;            /* Prevent side scrolling */
+    padding-bottom: 50px;          /* Add breathing room at the bottom */
+}
+
+/* Remove the "Box" constraints from the Leaderboard */
+.lb-container {
+    max-height: none !important;   /* Remove the height limit */
+    overflow: visible !important;  /* Remove the internal scrollbar */
+    margin-bottom: 50px;           /* Spacing at the bottom */
+}
