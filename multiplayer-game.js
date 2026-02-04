@@ -1039,9 +1039,24 @@ function cardKey(c) {
    DRAG AND DROP LOGIC
    ================================ */
 
+/* ================================
+   DRAG AND DROP LOGIC (PC + IPAD SUPPORT)
+   ================================ */
+
 function makeDraggable(img, cardData) {
-    img.onmousedown = (e) => {
-        e.preventDefault();
+    // Helper: Get X/Y from either Mouse or Touch
+    function getExy(e) {
+        if (e.touches && e.touches.length > 0) {
+            return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        }
+        return { x: e.clientX, y: e.clientY };
+    }
+
+    // Unified Start Handler
+    function dragStart(e) {
+        // Only prevent default if it's not a button click (allows basic interaction)
+        if (e.type === 'touchstart') e.preventDefault(); 
+        
         gameState.globalZ++;
         img.style.zIndex = gameState.globalZ;
         img.style.transition = 'none';
@@ -1055,8 +1070,10 @@ function makeDraggable(img, cardData) {
         if (!box) return;
 
         const startRect = img.getBoundingClientRect();
-        let shiftX = e.clientX - startRect.left;
-        let shiftY = e.clientY - startRect.top;
+        const coords = getExy(e);
+        
+        let shiftX = coords.x - startRect.left;
+        let shiftY = coords.y - startRect.top;
 
         function getCenterNormals(currLeft, currTop, containerW, containerH) {
             const elW = img.offsetWidth;
@@ -1089,31 +1106,51 @@ function makeDraggable(img, cardData) {
             }
         }
 
-        {
-            const boxRect = box.getBoundingClientRect();
-            const startLeft = e.pageX - shiftX - boxRect.left;
-            const startTop = e.pageY - shiftY - boxRect.top;
-            const { nx, ny } = getCenterNormals(startLeft, startTop, boxRect.width, boxRect.height);
-            sendNet({ 
-                type: 'DRAG', 
-                drag: { id: cardKey(cardData), nx, ny, phase: 'start', src: cardData.imgSrc } 
-            });
+        // Send Start Network Event
+        const boxRect = box.getBoundingClientRect();
+        const startLeft = coords.x - shiftX - boxRect.left;
+        const startTop = coords.y - shiftY - boxRect.top;
+        const { nx, ny } = getCenterNormals(startLeft, startTop, boxRect.width, boxRect.height);
+        
+        sendNet({ 
+            type: 'DRAG', 
+            drag: { id: cardKey(cardData), nx, ny, phase: 'start', src: cardData.imgSrc } 
+        });
+
+        moveAt(coords.x, coords.y, false);
+
+        // Define Move Handler
+        function onMove(event) {
+            if (event.type === 'touchmove') event.preventDefault(); // Stop Scrolling
+            const moveCoords = getExy(event);
+            moveAt(moveCoords.x, moveCoords.y, true);
         }
 
-        moveAt(e.pageX, e.pageY, false);
-
-        function onMouseMove(event) {
-            moveAt(event.pageX, event.pageY, true);
-        }
-
-        function onMouseUp(event) {
-            document.removeEventListener('mousemove', onMouseMove);
-            document.removeEventListener('mouseup', onMouseUp);
+        // Define End Handler
+        function onEnd(event) {
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onEnd);
+            document.removeEventListener('touchmove', onMove);
+            document.removeEventListener('touchend', onEnd);
 
             img.style.transition = 'all 0.1s ease-out';
 
+            // For drop detection, we need the last known coordinates. 
+            // Touchend doesn't have coordinates, so we use the element's position.
+            // However, getDropSide usually relies on mouse event clientX/Y.
+            // We need a robust way to check drop. 
+            
+            // SIMPLIFIED DROP CHECK FOR TOUCH:
+            // We just check if the element's center overlaps the drop zones.
+            const imgRect = img.getBoundingClientRect();
+            const centerX = imgRect.left + imgRect.width / 2;
+            const centerY = imgRect.top + imgRect.height / 2;
+            
+            // Mock an event object for getDropSide logic or replicate it:
+            const mockEvent = { clientX: centerX, clientY: centerY };
+
             if (gameState.gameActive && parseInt(img.style.top) < -10) {
-                const dropSide = getDropSide(img, event); 
+                const dropSide = getDropSide(img, mockEvent); 
                 requestMoveToHost(cardData, dropSide);
             } else {
                 const boxRect = box.getBoundingClientRect();
@@ -1126,11 +1163,18 @@ function makeDraggable(img, cardData) {
                 });
             }
         }
-        document.addEventListener('mousemove', onMouseMove);
-        document.addEventListener('mouseup', onMouseUp);
-    };
-}
 
+        // Attach Global Listeners
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onEnd);
+        document.addEventListener('touchmove', onMove, { passive: false });
+        document.addEventListener('touchend', onEnd);
+    }
+
+    // Attach Start Listeners
+    img.onmousedown = dragStart;
+    img.ontouchstart = dragStart;
+}
 function applyOpponentDrag(d) {
     const box = document.getElementById('ai-foundation-area');
     if (!box) return;
