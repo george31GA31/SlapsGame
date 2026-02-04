@@ -436,13 +436,25 @@ function handleNet(msg) {
         document.getElementById('rematch-modal').classList.remove('hidden');
         return;
     }
-    if (msg.type === 'REMATCH_YES') {
+   if (msg.type === 'REMATCH_YES') {
         document.getElementById('game-message').classList.add('hidden');
+        
+        // --- 1. RESET SCORE VARIABLES ---
         gameState.p1Rounds = 0; gameState.aiRounds = 0;
         gameState.p1Slaps = 0; gameState.aiSlaps = 0;
         gameState.playerTotal = 26; gameState.aiTotal = 26;
+        
+        // --- 2. RESET MATCH FLAGS (CRITICAL) ---
         gameState.matchEnded = false;
+        gameState.matchLive = false;         // Reset "Safe Start" flag
+        gameState.opponentDisconnected = false;
+        matchResultReported = false;         // <--- THE FIX: Allow new ELO report
+        gameState.matchStartTime = null;     // Reset Timer start
+        stopVisualTimer();                   // Stop old timer
+        startVisualTimer();                  // Start new timer logic
+
         updateScoreboardWidget();
+        
         if (gameState.isHost) startRoundHostAuthoritative();
         return;
     }
@@ -1930,21 +1942,33 @@ function acceptRematch() {
     document.getElementById('rematch-modal').classList.add('hidden');
     sendNet({ type: 'REMATCH_YES' });
     
+    // --- 1. RESET SCORE VARIABLES ---
     gameState.p1Rounds = 0; gameState.aiRounds = 0;
     gameState.p1Slaps = 0; gameState.aiSlaps = 0;
-    
     gameState.playerTotal = 26; 
     gameState.aiTotal = 26;
     
+    // --- 2. RESET MATCH FLAGS (CRITICAL) ---
     gameState.matchEnded = false;
+    gameState.matchLive = false;         // Reset "Safe Start" flag
+    gameState.opponentDisconnected = false;
+    matchResultReported = false;         // <--- THE FIX: Allow new ELO report
+    gameState.matchStartTime = null;     // Reset Timer start
+    stopVisualTimer();                   // Stop old timer
     
+    // Hide Game Over screen
     const modal = document.getElementById('game-message');
     if(modal) modal.classList.add('hidden');
     
     updateScoreboardWidget();
 
+    // If I am Host, I must start the mechanics
     if (gameState.isHost) {
         startRoundHostAuthoritative();
+    } else {
+        // If I am Joiner, I wait for the Host's ROUND_START message
+        // But I should start my visual timer now so it's ready
+        startVisualTimer();
     }
 }
 function declineRematch() {
