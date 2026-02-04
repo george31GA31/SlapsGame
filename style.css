@@ -212,6 +212,9 @@ img { pointer-events: none; }
     filter: drop-shadow(0 4px 6px rgba(0,0,0,0.5));
     transition: transform 0.05s; z-index: 10;
     pointer-events: auto !important; /* CRITICAL */
+    
+    /* --- IPAD FIX: STOPS SCROLLING WHEN TOUCHING CARDS --- */
+    touch-action: none; 
 }
 .player-card { cursor: grab; }
 .player-card:active { cursor: grabbing; transform: scale(1.05); z-index: 1000 !important; }
