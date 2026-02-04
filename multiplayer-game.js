@@ -366,8 +366,10 @@ function handleNet(msg) {
         return; 
     }
     
-    // --- CONCESSION HANDLERS ---
+
     if (msg.type === 'CONCESSION_REQ') {
+        if (gameState.matchEnded) return;
+
         gameState.gameActive = false; 
         const modal = document.getElementById('concession-modal');
         if (modal) modal.classList.remove('hidden');
@@ -608,26 +610,37 @@ function issuePenaltyHostAuth(who) {
         currentR = gameState.aiReds;
     }
 
+    // Check Red Card Logic
     let isRed = false;
     if (currentY >= 2) {
         isRed = true;
+        
+        // --- THE LOGIC FLIP ---
         if (who === 'player') { 
+            // HOST (PLAYER) GOT THE RED CARD
             gameState.playerYellows = 0; 
             gameState.playerReds++; 
             currentR = gameState.playerReds; 
             currentY = 0; 
-            gameState.playerTotal = Math.max(0, gameState.playerTotal - 3);
-            gameState.aiTotal += 3;
+            
+            // Penalty: Host GAINS 3 cards (Bad), Opponent LOSES 3 (Good)
+            gameState.playerTotal += 3;
+            gameState.aiTotal = Math.max(0, gameState.aiTotal - 3);
+            
         } else { 
+            // GUEST (AI) GOT THE RED CARD
             gameState.aiYellows = 0; 
             gameState.aiReds++; 
             currentR = gameState.aiReds; 
             currentY = 0; 
-            gameState.aiTotal = Math.max(0, gameState.aiTotal - 3);
-            gameState.playerTotal += 3;
+            
+            // Penalty: Guest GAINS 3 cards (Bad), Host LOSES 3 (Good)
+            gameState.aiTotal += 3;
+            gameState.playerTotal = Math.max(0, gameState.playerTotal - 3);
         }
     }
 
+    // Broadcast Penalty to both
     const payload = {
         type: 'PENALTY_UPDATE',
         target: who,
@@ -641,7 +654,6 @@ function issuePenaltyHostAuth(who) {
     sendNet(payload);
     applyPenaltyUpdate(payload);
 }
-
 // --- VISUAL APPLICATORS ---
 
 function applySlapUpdate(data) {
@@ -1837,6 +1849,13 @@ function applyMatchOver(data) {
     gameState.gameActive = false;
     gameState.matchEnded = true; 
     stopVisualTimer();
+
+    // --- FIX: FORCE CLOSE CONCESSION MODALS ---
+    // If a request was pending, hide it now because the match is done.
+    document.getElementById('concession-modal')?.classList.add('hidden');
+    document.getElementById('concession-waiting-overlay')?.classList.add('hidden');
+    // ------------------------------------------
+
     const iAmHost = gameState.isHost;
     const hostWon = (data.winner === 'player');
     const iWon = (iAmHost && hostWon) || (!iAmHost && !hostWon);
