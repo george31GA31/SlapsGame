@@ -1463,9 +1463,9 @@ function checkDrawConditionMultiplayer() {
     if (gameState.playerReady && gameState.aiReady) {
         if (!gameState.isHost) return;
 
+        // Check empty decks logic
         if (gameState.playerDeck.length === 0 && gameState.aiDeck.length === 0) {
             const isBorrowed = !document.getElementById('borrowed-player').classList.contains('hidden');
-            
             if (isBorrowed) {
                 triggerSecondCycleReset();
             } else {
@@ -1475,6 +1475,20 @@ function checkDrawConditionMultiplayer() {
         }
 
         gameState.drawLock = true;
+
+        // --- OPTIMIZATION: CALCULATE & SEND IMMEDIATELY ---
+        // We do this BEFORE the countdown starts so the data travels while the timer ticks.
+        const result = performRevealHostOnly();
+        
+        // 1. Send Data to Guest
+        sendNet({ type: 'REVEAL_PRELOAD', result });
+
+        // 2. Render Locally (Hidden)
+        if (result.right) renderCenterPile('right', unpackCard(result.right), true);
+        if (result.left) renderCenterPile('left', unpackCard(result.left), true);
+        updateScoreboard(); 
+
+        // 3. Start the Visual Countdown
         sendNet({ type: 'HOST_COUNTDOWN' });
         setTimeout(() => startCountdownFromHost(), 50);
     }
@@ -1500,29 +1514,23 @@ function startCountdownFromHost() {
             overlay.offsetHeight;
             overlay.style.animation = 'popIn 0.5s ease';
 
-            if (count === 1 && gameState.isHost) {
-                const result = performRevealHostOnly();
-                sendNet({ type: 'REVEAL_PRELOAD', result });
-
-                if (result.right) renderCenterPile('right', unpackCard(result.right), true);
-                if (result.left) renderCenterPile('left', unpackCard(result.left), true);
-                
-                updateScoreboard(); 
-            }
+            // --- DELETED: The "count === 1" logic block is gone.
+            // We already did the work in checkDrawConditionMultiplayer.
 
         } else {
+            // --- TIMER FINISHED (GO!) ---
             clearInterval(timer);
             overlay.classList.add('hidden');
             gameState.countdownRunning = false;
 
             if (gameState.isHost) {
+                // Send the "Make Visible" signal
                 sendNet({ type: 'REVEAL_SHOW' });
                 applyRevealShow(); 
             }
         }
     }, 800);
 }
-
 function performRevealHostOnly() {
     document.getElementById('player-draw-deck')?.classList.remove('deck-ready');
     document.getElementById('ai-draw-deck')?.classList.remove('deck-ready');
