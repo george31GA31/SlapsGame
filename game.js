@@ -375,8 +375,27 @@ function endRound(winner) {
     updateScoreboardWidget();
 }
 function setCardFaceUp(img, card, owner) {
-    img.src = card.imgSrc; img.classList.remove('card-face-down'); card.isFaceUp = true;
-    if (owner === 'player') { img.classList.add('player-card'); img.onclick = null; makeDraggable(img, card); } else img.classList.add('opponent-card');
+    // Trigger flip animation
+    img.classList.add('flipping');
+    
+    setTimeout(() => {
+        // Swap image at the halfway point (when card is edge-on)
+        img.src = card.imgSrc;
+        img.classList.remove('card-face-down');
+        card.isFaceUp = true;
+        
+        if (owner === 'player') {
+            img.classList.add('player-card');
+            img.onclick = null;
+            makeDraggable(img, card);
+        } else {
+            img.classList.add('opponent-card');
+        }
+    }, 250); // halfway through the 0.5s animation
+
+    setTimeout(() => {
+        img.classList.remove('flipping');
+    }, 500);
 }
 function setCardFaceDown(img, card, owner) {
     img.src = CARD_BACK_SRC; img.classList.add('card-face-down'); card.isFaceUp = false;
