@@ -1392,28 +1392,25 @@ body:has(.setup-card) .top-bar {
     z-index: 100;
     text-shadow: 0 0 5px rgba(0,0,0,0.5);
 }
-/* =========================================
-   CARD FLIP ANIMATION
-   ========================================= */
-.card-flip-wrapper {
-    position: absolute;
-    perspective: 600px;
+/* Card Flip Animation */
+.card-flip {
+    animation: flip-halfway 0.15s ease-in forwards, unflip-halfway 0.15s ease-out 0.15s forwards;
 }
 
-.card-flip-inner {
-    width: 12vh;
-    max-width: 100px;
-    height: auto;
-    transform-style: preserve-3d;
-    transition: transform 0.5s ease;
+@keyframes flip-halfway {
+    0% {
+        transform: scaleX(1);
+    }
+    100% {
+        transform: scaleX(0);
+    }
 }
 
-.card-flip-inner.flipping {
-    animation: flipCard 0.5s ease forwards;
-}
-
-@keyframes flipCard {
-    0%   { transform: rotateY(0deg) scaleX(1); }
-    50%  { transform: rotateY(90deg) scaleX(0.1); }
-    100% { transform: rotateY(0deg) scaleX(1); }
+@keyframes unflip-halfway {
+    0% {
+        transform: scaleX(0);
+    }
+    100% {
+        transform: scaleX(1);
+    }
 }
