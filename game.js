@@ -375,6 +375,8 @@ function endRound(winner) {
     updateScoreboardWidget();
 }
 function setCardFaceUp(img, card, owner) {
+    img.setAttribute('aria-label', card.rank + ' of ' + card.suit);
+    card.flipping = true;
     // Trigger flip animation
     img.classList.add('flipping');
     
@@ -382,7 +384,7 @@ function setCardFaceUp(img, card, owner) {
         // Swap image at the halfway point (when card is edge-on)
         img.src = card.imgSrc;
         img.classList.remove('card-face-down');
-        card.isFaceUp = true;
+        card.isFaceUp = true; card.flipping = false;
         
         if (owner === 'player') {
             img.classList.add('player-card');
@@ -399,10 +401,14 @@ function setCardFaceUp(img, card, owner) {
 }
 function setCardFaceDown(img, card, owner) {
     img.src = CARD_BACK_SRC; img.classList.add('card-face-down'); card.isFaceUp = false;
-    if (owner === 'player') img.onclick = () => tryFlipCard(img, card);
+    if (owner === 'player') {
+        img.onclick = () => tryFlipCard(img, card);
+        CardLayout.attach(img, card, null);
+    }
 }
 function tryFlipCard(img, card) {
-    const liveCards = gameState.playerHand.filter(c => c.isFaceUp).length;
+    if (card.isFaceUp || card.flipping || !gameState.playerHand.includes(card)) return;
+    const liveCards = gameState.playerHand.filter(c => c.isFaceUp || c.flipping).length;
     if (liveCards < 4) setCardFaceUp(img, card, 'player');
 }
 
@@ -768,7 +774,7 @@ function getDropSide(imgElement, mouseEvent) {
     return null;
 }
 function makeDraggable(img, cardData) {
-    img.onmousedown = (e) => {
+    img.onpointerdown = (e) => {
         e.preventDefault(); gameState.globalZ++; img.style.zIndex = gameState.globalZ; img.style.transition = 'none'; 
         cardData.originalLeft = img.style.left; cardData.originalTop = img.style.top;
         let shiftX = e.clientX - img.getBoundingClientRect().left; let shiftY = e.clientY - img.getBoundingClientRect().top;
@@ -778,10 +784,10 @@ function makeDraggable(img, cardData) {
             if (newTop < 0) { if (!gameState.gameActive || !checkLegalPlay(cardData)) newTop = 0; }
             img.style.left = newLeft + 'px'; img.style.top = newTop + 'px';
         }
-        moveAt(e.pageX, e.pageY);
-        function onMouseMove(event) { moveAt(event.pageX, event.pageY); }
+        moveAt(e.clientX, e.clientY);
+        function onMouseMove(event) { moveAt(event.clientX, event.clientY); }
         function onMouseUp(event) {
-            document.removeEventListener('mousemove', onMouseMove); document.removeEventListener('mouseup', onMouseUp);
+            document.removeEventListener('pointermove', onMouseMove); document.removeEventListener('pointerup', onMouseUp);
             img.style.transition = 'all 0.1s ease-out'; 
             if (gameState.gameActive && parseInt(img.style.top) < -10) {
     const dropSide = getDropSide(img, event); // 'left' | 'right' | null
@@ -792,7 +798,7 @@ function makeDraggable(img, cardData) {
     }
 }
         }
-        document.addEventListener('mousemove', onMouseMove); document.addEventListener('mouseup', onMouseUp);
+        document.addEventListener('pointermove', onMouseMove); document.addEventListener('pointerup', onMouseUp);
     };
 }
 function checkLegalPlay(card) { if (!gameState.gameActive) return false; return checkPileLogic(card, gameState.centerPileLeft) || checkPileLogic(card, gameState.centerPileRight); }
@@ -800,6 +806,7 @@ function checkPileLogic(card, targetPile) {
     if (targetPile.length === 0) return false; const targetCard = targetPile[targetPile.length - 1]; const diff = Math.abs(card.value - targetCard.value); return (diff === 1 || diff === 12);
 }
 function playCardToCenter(card, imgElement, dropSide) {
+    if (!card.isFaceUp) return false;
     if (!gameState.gameActive) return false;
 
     // Must be dropped on a pile

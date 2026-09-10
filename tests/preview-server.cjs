@@ -14,7 +14,7 @@ http.createServer((req,res)=>{
  if(!file.startsWith(root+path.sep)){res.writeHead(403).end();return}
  if(url.pathname === '/__mobile') {
   const page = url.searchParams.get('page') || 'login.html';
-  const safePage = /^[a-z-]+\.html(?:\?uid=qa-1)?$/.test(page) ? page : 'login.html';
+  const safePage = /^[a-z-]+\.html(?:\?(?:uid=qa-1|qaMember=1|qaPeer=(?:host|join)))?$/.test(page) ? page : 'login.html';
   res.writeHead(200,{'Content-Type':'text/html'}).end('<!doctype html><style>body{background:#252525;margin:24px}iframe{width:390px;height:844px;border:0}</style><iframe src="/' + safePage + '"></iframe>');return;
  }
  try {

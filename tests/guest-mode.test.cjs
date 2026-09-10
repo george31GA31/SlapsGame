@@ -90,3 +90,10 @@ test('authentication restoration completes before multiplayer identity is sent',
     f.ctx.auth.currentUser={uid:'restored-member',isAnonymous:false};resolveAuth(f.ctx.auth.currentUser);
     await boot;assert.equal(f.ctx.matchIdentity().uid,'restored-member');assert.equal(f.ctx.matchIdentity().isGuest,false);
 });
+test('online host rejects attempts to play a face-down card',()=>{
+    const f=fixture(true);
+    f.run(`gameState.gameActive=true;gameState.aiHand=[{id:'hidden',isFaceUp:false,value:5}];gameState.centerPileLeft=[{id:'top',value:6}];applyMoveAuthoritative=function(){throw Error('Hidden card must not be played')};`);
+    f.ctx.adjudicateMove({card:{id:'hidden'},targetId:'top',dropSide:'left',reqId:'test'},'ai');
+    assert.equal(f.run('gameState.aiHand.length'),1);
+    assert.equal(f.run('gameState.centerPileLeft.length'),1);
+});

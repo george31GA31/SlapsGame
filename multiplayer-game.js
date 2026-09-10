@@ -344,6 +344,7 @@ function handleNet(msg) {
     if (!msg) return;
 
     // --- 1. HANDSHAKE HANDLER ---
+    if (msg.type === 'CARD_LAYOUT') { CardLayout.receive(msg, gameState.aiHand); return; }
     if (msg.type === 'HANDSHAKE') {
         gameState.opponentName = typeof msg.name === 'string' ? msg.name : 'OPPONENT';
         // Old/unknown clients cannot opt a guest into a ranked match.
@@ -386,7 +387,7 @@ function handleNet(msg) {
     if (msg.type === 'MOVE_APPLY') { applyMoveFromHost(msg.apply); return; }
     if (msg.type === 'MOVE_REJECT') { rejectMoveFromHost(msg.reject); return; }
     if (msg.type === 'OPPONENT_REJECT') { cleanupGhost(msg.card); return; }
-    if (msg.type === 'OPPONENT_FLIP') { const card = gameState.aiHand.find(c => c.id === msg.cardId); if (card && card.element) setCardFaceUp(card.element, card, 'ai'); return; }
+    if (msg.type === 'OPPONENT_FLIP') { const card = gameState.aiHand.find(c => c.id === msg.cardId); if (card && card.element && !card.isFaceUp && gameState.aiHand.filter(c => c.isFaceUp).length < 4) setCardFaceUp(card.element, card, 'ai'); return; }
     if (msg.type === 'SLAP_REQ') { if (gameState.isHost) adjudicateSlap('ai'); return; }
     if (msg.type === 'SLAP_UPDATE') { applySlapUpdate(msg); return; }
     if (msg.type === 'PENALTY_UPDATE') { applyPenaltyUpdate(msg); return; }
@@ -1050,6 +1051,7 @@ function dealSmartHand(cards, owner) {
 }
 
 function setCardFaceUp(img, card, owner) {
+    img.setAttribute('aria-label', card.rank + ' of ' + card.suit);
     img.src = card.imgSrc;
     img.classList.remove('card-face-down');
     card.isFaceUp = true;
@@ -1066,11 +1068,15 @@ function setCardFaceDown(img, card, owner) {
     img.src = CARD_BACK_SRC;
     img.classList.add('card-face-down');
     card.isFaceUp = false;
-    if (owner === 'player') img.onclick = () => tryFlipCard(img, card);
+    if (owner === 'player') {
+        img.onclick = () => tryFlipCard(img, card);
+        CardLayout.attach(img, card, position => sendNet({type: 'CARD_LAYOUT', ...position}));
+    }
 }
 
 function tryFlipCard(img, card) {
-    const liveCards = gameState.playerHand.filter(c => c.isFaceUp).length;
+    if (card.isFaceUp || card.flipping || !gameState.playerHand.includes(card)) return;
+    const liveCards = gameState.playerHand.filter(c => c.isFaceUp || c.flipping).length;
     if (liveCards < 4) {
         setCardFaceUp(img, card, 'player');
         sendNet({ type: 'OPPONENT_FLIP', cardId: card.id });
@@ -1363,7 +1369,8 @@ function adjudicateMove(m, moverOverride) {
     const currentTopId = currentTop ? currentTop.id : null;
 
     let rejectionReason = null;
-    if (m.targetId !== currentTopId) rejectionReason = "race_lost";
+    if (!cardObj.isFaceUp || !gameState.gameActive) rejectionReason = "not_playable";
+    else if (m.targetId !== currentTopId) rejectionReason = "race_lost";
     else if (!checkPileLogic(cardObj, pile)) rejectionReason = "invalid_math";
 
     if (rejectionReason) {
