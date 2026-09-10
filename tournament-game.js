@@ -792,7 +792,7 @@ function showEndGame(titleText, isWin) {
 function updateScoreboardWidget() {
     const p1Name = document.getElementById('sb-p1-name');
     const p2Name = document.getElementById('sb-p2-name');
-    if(p1Name) p1Name.innerText = "You";
+    if(p1Name) p1Name.innerText = ISFSession.isGuest() ? "You (Guest)" : "You";
     if(p2Name) p2Name.innerText = "AI";
 
     const p1R = document.getElementById('sb-p1-rounds');

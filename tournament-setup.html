@@ -7,7 +7,7 @@
     <link rel="icon" type="image/png" href="assets/ISF_favicon.png">
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700;900&display=swap" rel="stylesheet">
+
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
     
     <style>
@@ -123,8 +123,11 @@
             max-width: 600px;
         }
     </style>
+    <link rel="stylesheet" href="theme.css">
+    <script src="session.js"></script>
+    <script src="ui.js" defer></script>
 </head>
-<body>
+<body class="page-tournament-setup">
 
     <div class="tournament-grid" id="main-grid">
         
@@ -377,7 +380,7 @@
             const nick = document.getElementById('online-nick').value.trim();
             if(!nick) return alert("Enter nickname!");
             localStorage.setItem('isf_my_name', nick);
-            window.location.href = 'online-tournament.html';
+            window.location.href = 'matchmaking.html';
         }
 
         function startBotTournament() {

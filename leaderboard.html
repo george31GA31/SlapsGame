@@ -50,8 +50,11 @@
         
         .loading-text { text-align: center; padding: 50px; color: #666; }
     </style>
+    <link rel="stylesheet" href="theme.css">
+    <script src="session.js"></script>
+    <script src="ui.js" defer></script>
 </head>
-<body>
+<body class="page-leaderboard">
 
     <div class="header-bar">
         <div class="title">GLOBAL RANKINGS</div>
@@ -59,7 +62,7 @@
     </div>
 
     <div class="lb-container" id="lb-list">
-        <div class="loading-text">Loading Top Players...</div>
+        <div class="loading-text">Loading players...</div>
     </div>
 
     <script>
@@ -67,7 +70,7 @@
         const myUsername = localStorage.getItem('isf_username'); 
 
         // 1. QUERY FIREBASE
-        const leaderboardQuery = db.ref('users').orderByChild('elo').limitToLast(50);
+        const leaderboardQuery = db.ref('users').orderByChild('elo');
 
         leaderboardQuery.on('value', (snapshot) => {
             listContainer.innerHTML = ''; 
@@ -76,6 +79,7 @@
 
             snapshot.forEach((child) => {
                 const data = child.val();
+                if (!data || data.isGuest === true || data.isAnonymous === true) return;
                 
                 // --- UPDATE 1: GET THE UID ---
                 const uid = child.key; 
@@ -93,8 +97,8 @@
                     uid: uid, // Save the ID here
                     username: data.username || "Unknown",
                     realName: fullName, 
-                    flagSrc: data.flag || "assets/flags/UnitedStatesofAmerica.png",
-                    elo: data.elo || 1000,
+                    flagSrc: data.flag || "assets/flags/United States of America.png",
+                    elo: data.elo ?? 1000,
                     wins: data.wins || 0,
                     losses: data.losses || 0,
                     isMe: (data.username === myUsername)
@@ -109,37 +113,43 @@
                 const isTop3 = rank <= 3 ? 'top3' : '';
                 const isMeClass = p.isMe ? 'me' : '';
                 
-                // --- UPDATE 2: MAKE THE NAME A LINK ---
-                const html = `
-                    <div class="lb-row ${isMeClass}">
-                        <div class="rank ${isTop3}">#${rank}</div>
-                        
-                        <div class="country">
-                            <img src="${p.flagSrc}" alt="Flag" onerror="this.src='assets/flags/UnitedStatesofAmerica.png'">
-                        </div>
-                        
-                        <div class="player-info">
-                            <a href="stats.html?uid=${p.uid}" class="p-name" style="text-decoration:none; color:white;">
-                                ${p.realName}
-                            </a>
-                            
-                            <span style="display:block; font-size:0.75rem; color:#888; margin-top:2px;">
-                                @${p.username}
-                            </span>
-                            
-                            <span class="p-stats">${p.wins} Wins - ${p.losses} Losses</span>
-                        </div>
-                        
-                        <div class="elo-score">${p.elo}</div>
-                    </div>
-                `;
-                
-                listContainer.insertAdjacentHTML('beforeend', html);
+                const row = document.createElement('div');
+                row.className = `lb-row ${isMeClass}`;
+                const rankCell = document.createElement('div');
+                rankCell.className = `rank ${isTop3}`;
+                rankCell.textContent = `#${rank}`;
+                const country = document.createElement('div');
+                country.className = 'country';
+                const flag = document.createElement('img');
+                flag.alt = 'Flag';
+                flag.src = p.flagSrc.startsWith('assets/flags/') ? p.flagSrc : 'assets/flags/United States of America.png';
+                flag.onerror = () => { flag.onerror = null; flag.src = 'assets/flags/United States of America.png'; };
+                country.append(flag);
+                const info = document.createElement('div');
+                info.className = 'player-info';
+                const name = document.createElement('a');
+                name.className = 'p-name';
+                name.href = `stats.html?uid=${encodeURIComponent(p.uid)}`;
+                name.textContent = p.realName || p.username;
+                const username = document.createElement('span');
+                username.className = 'p-username';
+                username.textContent = `@${p.username}`;
+                const stats = document.createElement('span');
+                stats.className = 'p-stats';
+                stats.textContent = `${p.wins} Wins - ${p.losses} Losses`;
+                info.append(name, username, stats);
+                const elo = document.createElement('div');
+                elo.className = 'elo-score';
+                elo.textContent = p.elo;
+                row.append(rankCell, country, info, elo);
+                listContainer.append(row);
             });
 
             if (players.length === 0) {
                 listContainer.innerHTML = '<div class="loading-text">No ranked players found.</div>';
             }
+        }, () => {
+            listContainer.innerHTML = '<div class="loading-text">Unable to load rankings. Please refresh to try again.</div>';
         });
     </script>
 </body>

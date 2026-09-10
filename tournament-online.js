@@ -156,7 +156,7 @@ function bindConnection(conn) {
     gameState.conn = conn;
 
     conn.on('open', () => {
-        sendNet({ type: 'HANDSHAKE', name: gameState.myName });
+        sendNet({ type: 'HANDSHAKE', name: gameState.myName, isGuest: ISFSession.isGuest() });
     });
 
     conn.on('data', (msg) => handleNet(msg));
@@ -186,12 +186,12 @@ function handleNet(msg) {
     if (!msg) return;
 
     if (msg.type === 'HANDSHAKE') {
-        gameState.opponentName = msg.name || 'OPPONENT';
+        gameState.opponentName = (msg.name || 'OPPONENT') + (msg.isGuest ? ' (GUEST)' : '');
         updateScoreboardWidget();
 
         if (!gameState.handshakeDone) {
             gameState.handshakeDone = true;
-            sendNet({ type: 'HANDSHAKE', name: gameState.myName });
+            sendNet({ type: 'HANDSHAKE', name: gameState.myName, isGuest: ISFSession.isGuest() });
         }
 
         if (gameState.isHost && !gameState.roundStarted) {
@@ -1535,7 +1535,7 @@ function checkDeckVisibility() {
 function updateScoreboardWidget() {
     const p1Name = document.getElementById('sb-p1-name');
     const p2Name = document.getElementById('sb-p2-name');
-    if (p1Name) p1Name.innerText = gameState.myName || "You";
+    if (p1Name) p1Name.innerText = (gameState.myName || "You") + (ISFSession.isGuest() ? " (GUEST)" : "");
     if (p2Name) p2Name.innerText = gameState.opponentName || "Opponent";
 
     const p1R = document.getElementById('sb-p1-rounds');

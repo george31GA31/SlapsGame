@@ -7,7 +7,7 @@
     <link rel="icon" type="image/png" href="assets/ISF_favicon.png">
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700;900&display=swap" rel="stylesheet">
+
 
 <style>
     /* --- DARK THEME STYLES --- */
@@ -119,8 +119,11 @@
     }
     .btn-back:hover { color: white; }
 </style>
+    <link rel="stylesheet" href="theme.css">
+    <script src="session.js"></script>
+    <script src="ui.js" defer></script>
 </head>
-<body class="matchmaking-body">
+<body class="page-setup matchmaking-body">
 <div class="setup-container">
         
         <i class="fa-solid fa-robot" id="bot-icon" style="font-size: 3rem; margin-bottom: 10px;"></i>
@@ -131,7 +134,7 @@
         <div class="diff-label" id="difficulty-label">ROOKIE</div>
 
         <div class="slider-container">
-            <input type="range" min="1" max="10" value="1" class="slider" id="diffRange">
+            <input aria-label="Bot difficulty" type="range" min="1" max="10" value="1" class="slider" id="diffRange">
             <div style="display:flex; justify-content:space-between; color:#666; font-size:0.8rem; margin-top:5px; font-weight:bold;">
                 <span>1</span>
                 <span>10</span>
@@ -182,12 +185,6 @@
         icon.style.color = color;
         icon.style.textShadow = `0 0 20px ${color}`;
         
-        // Button Border Color
-        startBtn.style.borderColor = color;
-        
-        // Dynamic Hover Effect
-        startBtn.onmouseover = () => { startBtn.style.background = color; startBtn.style.color = "black"; };
-        startBtn.onmouseout = () => { startBtn.style.background = "transparent"; startBtn.style.color = "white"; };
     }
 
     // 3. LISTENERS
@@ -202,64 +199,6 @@
     // Init
     updateUI();
     </script>
-    <script>
-    // 1. CONFIGURATION
-    const slider = document.querySelector('.slider');
-    const numberDisplay = document.querySelector('.diff-number');
-    const label = document.querySelector('.difficulty-display h2');
-    const icon = document.querySelector('.setup-header i');
-    const startBtn = document.querySelector('.btn-start');
 
-    // Difficulty Labels
-    const levels = {
-        1: "ROOKIE", 2: "BEGINNER", 3: "AMATEUR", 4: "SEMI-PRO", 
-        5: "PROFESSIONAL", 6: "VETERAN", 7: "EXPERT", 
-        8: "MASTER", 9: "GRANDMASTER", 10: "LEGEND"
-    };
-
-    // Colors (Green -> Yellow -> Red)
-    const colors = {
-        1: "#66ff66", 2: "#88ff66", 3: "#aaff66", 4: "#ccff66",
-        5: "#ffff66", 6: "#ffcc66", 7: "#ffaa66", 8: "#ff8866",
-        9: "#ff6666", 10: "#ff0000"
-    };
-
-    // 2. UPDATE FUNCTION (Visuals)
-    function updateUI() {
-        const val = slider.value;
-        
-        // Update Text
-        numberDisplay.innerText = val;
-        label.innerText = levels[val];
-        
-        // Update Colors
-        const color = colors[val];
-        numberDisplay.style.color = color;
-        label.style.color = color;
-        icon.style.color = color;
-        icon.style.textShadow = `0 0 20px ${color}`;
-        startBtn.style.borderColor = color;
-    }
-
-    // 3. EVENT LISTENERS
-    slider.addEventListener('input', updateUI);
-
-    // --- THE CRITICAL FIX: SAVING THE DATA ---
-    startBtn.addEventListener('click', () => {
-        const difficulty = slider.value;
-        
-        // This line saves the number "10" (or whatever you picked) 
-        // into the browser's memory so the next page can read it.
-        localStorage.setItem('slapsDifficulty', difficulty);
-        
-        console.log("Saved Difficulty:", difficulty);
-        
-        // NOW we go to the game page
-        window.location.href = 'game.html'; 
-    });
-
-    // Initialize
-    updateUI();
-    </script>
 </body>
 </html>

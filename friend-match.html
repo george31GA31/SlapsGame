@@ -6,7 +6,7 @@
     <title>Tournament Match</title>
     <link rel="icon" type="image/png" href="assets/ISF_favicon.png">
     <link rel="stylesheet" href="style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700;900&display=swap" rel="stylesheet">
+
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
     
     <style>
@@ -62,8 +62,12 @@
             transition: color 0.3s;
         }
     </style>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="theme.css">
+    <script src="session.js"></script>
+    <script src="ui.js" defer></script>
 </head>
-<body>
+<body class="page-friend-match">
 
     <div id="match-ui">
         <h1 id="round-name" class="anim-text-1">TOURNAMENT MATCH</h1>
@@ -90,10 +94,10 @@
             // 1. Set Text
             // We can determine the "Round Name" from the Match ID (e.g., MATCH-L16-1)
             let displayRound = "TOURNAMENT MATCH";
-            if(matchId.includes("16")) displayRound = "ROUND OF 16";
-            else if(matchId.includes("QF")) displayRound = "QUARTER FINAL";
-            else if(matchId.includes("SF")) displayRound = "SEMI FINAL";
-            else if(matchId.includes("FINAL")) displayRound = "GRAND FINAL";
+            if(matchId && matchId.includes("16")) displayRound = "ROUND OF 16";
+            else if(matchId && matchId.includes("QF")) displayRound = "QUARTER FINAL";
+            else if(matchId && matchId.includes("SF")) displayRound = "SEMI FINAL";
+            else if(matchId && matchId.includes("FINAL")) displayRound = "GRAND FINAL";
 
             document.getElementById('round-name').innerText = displayRound;
             document.getElementById('opponent-name').innerText = `VS ${opponentName.toUpperCase()}`;
