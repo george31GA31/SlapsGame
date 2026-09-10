@@ -6,8 +6,8 @@
     <title>ISF - Multiplayer Match</title>
     <link rel="icon" type="image/png" href="assets/ISF_favicon.png">
     <link rel="stylesheet" href="style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700;900&display=swap" rel="stylesheet">
-    
+
+
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
 
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -16,8 +16,12 @@
 
     <script src="firebase-init.js"></script>
     <script src="elo-engine.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="theme.css">
+    <script src="session.js"></script>
+    <script src="ui.js" defer></script>
 </head>
-<body class="game-body" ondragstart="return false;" ondrop="return false;">
+<body class="page-multiplayer-game game-body" ondragstart="return false;" ondrop="return false;">
 
     <div class="bottom-left-actions">
         <button class="btn-action-small btn-quit" onclick="quitMatch()">

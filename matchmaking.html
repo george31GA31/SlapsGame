@@ -7,7 +7,7 @@
     <link rel="icon" type="image/png" href="assets/ISF_favicon.png">
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700;900&family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+
     <link rel="stylesheet" href="style.css">
     
     <style>
@@ -151,8 +151,11 @@
             color: #00ff00;
         }
     </style>
+    <link rel="stylesheet" href="theme.css">
+    <script src="session.js"></script>
+    <script src="ui.js" defer></script>
 </head>
-<body class="matchmaking-body">
+<body class="page-matchmaking matchmaking-body">
 
     <div id="name-setup" class="menu-card">
         <div class="icon-group">
@@ -211,7 +214,7 @@
             }
             // Update the display text
             const label = document.getElementById('user-label');
-            if(label) label.innerHTML = `Playing as: <span style="color:#00ccff">${myName}</span>`;
+            if(label) label.textContent = `Playing as: ${myName}`;
         };
 
         function startSearch() {

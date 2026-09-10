@@ -3,13 +3,44 @@
    ========================================= */
 
 // --- 1. ELO VARIABLES ---
-let isRanked = true; 
+// Fail closed until both peers have exchanged registered account identities.
+const guestAtMatchStart = ISFSession.isGuest();
+let isRanked = false;
+let localMatchUid = null;
+let opponentUid = null;
+let opponentIsGuest = true;
+let unrankedMatch = guestAtMatchStart;
+let enemyStatsReady = false;
+
+function matchIdentity() {
+    const guest = guestAtMatchStart || ISFSession.isGuest() || !localMatchUid;
+    return { type: 'HANDSHAKE', name: gameState.myName,
+        uid: guest ? null : localMatchUid, isGuest: guest, protocol: 2 };
+}
+
+function canRecordMatch() {
+    const user = window.auth && window.auth.currentUser;
+    return isRanked && !unrankedMatch && !guestAtMatchStart && !ISFSession.isGuest()
+        && !opponentIsGuest && !!opponentUid && enemyStatsReady
+        && !!user && !user.isAnonymous && user.uid === localMatchUid;
+}
+
+function updateMatchStatus() {
+    if (guestAtMatchStart) {
+        ISFSession.showMatchStatus('GUEST MODE · Unranked · Neither player’s ELO, history or statistics will change');
+    } else if (gameState.handshakeDone && !isRanked) {
+        ISFSession.showMatchStatus('UNRANKED MATCH · Neither player’s ELO, history or statistics will change');
+    } else if (isRanked) {
+        ISFSession.showMatchStatus('RANKED MATCH');
+    }
+}
 let enemyElo = 1000; 
 let enemyGameCount = 0;
 let matchResultReported = false;
 
 // --- 2. FETCH ENEMY STATS ---
 function fetchEnemyStats(enemyId) {
+    if (!isRanked || unrankedMatch || opponentIsGuest) return;
     console.log("Fetching stats for enemy:", enemyId);
     
     if (!window.db) {
@@ -23,6 +54,7 @@ function fetchEnemyStats(enemyId) {
         .then((snapshot) => {
             if (snapshot.exists()) {
                 const data = snapshot.val();
+                enemyStatsReady = true;
                 
                 // 1. GET ELO & GAMES
                 enemyElo = data.elo || 1000;
@@ -48,6 +80,9 @@ function fetchEnemyStats(enemyId) {
 
 // --- 3. REPORT RESULT TO FIREBASE (WITH ADVANCED STATS) ---
 function reportMatchResultInternal(isWin, onComplete, proofToken) {
+    // Every result route (including forfeit, disconnect and rematch) passes here.
+    // Return before any database access; also release callers waiting to navigate.
+    if (!canRecordMatch()) { if (onComplete) onComplete(); return; }
     if (matchResultReported) { if (onComplete) onComplete(); return; }
     
     // SECURITY CHECK
@@ -68,6 +103,7 @@ function reportMatchResultInternal(isWin, onComplete, proofToken) {
     const durationSec = gameState.matchStartTime ? Math.floor((Date.now() - gameState.matchStartTime) / 1000) : 0;
 
     userRef.transaction((userData) => {
+        if (!canRecordMatch()) return;
         if (userData) {
             const currentElo = userData.elo || 1000;
             const wins = userData.wins || 0;
@@ -203,13 +239,19 @@ class Card {
    BOOTSTRAP
    ================================ */
 
-window.onload = function () {
+window.onload = async function () {
     document.addEventListener('keydown', handleInput);
 
     const pDeck = document.getElementById('player-draw-deck');
     if (pDeck) pDeck.onclick = handlePlayerDeckClick;
 
+    // Firebase restores persisted accounts asynchronously.
+    if (window.isfAuthReady) await window.isfAuthReady;
+    const user = window.auth && window.auth.currentUser;
+    localMatchUid = !guestAtMatchStart && !ISFSession.isGuest() && user && !user.isAnonymous ? user.uid : null;
+    unrankedMatch = unrankedMatch || !localMatchUid;
     updateScoreboardWidget();
+    updateMatchStatus();
     initMultiplayer();
 };
 
@@ -274,8 +316,7 @@ function bindConnection(conn) {
     gameState.conn = conn;
 
     conn.on('open', () => {
-        const myUid = (window.auth && window.auth.currentUser) ? window.auth.currentUser.uid : null;
-        sendNet({ type: 'HANDSHAKE', name: gameState.myName, uid: myUid });
+        sendNet(matchIdentity());
     });
 
     conn.on('data', (msg) => handleNet(msg));
@@ -304,15 +345,20 @@ function handleNet(msg) {
 
     // --- 1. HANDSHAKE HANDLER ---
     if (msg.type === 'HANDSHAKE') {
-        gameState.opponentName = msg.name || 'OPPONENT';
+        gameState.opponentName = typeof msg.name === 'string' ? msg.name : 'OPPONENT';
+        // Old/unknown clients cannot opt a guest into a ranked match.
+        opponentIsGuest = msg.isGuest !== false || !msg.uid || msg.protocol !== 2;
+        opponentUid = typeof msg.uid === 'string' ? msg.uid : null;
+        unrankedMatch = unrankedMatch || opponentIsGuest;
+        isRanked = !unrankedMatch && !!localMatchUid && !!opponentUid;
+        if (isRanked) fetchEnemyStats(opponentUid);
         updateScoreboardWidget();
-        if (msg.uid) fetchEnemyStats(msg.uid);
 
         if (!gameState.handshakeDone) {
             gameState.handshakeDone = true;
-            const myUid = (window.auth && window.auth.currentUser) ? window.auth.currentUser.uid : null;
-            sendNet({ type: 'HANDSHAKE', name: gameState.myName, uid: myUid });
+            sendNet(matchIdentity());
         }
+        updateMatchStatus();
         if (gameState.isHost && !gameState.roundStarted) {
             gameState.roundStarted = true;
             startRoundHostAuthoritative();
@@ -406,7 +452,7 @@ function handleNet(msg) {
         document.getElementById('rematch-modal')?.classList.add('hidden');
 
         // --- CRITICAL FIX: CHECK IF MATCH IS LIVE ---
-        if (gameState.matchLive && isRanked) {
+        if (gameState.matchLive) {
             // Game was actually playing -> Count it as a Win
             reportMatchResultInternal(true);
             showEndGame(`${(gameState.opponentName || "OPPONENT").toUpperCase()} DISCONNECTED`, true);
@@ -1743,12 +1789,12 @@ function checkDeckVisibility() {
 
 function updateScoreboardWidget() {
     const p1Name = document.getElementById('sb-p1-name');
-    if (p1Name) p1Name.innerText = "YOU";
+    if (p1Name) p1Name.innerText = guestAtMatchStart ? "YOU (GUEST)" : "YOU";
 
     const p2Name = document.getElementById('sb-p2-name'); 
     const oppLabel = document.getElementById('opponent-display-name'); 
 
-    const displayName = `${gameState.opponentName} (${enemyElo})`;
+    const displayName = opponentIsGuest ? `${gameState.opponentName} (GUEST)` : `${gameState.opponentName} (${enemyElo})`;
 
     if (p2Name) p2Name.innerText = displayName;
     if (oppLabel) oppLabel.innerText = displayName;
@@ -1788,6 +1834,7 @@ function showEndGame(title, isWin) {
     
     const contentArea = modal.querySelector('p');
     contentArea.innerHTML = `
+        ${!isRanked ? "<span>Unranked match — no ELO, match history or statistics saved for either player.</span>" : ""}
         <div style="display:flex; gap:10px; justify-content:center; margin-top:20px;">
             <button class="btn-action-small" onclick="sendRematchRequest()" style="background:#444; width:auto;">
                 <i class="fa-solid fa-rotate-right"></i> REMATCH

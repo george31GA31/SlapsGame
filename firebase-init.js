@@ -29,6 +29,13 @@ if (typeof firebase !== 'undefined') {
     // Make 'auth' and 'db' global variables so other pages can see them
     window.auth = firebase.auth();
     window.db = firebase.database();
+    // Resolve persisted authentication before exchanging multiplayer identities.
+    window.isfAuthReady = new Promise(resolve => {
+        const unsubscribe = window.auth.onAuthStateChanged(user => {
+            resolve(user);
+            queueMicrotask(() => unsubscribe());
+        });
+    });
     
 } else {
     console.error("❌ CRITICAL: Firebase SDK not loaded. Check your HTML <head> tags.");

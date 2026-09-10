@@ -7,7 +7,7 @@
     <link rel="icon" type="image/png" href="assets/ISF_favicon.png">
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700;900&display=swap" rel="stylesheet">
+
 
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
@@ -213,8 +213,11 @@
 
         @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
     </style>
+    <link rel="stylesheet" href="theme.css">
+    <script src="session.js"></script>
+    <script src="ui.js" defer></script>
 </head>
-<body>
+<body class="page-stats">
 
     <div id="loading" style="margin-top: 100px;">
         <i class="fa-solid fa-spinner fa-spin fa-2x"></i>
@@ -282,7 +285,14 @@
             } else {
                 document.getElementById('p-name').innerText = "PLAYER NOT FOUND";
                 document.getElementById('loading').classList.add('hidden');
+                document.getElementById('content').classList.remove('hidden');
+                document.querySelector('.stats-grid').classList.add('hidden');
+                document.querySelector('.profile-header').classList.add('hidden');
+                document.getElementById('loading').textContent = 'Player not found.';
+                document.getElementById('loading').classList.remove('hidden');
             }
+        }).catch(() => {
+            document.getElementById('loading').textContent = 'Unable to load this player. Please refresh to try again.';
         });
 
         function renderStats(data) {

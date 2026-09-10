@@ -8,7 +8,7 @@
     <link rel="icon" type="image/png" href="assets/ISF_tab_logo.png">
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&family=Cinzel:wght@700&display=swap" rel="stylesheet">
+
 
     <script>
         if (!localStorage.getItem('isf_username')) {
@@ -48,8 +48,11 @@
         }
         .btn-logout-small:hover { color: #ff4444; border-color: #ff4444; }
     </style>
+    <link rel="stylesheet" href="theme.css">
+    <script src="session.js"></script>
+    <script src="ui.js" defer></script>
 </head>
-<body>
+<body class="page-index">
 
     <div class="app-container">
         
@@ -155,7 +158,7 @@
 
         // 2. Fetch Live Stats from Firebase
         auth.onAuthStateChanged((user) => {
-            if (user) {
+            if (user && !ISFSession.isGuest()) {
                 const userRef = db.ref('users/' + user.uid);
                 userRef.on('value', (snapshot) => {
                     const data = snapshot.val();
@@ -171,7 +174,7 @@
         // 3. Logout Logic
         function logout() {
             auth.signOut().then(() => {
-                localStorage.clear();
+                ISFSession.clear();
                 window.location.href = 'login.html';
             });
         }
@@ -185,7 +188,7 @@
  */
 function reportMatchResult(opponentElo, opponentGameCount, isWin) {
     const user = auth.currentUser;
-    if (!user) return; // Safety check
+    if (!user || user.isAnonymous || ISFSession.isGuest()) return; // Never report guest results
 
     console.log("Reporting Match... Win:", isWin);
 
