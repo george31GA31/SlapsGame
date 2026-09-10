@@ -185,6 +185,7 @@ function sendNet(obj) {
 function handleNet(msg) {
     if (!msg) return;
 
+    if (msg.type === 'CARD_LAYOUT') { CardLayout.receive(msg, gameState.aiHand); return; }
     if (msg.type === 'HANDSHAKE') {
         gameState.opponentName = (msg.name || 'OPPONENT') + (msg.isGuest ? ' (GUEST)' : '');
         updateScoreboardWidget();
@@ -262,7 +263,7 @@ function handleNet(msg) {
 
     if (msg.type === 'OPPONENT_FLIP') {
         const card = gameState.aiHand.find(c => c.id === msg.cardId);
-        if (card && card.element) setCardFaceUp(card.element, card, 'ai');
+        if (card && card.element && !card.isFaceUp && gameState.aiHand.filter(c => c.isFaceUp).length < 4) setCardFaceUp(card.element, card, 'ai');
         return;
     }
     
@@ -832,6 +833,7 @@ function dealSmartHand(cards, owner) {
 }
 
 function setCardFaceUp(img, card, owner) {
+    img.setAttribute('aria-label', card.rank + ' of ' + card.suit);
     img.src = card.imgSrc;
     img.classList.remove('card-face-down');
     card.isFaceUp = true;
@@ -848,11 +850,15 @@ function setCardFaceDown(img, card, owner) {
     img.src = CARD_BACK_SRC;
     img.classList.add('card-face-down');
     card.isFaceUp = false;
-    if (owner === 'player') img.onclick = () => tryFlipCard(img, card);
+    if (owner === 'player') {
+        img.onclick = () => tryFlipCard(img, card);
+        CardLayout.attach(img, card, position => sendNet({type: 'CARD_LAYOUT', ...position}));
+    }
 }
 
 function tryFlipCard(img, card) {
-    const liveCards = gameState.playerHand.filter(c => c.isFaceUp).length;
+    if (card.isFaceUp || card.flipping || !gameState.playerHand.includes(card)) return;
+    const liveCards = gameState.playerHand.filter(c => c.isFaceUp || c.flipping).length;
     if (liveCards < 4) {
         setCardFaceUp(img, card, 'player');
         sendNet({ type: 'OPPONENT_FLIP', cardId: card.id });
@@ -868,7 +874,7 @@ function cardKey(c) {
    ================================ */
 
 function makeDraggable(img, cardData) {
-    img.onmousedown = (e) => {
+    img.onpointerdown = (e) => {
         e.preventDefault();
         gameState.globalZ++;
         img.style.zIndex = gameState.globalZ;
@@ -928,15 +934,15 @@ function makeDraggable(img, cardData) {
             });
         }
 
-        moveAt(e.pageX, e.pageY, false);
+        moveAt(e.clientX, e.clientY, false);
 
         function onMouseMove(event) {
-            moveAt(event.pageX, event.pageY, true);
+            moveAt(event.clientX, event.clientY, true);
         }
 
         function onMouseUp(event) {
-            document.removeEventListener('mousemove', onMouseMove);
-            document.removeEventListener('mouseup', onMouseUp);
+            document.removeEventListener('pointermove', onMouseMove);
+            document.removeEventListener('pointerup', onMouseUp);
 
             img.style.transition = 'all 0.1s ease-out';
 
@@ -954,8 +960,8 @@ function makeDraggable(img, cardData) {
                 });
             }
         }
-        document.addEventListener('mousemove', onMouseMove);
-        document.addEventListener('mouseup', onMouseUp);
+        document.addEventListener('pointermove', onMouseMove);
+        document.addEventListener('pointerup', onMouseUp);
     };
 }
 
@@ -1107,7 +1113,8 @@ function adjudicateMove(m, moverOverride) {
     const currentTopId = currentTop ? currentTop.id : null;
 
     let rejectionReason = null;
-    if (m.targetId !== currentTopId) rejectionReason = "race_lost";
+    if (!cardObj.isFaceUp || !gameState.gameActive) rejectionReason = "not_playable";
+    else if (m.targetId !== currentTopId) rejectionReason = "race_lost";
     else if (!checkPileLogic(cardObj, pile)) rejectionReason = "invalid_math";
 
     if (rejectionReason) {

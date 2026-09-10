@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Settings — SlapsGame</title>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="theme.css">
+<script src="preferences.js">
+</script>
+<script src="session.js">
+</script>
+<script src="ui.js" defer>
+</script>
+</head>
+<body class="page-settings preferences-page">
+<main class="preferences-card">
+<h1>Settings</h1>
+<fieldset>
+<legend>Menu appearance</legend>
+<label class="theme-choice">
+<input type="radio" name="theme" value="dark"> Dark</label>
+<label class="theme-choice">
+<input type="radio" name="theme" value="light"> Light</label>
+</fieldset>
+<p class="preference-help">Saved on this device. Matches always use the green playing area.</p>
+<p id="settings-status" role="status">
+</p>
+<script>document.querySelectorAll('[name="theme"]').forEach(input=>{input.checked=input.value===ISFPreferences.getTheme();input.addEventListener('change',()=>{ISFPreferences.setTheme(input.value);document.getElementById('settings-status').textContent='Appearance saved.';});});</script>
+<nav class="preferences-nav">
+<a href="index.html">Back to Home</a>
+<a href="account.html">My Account</a>
+</nav>
+</main>
+</body>
+</html>

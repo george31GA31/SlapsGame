@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>My Account — SlapsGame</title>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="theme.css">
+<script src="preferences.js">
+</script>
+<script src="session.js">
+</script>
+<script src="ui.js" defer>
+</script>
+<script src="countries.js">
+</script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js">
+</script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js">
+</script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js">
+</script>
+<script src="firebase-init.js">
+</script>
+<script src="account.js" defer>
+</script>
+</head>
+<body class="page-account preferences-page">
+<main class="preferences-card">
+<h1>My Account</h1>
+<p id="account-status" role="status">Loading your account…</p>
+<div id="account-guest" hidden>
+<p>Guest profiles are temporary. Sign in to edit your account.</p>
+<a class="btn-auth" href="login.html">Log In</a>
+</div>
+<form id="account-form" hidden>
+<div class="input-group">
+<label for="firstName">First name</label>
+<input class="auth-input" id="firstName" maxlength="80" required autocomplete="given-name">
+</div>
+<div class="input-group">
+<label for="lastName">Last name</label>
+<input class="auth-input" id="lastName" maxlength="80" required autocomplete="family-name">
+</div>
+<div class="input-group">
+<label for="username">Username</label>
+<input class="auth-input" id="username" minlength="3" maxlength="40" required autocomplete="nickname">
+</div>
+<div class="input-group">
+<label for="country">Country</label>
+<select class="auth-input" id="country" required>
+</select>
+</div>
+<button class="btn-auth" type="submit">Save Profile</button>
+</form>
+<section id="account-security" hidden>
+<h2>Sign-in details</h2>
+<p>Current email: <span id="current-email">
+</span>
+</p>
+<form id="email-form">
+<label for="new-email">New email address</label>
+<input class="auth-input" id="new-email" type="email" autocomplete="email" required>
+<button class="btn-outline" type="submit">Send Verification Email</button>
+</form>
+<p class="preference-help">Your email changes after verification. You may need to sign in again first.</p>
+<button class="btn-outline" id="reset-password" type="button">Send Password Reset Email</button>
+</section>
+<nav class="preferences-nav">
+<a href="index.html">Back to Home</a>
+<a href="settings.html">Settings</a>
+</nav>
+</main>
+</body>
+</html>

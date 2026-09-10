@@ -19,3 +19,24 @@ if (/(friend-match|friend-tournament-game|multiplayer-game)\.html$/.test(locatio
     localStorage.setItem('isf_role','host');
     localStorage.setItem('isf_code','QA-MATCH');
 }
+// Two-tab transport for exercising the real online engine without public matchmaking.
+if(new URLSearchParams(location.search).has('qaPeer')) {
+ const params=new URLSearchParams(location.search), role=params.get('qaPeer');
+ localStorage.setItem('isf_role',role);localStorage.setItem('isf_code','QA-LAYOUT');
+ localStorage.setItem('isf_is_guest','true');localStorage.setItem('isf_my_name','Guest-'+role);
+ const channel=new BroadcastChannel('slaps-layout-qa');
+ window.Peer=class {
+  constructor(id){this.id=id||'qa-join';this.events={};this.conn=null;channel.onmessage=e=>this.receive(e.data);setTimeout(()=>this.events.open?.(this.id),20);}
+  on(n,fn){this.events[n]=fn;} once(n,fn){this.on(n,fn);} destroy(){channel.close();}
+  connection(){return {open:true,events:{},on(n,fn){this.events[n]=fn;},send(msg){channel.postMessage({kind:'data',msg});},close(){channel.postMessage({kind:'close'});}};}
+  connect(){this.conn=this.connection();channel.postMessage({kind:'connect'});return this.conn;}
+  receive(m){if(m.kind==='connect'){this.conn=this.connection();this.events.connection?.(this.conn);channel.postMessage({kind:'accept'});setTimeout(()=>this.conn.events.open?.(),20);}else if(m.kind==='accept'){this.conn.events.open?.();}else if(m.kind==='data'){this.conn?.events.data?.(m.msg);}else if(m.kind==='close'){this.conn?.events.close?.();}}
+ };
+}
+if(new URLSearchParams(location.search).has('qaMember')) {
+ currentUser=qaUser;qaUser.email='test@example.invalid';qaUser.updateProfile=async()=>{};
+ qaUser.verifyBeforeUpdateEmail=async()=>{};qaAuth.sendPasswordResetEmail=async()=>{};
+ localStorage.setItem('isf_is_guest','false');
+ qaRef.update=async patch=>Object.assign(qaPlayers[0],patch);
+ qaPlayers[0].country='GBR';
+}
