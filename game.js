@@ -337,8 +337,7 @@ function dealSmartHand(cards, owner) {
             const isTopCard = (index === pile.length - 1);
             if (isTopCard) setCardFaceUp(img, card, owner); else setCardFaceDown(img, card, owner);
             img.style.left = `${currentLeftPercent}%`;
-            let stackOffset = index * 5; 
-            if (owner === 'ai') img.style.top = `${10 + stackOffset}px`; else img.style.top = `${60 - stackOffset}px`;
+            img.style.top = `calc(4px + ${owner === 'ai' ? index : 3 - index} * var(--stack-step))`;
             img.style.zIndex = index + 10; 
             card.element = img; container.appendChild(img);
             if (owner === 'player') gameState.playerHand.push(card); else gameState.aiHand.push(card);
@@ -376,29 +375,18 @@ function endRound(winner) {
 }
 function setCardFaceUp(img, card, owner) {
     img.setAttribute('aria-label', card.rank + ' of ' + card.suit);
-    card.flipping = true;
-    // Trigger flip animation
-    img.classList.add('flipping');
-    
-    setTimeout(() => {
-        // Swap image at the halfway point (when card is edge-on)
-        img.src = card.imgSrc;
-        img.classList.remove('card-face-down');
-        card.isFaceUp = true; card.flipping = false;
-        
-        if (owner === 'player') {
-            img.classList.add('player-card');
-            img.onclick = null;
-            makeDraggable(img, card);
-        } else {
-            img.classList.add('opponent-card');
-        }
-    }, 250); // halfway through the 0.5s animation
-
-    setTimeout(() => {
-        img.classList.remove('flipping');
-    }, 500);
+    img.src = card.imgSrc;
+    img.classList.remove('card-face-down');
+    card.isFaceUp = true;
+    card.flipping = false;
+    if (owner === 'player') {
+        img.classList.add('player-card');
+        img.onclick = null;
+        makeDraggable(img, card);
+    } else img.classList.add('opponent-card');
+    GameVisuals.flip(img);
 }
+
 function setCardFaceDown(img, card, owner) {
     img.src = CARD_BACK_SRC; img.classList.add('card-face-down'); card.isFaceUp = false;
     if (owner === 'player') {
@@ -538,6 +526,7 @@ function performRevealShow() {
     hiddenCards.forEach(img => {
         img.style.opacity = '1';
         img.classList.remove('pending-reveal');
+        GameVisuals.flip(img);
     });
 
     // 2. Activate Game
@@ -729,9 +718,11 @@ function attemptAIMove() {
 function isTopOffPile(card) { let cardsInLane = gameState.aiHand.filter(c => c.laneIndex === card.laneIndex); return cardsInLane[cardsInLane.length - 1] === card; }
 function animateAIMove(card, targetSide, callback) {
     const el = card.element; const targetId = targetSide === 'left' ? 'center-pile-left' : 'center-pile-right'; const targetEl = document.getElementById(targetId);
+    GameVisuals.stopFlip(el);
     const startRect = el.getBoundingClientRect(); const targetRect = targetEl.getBoundingClientRect();
     card.originalLeft = el.style.left; card.originalTop = el.style.top;
     const startLeft = startRect.left || 100; const startTop = startRect.top || 50;
+    el.style.width = startRect.width + 'px'; el.style.height = startRect.height + 'px';
     el.style.position = 'fixed'; el.style.left = startLeft + 'px'; el.style.top = startTop + 'px'; el.style.zIndex = 2000; el.style.transition = 'all 0.4s ease-in-out'; 
     requestAnimationFrame(() => {
         const destX = targetRect.left + (targetRect.width / 2) - (startRect.width / 2); const destY = targetRect.top + (targetRect.height / 2) - (startRect.height / 2);
@@ -740,7 +731,7 @@ function animateAIMove(card, targetSide, callback) {
     setTimeout(() => { callback(); }, 400); 
 }
 function animateSnapBack(card) {
-    const el = card.element; el.style.transition = 'none'; el.style.position = 'absolute'; el.style.left = card.originalLeft; el.style.top = card.originalTop; el.style.zIndex = 10; el.style.border = '2px solid red';
+    const el = card.element; el.style.transition = 'none'; el.style.position = 'absolute'; el.style.width = ''; el.style.height = ''; el.style.left = card.originalLeft; el.style.top = card.originalTop; el.style.zIndex = 10; el.style.border = '2px solid red';
     setTimeout(() => { el.style.border = 'none'; }, 500);
 }
 function animateAIMoveToLane(card, laneIdx, callback) {
@@ -775,6 +766,7 @@ function getDropSide(imgElement, mouseEvent) {
 }
 function makeDraggable(img, cardData) {
     img.onpointerdown = (e) => {
+        GameVisuals.stopFlip(img);
         e.preventDefault(); gameState.globalZ++; img.style.zIndex = gameState.globalZ; img.style.transition = 'none'; 
         cardData.originalLeft = img.style.left; cardData.originalTop = img.style.top;
         let shiftX = e.clientX - img.getBoundingClientRect().left; let shiftY = e.clientY - img.getBoundingClientRect().top;
@@ -782,6 +774,10 @@ function makeDraggable(img, cardData) {
         function moveAt(pageX, pageY) {
             const boxRect = box.getBoundingClientRect(); let newLeft = pageX - shiftX - boxRect.left; let newTop = pageY - shiftY - boxRect.top;
             if (newTop < 0) { if (!gameState.gameActive || !checkLegalPlay(cardData)) newTop = 0; }
+            newLeft = Math.max(0, Math.min(newLeft, box.clientWidth - img.offsetWidth));
+            newTop = Math.min(newTop, box.clientHeight - img.offsetHeight);
+            const boardTop = document.querySelector('.game-board').getBoundingClientRect().top;
+            newTop = Math.max(newTop, boardTop - boxRect.top);
             img.style.left = newLeft + 'px'; img.style.top = newTop + 'px';
         }
         moveAt(e.clientX, e.clientY);
