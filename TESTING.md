@@ -45,3 +45,13 @@ The Game History navigation points to an external site whose source is not in th
 Additional browser QA used isolated Firebase fixtures and a two-tab BroadcastChannel transport with the real multiplayer engine. Both players started rounds, and hidden-card positions mirrored between desktop tabs and between a mobile viewport and desktop. A pointer drag retained the card back. Bot gameplay started and dealt cards. Desktop/mobile checks cover the controls outside the board, settings, account form, and mode-entry panels. Test-only URLs: `multiplayer-game.html?qaPeer=host` and `multiplayer-game.html?qaPeer=join`; `account.html?qaMember=1` enables an editable synthetic account. These switches are only interpreted by the preview fixture script, which is never loaded by production HTML.
 
 Live Firebase profile writes, real verification/reset emails, physical touch devices, and public PeerJS signalling were not used for these checks. Online clients must reload together to support the new `CARD_LAYOUT` position message. Its payload contains only an opaque card ID and normalised coordinates; it never includes a face image or rank. The pre-existing peer protocol still exchanges full dealt-card state and is not an anti-cheat boundary. Arrangement does not change a card's lane, ownership, face state, hand order or legal-play eligibility.
+
+## Viewport gameplay and card animation update
+
+`npm test` passes 26 checks. New coverage exercises responsive card sizing, 120 ms presentation-only flips, reduced-motion support, immediate playable state in all four engines, and fixed bot-animation dimensions without changing movement/result timing.
+
+Bot and multiplayer pages were checked at 1920×1080, 1366×768, 1024×768, 768×1024, 390×844, 320×568, 844×390 and 568×320. Document scroll dimensions matched each viewport; header, guest status and controls stayed within its bounds. Desktop, mobile portrait and short landscape were visually inspected. Real multiplayer engines started a round through the isolated two-tab transport, with desktop and mobile players.
+
+A running bot round exercised actual movement and reveal animations. Preview-only animation sampling measured moving card width at 1.003 times the shared width (integer-pixel rounding), confirming no enlargement when switching to fixed positioning. The fixed-position percentage-sizing cause is removed; cards use the same pixel dimensions in hands, piles and animations.
+
+The shared layout also loads on both tournament game pages. No game rules, ranking policy or transport protocol are changed. Browser checks use emulated viewport sizes, not physical touch devices; public PeerJS signalling and production Firebase writes remain outside these isolated checks.

@@ -195,25 +195,7 @@ body.page-report-bug .top-bar { position: static; }
 .page-report-bug .input-group { margin-bottom: 20px; }
 .page-report-bug .lobby-input { margin-bottom: 0; }
 .page-report-bug .setup-header { margin-bottom: 24px; }
-@media (max-width: 700px) {
-    .game-body .game-board { width: calc(100% - 20px); height: calc(100dvh - 290px); margin: 210px auto 80px; flex-shrink: 0; }
-    .game-body .scoreboard-widget { top: 10px; left: 10px; right: 10px; width: auto; }
-    .game-body .ui-widget-left, .game-body .ui-widget-right { top: 125px !important; padding: 8px 12px; }
-    .game-body .ui-widget-left { left: 10px !important; }
-    .game-body .ui-widget-right { right: 10px !important; }
-    .game-body .stat-value { font-size: 24px; }
-    .game-body .penalty-box { min-height: 12px; margin-top: 4px; }
-    .game-body .center-zone { padding: 0 8px; gap: 8px; }
-    .game-body .deck-area { width: 15vw; height: 22vw; }
-    .game-body .center-pile { width: 16vw; height: 23vw; }
-    .game-body .game-card { width: 16vw; }
-    .game-body .battlefield { flex: 1; min-width: 0; }
-    .game-body .bottom-left-actions { bottom: 38px; left: 10px; flex-direction: row; gap: 8px; }
-    .game-body .bottom-left-actions button { width: auto; padding: 8px 12px; font-size: .8rem; }
-    .game-body .timer-display { right: 10px; bottom: 44px; font-size: 1rem; }
-    .game-body .slap-modal { max-width: calc(100% - 20px); padding: 16px; }
-    .game-body .slap-modal h1 { white-space: normal; font-size: 1.5rem; }
-}
+
 
 /* All single-match entry panels share the same dimensions and rhythm. */
 :is(.page-setup, .page-multiplayer-setup, .page-matchmaking) :is(.setup-container, .menu-card) {
@@ -227,30 +209,6 @@ body.page-report-bug .top-bar { position: static; }
 .page-setup .diff-number {font-size:3rem; margin:0;}
 .page-setup .diff-label {font-size:1rem; margin:0;}
 
-/* Match chrome has reserved rows; controls never float over cards. */
-body.game-body {background: #133e00 !important; min-height: 780px; height: 100dvh; overflow-y:auto; justify-content:flex-start; padding: 0 12px 42px;}
-.game-body .game-board {width:100%; max-width:1400px; height:calc(100dvh - 220px); min-height:560px; margin:128px auto 0; flex-shrink:0;}
-.game-body .foundation-box {background: #133e00;}
-.game-body .bottom-left-actions {position:static; order:2; display:flex; flex-direction:row; justify-content:center; gap:12px; width:100%; padding:16px 0; margin:0; z-index:auto;}
-.game-body .bottom-left-actions button {width:auto; min-height:44px; padding:10px 18px; font-size:.9rem;}
-.game-body .scoreboard-widget {top:12px; left:50%; right:auto; transform:translateX(-50%); width:320px;}
-.game-body .ui-widget-left {top:12px !important; left:12px !important; padding:10px 16px;}
-.game-body .ui-widget-right {top:12px !important; right:12px !important; padding:10px 16px;}
-.game-body .stat-value {font-size:28px;}
-.game-body .penalty-box {min-height:12px; margin-top:4px;}
-.game-body .timer-display {position:static; order:3; margin:0 0 12px;}
-.game-body .game-card {max-height:calc(100% - 68px); width:auto; max-width:18%; touch-action:none;}
-.game-body .card-face-down {cursor:grab;}
-.game-body .card-face-down:active {cursor:grabbing;}
-.game-body .card-face-down:focus-visible {outline:3px solid #00c6ef; outline-offset:2px;}
-@media(max-width:700px) {
-    body.game-body {min-height:800px;}
-    .game-body .scoreboard-widget {left:10px; right:10px; transform:none; width:auto;}
-    .game-body .ui-widget-left, .game-body .ui-widget-right {top:124px !important;}
-    .game-body .game-board {height:calc(100dvh - 310px); min-height:550px; margin:216px auto 0;}
-    .game-body .game-card {width:16vw; max-width:20%; height:auto;}
-    .game-body .bottom-left-actions {padding:16px 0;}
-}
 .preferences-page {display:flex; align-items:center; justify-content:flex-start; height:auto; padding:40px 20px 80px; min-height:100dvh;}
 .preferences-card {width:540px; max-width:100%; padding:32px; background:var(--isf-panel); border:1px solid var(--isf-border); border-radius:var(--isf-radius);}
 .preferences-card h1 {margin-bottom:28px; font-size:2rem; font-style:italic;}
@@ -281,11 +239,9 @@ html[data-theme=light] body:not(.game-body) :is(.rule-box p,.rule-box li,.rules-
 html[data-theme=light] body:not(.game-body) .session-status {background:#e4f5fc; color:#185369;}
 html[data-theme=light] body:not(.game-body) .lb-row.me {background:#d7edf5;}
 html[data-theme=light] body:not(.game-body) :is(.diff-number,.diff-label) {color:#23536b !important; text-shadow:none;}
-.game-body .center-pile .game-card {width:100%; max-width:none; max-height:none;}
 .page-multiplayer-setup #lobby-actions-container {display:flex; flex-direction:column; gap:18px;}
 .page-multiplayer-setup #join-code {width:100% !important;}
 .page-multiplayer-setup .divider {justify-content:center;}
-.game-body .session-status {position:static; order:4; transform:none; width:auto; margin:8px auto 0; border-radius:10px;}
 html[data-theme=light] body:not(.game-body) :is(.setup-container,.menu-card,.auth-card,.preferences-card,.rule-box,.stat-card,.user-panel) {box-shadow:0 12px 30px #23435a24;}
 
 :is(.page-setup,.page-multiplayer-setup,.page-matchmaking) :is(.setup-container > i,.icon-group) {font-size:3rem !important; color:var(--isf-accent) !important; text-shadow:none !important; margin:0 !important;}

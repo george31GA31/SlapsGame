@@ -40,3 +40,16 @@ if(new URLSearchParams(location.search).has('qaMember')) {
  qaRef.update=async patch=>Object.assign(qaPlayers[0],patch);
  qaPlayers[0].country='GBR';
 }
+
+// Observe actual moving cards without altering game state (isolated preview only).
+document.addEventListener('DOMContentLoaded',()=>{
+ if(!document.body.classList.contains('game-body'))return;
+ const sample=()=>{
+  for(const card of document.querySelectorAll('.game-card'))if(card.style.position==='fixed'){
+   const expected=parseFloat(getComputedStyle(document.body).getPropertyValue('--card-width'));
+   document.body.dataset.qaMovingSamples=Number(document.body.dataset.qaMovingSamples||0)+1;
+   document.body.dataset.qaMaxMovingRatio=Math.max(Number(document.body.dataset.qaMaxMovingRatio||0),card.offsetWidth/expected);
+  }
+  requestAnimationFrame(sample);
+ };requestAnimationFrame(sample);
+});

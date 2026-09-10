@@ -1036,9 +1036,7 @@ function dealSmartHand(cards, owner) {
             else setCardFaceDown(img, card, owner);
 
             img.style.left = `${PLAYER_LANES[displayIdx]}%`;
-            const stackOffset = index * 5;
-            if (owner === 'ai') img.style.top = `${10 + stackOffset}px`;
-            else img.style.top = `${60 - stackOffset}px`;
+            img.style.top = `calc(4px + ${owner === 'ai' ? index : 3 - index} * var(--stack-step))`;
 
             img.style.zIndex = index + 10;
             card.element = img;
@@ -1055,13 +1053,13 @@ function setCardFaceUp(img, card, owner) {
     img.src = card.imgSrc;
     img.classList.remove('card-face-down');
     card.isFaceUp = true;
+    card.flipping = false;
     if (owner === 'player') {
         img.classList.add('player-card');
         img.onclick = null;
         makeDraggable(img, card);
-    } else {
-        img.classList.add('opponent-card');
-    }
+    } else img.classList.add('opponent-card');
+    GameVisuals.flip(img);
 }
 
 function setCardFaceDown(img, card, owner) {
@@ -1106,6 +1104,7 @@ function makeDraggable(img, cardData) {
 
     // Unified Start Handler
     function dragStart(e) {
+        GameVisuals.stopFlip(img);
         // Only prevent default if it's not a button click (allows basic interaction)
         if (e.type === 'touchstart') e.preventDefault(); 
         
@@ -1146,6 +1145,10 @@ function makeDraggable(img, cardData) {
                 if (!gameState.gameActive || !checkLegalPlay(cardData)) newTop = 0;
             }
 
+            newLeft = Math.max(0, Math.min(newLeft, box.clientWidth - img.offsetWidth));
+            newTop = Math.min(newTop, box.clientHeight - img.offsetHeight);
+            const boardTop = document.querySelector('.game-board').getBoundingClientRect().top;
+            newTop = Math.max(newTop, boardTop - boxRect.top);
             img.style.left = newLeft + 'px';
             img.style.top = newTop + 'px';
 
@@ -2112,6 +2115,7 @@ function applyRevealShow() {
     hiddenCards.forEach(img => {
         img.style.opacity = '1';
         img.classList.remove('pending-reveal');
+        GameVisuals.flip(img);
     });
 
     gameState.gameActive = true;

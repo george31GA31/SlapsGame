@@ -15,7 +15,9 @@ http.createServer((req,res)=>{
  if(url.pathname === '/__mobile') {
   const page = url.searchParams.get('page') || 'login.html';
   const safePage = /^[a-z-]+\.html(?:\?(?:uid=qa-1|qaMember=1|qaPeer=(?:host|join)))?$/.test(page) ? page : 'login.html';
-  res.writeHead(200,{'Content-Type':'text/html'}).end('<!doctype html><style>body{background:#252525;margin:24px}iframe{width:390px;height:844px;border:0}</style><iframe src="/' + safePage + '"></iframe>');return;
+  const width=Math.max(240,Math.min(2560,Number(url.searchParams.get('w'))||390));
+  const height=Math.max(240,Math.min(1600,Number(url.searchParams.get('h'))||844));
+  res.writeHead(200,{'Content-Type':'text/html'}).end('<!doctype html><style>body{background:#252525;margin:0}iframe{width:'+width+'px;height:'+height+'px;border:0}</style><iframe src="/' + safePage + '"></iframe>');return;
  }
  try {
   let data=fs.readFileSync(file);
