@@ -11,7 +11,7 @@ window.GameVisuals = {
         const animation = img.animate([
             {scale:'0.08 1', filter:'brightness(1.18) saturate(.92)'},
             {scale:'1 1', filter:'brightness(1) saturate(1)'}
-        ], {duration:115, easing:'cubic-bezier(.2,.8,.2,1)'});
+        ], {duration:120, easing:'cubic-bezier(.2,.8,.2,1)'});
         this.animations.set(img, animation);
         animation.addEventListener?.('finish', () => this.animations.delete(img), {once:true});
     },
