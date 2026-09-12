@@ -22,6 +22,8 @@
 </script>
 <script src="firebase-init.js">
 </script>
+<script src="profile-picture.js" defer></script>
+<script src="public-player.js" defer></script>
 <script src="account.js" defer>
 </script>
 </head>
@@ -34,6 +36,9 @@
 <a class="btn-auth" href="login.html">Log In</a>
 </div>
 <form id="account-form" hidden>
+<div class="input-group"><label for="profile-picture">Profile picture</label>
+<img id="profile-picture-preview" alt="Your profile picture" style="width:96px;height:96px;object-fit:cover;border-radius:20px;display:block;margin:12px 0">
+<input id="profile-picture" type="file" accept="image/jpeg,image/png,image/webp"><p>JPEG, PNG or WebP, up to 5 MB. Cropped to a square.</p></div>
 <div class="input-group">
 <label for="firstName">First name</label>
 <input class="auth-input" id="firstName" maxlength="80" required autocomplete="given-name">

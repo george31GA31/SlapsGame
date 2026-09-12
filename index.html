@@ -20,6 +20,7 @@
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
     <script src="firebase-init.js"></script>
+    <script src="public-player.js"></script>
     <script src="elo-engine.js"></script>
 
     <style>
@@ -65,9 +66,10 @@
             <ul class="nav-links">
                 <li class="active"><a href="#">Home</a></li>
                 <li><a href="how-to-play.html">How to Play</a></li>
-                <li><a href="https://sprucewilliams.github.io/Slaps-Online/matchtable.html">Game History</a></li>
+                <li><a href="history.html">Game History</a></li>
+                <li><a href="competitions.html?mode=league">League</a></li><li><a href="shop.html">Shop</a></li>
                 <li><a href="leaderboard.html">Leaderboard</a></li>
-                <li><a href="assets/SLAPS rules and regs v1.2-compressed.pdf" target="_blank">Rules & Regs</a></li>
+                <li><a href="rules.html">Rules & Regs</a></li>
             </ul>
 
             <div class="sidebar-footer">
@@ -165,6 +167,7 @@
                 userRef.on('value', (snapshot) => {
                     const data = snapshot.val();
                     if(data) {
+                        ISFPublicPlayer.sync(user.uid, data).catch(() => {});
                         document.getElementById('disp-elo').innerText = data.elo || 1000;
                         document.getElementById('disp-wins').innerText = data.wins || 0;
                         document.getElementById('disp-country').innerText = data.country || "---";

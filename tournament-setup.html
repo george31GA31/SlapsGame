@@ -137,15 +137,15 @@
             <div id="friends-menu" style="width:100%; display:flex; flex-direction:column; align-items:center;">
                 <i class="fa-solid fa-users icon-large"></i>
                 <h2>Play Friends</h2>
-                <input type="text" id="friend-nick" class="modern-input" placeholder="ENTER NICKNAME" maxlength="12">
+                <p>Eight players. Three rounds. One champion.</p>
                 
                 <div style="width: 100%; display: flex; flex-direction: column; align-items: center; gap: 15px;">
-                    <button class="btn-blue" onclick="initHost()">HOST TOURNAMENT</button>
+                    <button class="btn-blue" onclick="window.location.href='competitions.html'">HOST TOURNAMENT</button>
                     
                     <div style="color:#666; font-weight:bold; font-size:0.8rem;">- OR -</div>
                     
                     <input type="text" id="join-code-input" class="modern-input hidden" placeholder="ENTER CODE (ISF-XXXX)" style="margin-bottom:5px;">
-                    <button id="btn-join-main" class="btn-outline" onclick="showJoinField()">
+                    <button id="btn-join-main" class="btn-outline" onclick="window.location.href='competitions.html'">
                         <i class="fa-solid fa-plug"></i> JOIN TOURNAMENT
                     </button>
                     <button id="btn-connect" class="btn-blue hidden" onclick="initJoin()">CONNECT</button>

@@ -153,13 +153,17 @@ function initTournamentMatch() {
     });
 }
 function bindConnection(conn) {
+    if (gameState.conn && gameState.conn !== conn && gameState.conn.open) { conn.close(); return; }
+    if (gameState.boundPeer && gameState.boundPeer !== conn.peer) { conn.close(); return; }
+    gameState.boundPeer = conn.peer;
     gameState.conn = conn;
 
     conn.on('open', () => {
         sendNet({ type: 'HANDSHAKE', name: gameState.myName, isGuest: ISFSession.isGuest() });
     });
 
-    conn.on('data', (msg) => handleNet(msg));
+    const admit = NetworkGuard.limiter();
+    conn.on('data', (msg) => { if (gameState.conn === conn && admit(Date.now())) { try { handleNet(msg); } catch (error) { console.warn('Rejected malformed match event'); } } });
 
     conn.on('close', () => {
         // If match already ended normally, ignore disconnect
@@ -183,7 +187,7 @@ function sendNet(obj) {
    ================================ */
 
 function handleNet(msg) {
-    if (!msg) return;
+    if (!NetworkGuard.valid(msg, gameState.isHost)) return;
 
     if (msg.type === 'CARD_LAYOUT') { CardLayout.receive(msg, gameState.aiHand); return; }
     if (msg.type === 'HANDSHAKE') {
@@ -361,6 +365,7 @@ function handleNet(msg) {
 } 
 
 function handleInput(e) {
+    if (e.repeat) return;
     if (e.code === 'Space') {
         e.preventDefault();
         if (!gameState.gameActive) return;
@@ -429,6 +434,8 @@ function adjudicateSlap(who) {
         gameState.gameActive = false; // Stop game immediately
 
         const pilesTotal = gameState.centerPileLeft.length + gameState.centerPileRight.length;
+        const holding = who === 'player' ? 'aiSlapCards' : 'playerSlapCards';
+        gameState[holding] = (gameState[holding] || 0) + pilesTotal;
 
         // --- FIX: GIVE CARDS TO THE LOSER ---
         // If Host ('player') won the slap -> Guest ('ai') takes the cards.
@@ -448,6 +455,7 @@ function adjudicateSlap(who) {
         // Broadcast Valid Win
         const update = {
             type: 'SLAP_UPDATE',
+        playerSlapCards: gameState.playerSlapCards || 0, aiSlapCards: gameState.aiSlapCards || 0,
             winner: who, // 'player' (Host) or 'ai' (Guest) - Use this for the "Who Won" text
             pTotal: gameState.playerTotal,
             aTotal: gameState.aiTotal
@@ -519,6 +527,9 @@ function issuePenaltyHostAuth(who) {
 // --- VISUAL APPLICATORS (Run on both Client & Host) ---
 
 function applySlapUpdate(data) {
+    gameState.playerSlapCards = (gameState.isHost ? data.playerSlapCards : data.aiSlapCards) || 0;
+    gameState.aiSlapCards = (gameState.isHost ? data.aiSlapCards : data.playerSlapCards) || 0;
+    document.dispatchEvent(new Event('slap-piles-changed'));
     gameState.gameActive = false;
     gameState.slapActive = false;
 
@@ -630,6 +641,8 @@ function applyPenaltyUpdate(data) {
 }
 
 async function startRoundHostAuthoritative() {
+    gameState.playerSlapCards = 0; gameState.aiSlapCards = 0;
+    document.dispatchEvent(new Event("slap-piles-changed"));
     gameState.matchEnded = false;
 
     let fullDeck = createDeck();
@@ -707,6 +720,8 @@ async function startRoundHostAuthoritative() {
 }
 
 async function startRoundJoinerFromState(state) {
+    gameState.playerSlapCards = 0; gameState.aiSlapCards = 0;
+    document.dispatchEvent(new Event("slap-piles-changed"));
     importState(state);
     await preloadCardImages([...gameState.playerHand, ...gameState.aiHand]);
     dealSmartHand(gameState.playerHand, 'player');
@@ -832,6 +847,7 @@ function dealSmartHand(cards, owner) {
 
 function setCardFaceUp(img, card, owner) {
     img.setAttribute('aria-label', card.rank + ' of ' + card.suit);
+    const previousFace = img.src;
     img.src = card.imgSrc;
     img.classList.remove('card-face-down');
     card.isFaceUp = true;
@@ -841,7 +857,7 @@ function setCardFaceUp(img, card, owner) {
         img.onclick = null;
         makeDraggable(img, card);
     } else img.classList.add('opponent-card');
-    GameVisuals.flip(img);
+    GameVisuals.flip(img, previousFace);
 }
 
 function setCardFaceDown(img, card, owner) {
@@ -949,7 +965,7 @@ function makeDraggable(img, cardData) {
 
             img.style.transition = 'all 0.1s ease-out';
 
-            if (gameState.gameActive && parseInt(img.style.top) < -10) {
+            if (event.type !== 'pointercancel' && gameState.gameActive && parseInt(img.style.top) < -10) {
                 const dropSide = getDropSide(img, event); 
                 requestMoveToHost(cardData, dropSide);
             } else {
@@ -969,6 +985,7 @@ function makeDraggable(img, cardData) {
 }
 
 function applyOpponentDrag(d) {
+    if (!d || !Number.isFinite(d.nx) || !Number.isFinite(d.ny)) return;
     const box = document.getElementById('ai-foundation-area');
     if (!box) return;
     const boxRect = box.getBoundingClientRect();
@@ -987,12 +1004,13 @@ function applyOpponentDrag(d) {
         }
     }
 
+    if (!realCard || !realCard.isFaceUp) return;
     if (d.phase === 'start') {
         if (realCard && realCard.element) realCard.element.style.opacity = '0';
         if (!el) {
             el = document.createElement('img');
             el.className = 'game-card opponent-card'; 
-            el.src = d.src || 'assets/cards/back_of_card.png';
+            el.src = realCard.imgSrc;
             el.style.position = 'absolute';
             el.style.zIndex = 5000;
             el.style.pointerEvents = 'none';
@@ -1094,6 +1112,7 @@ function requestMoveToHost(cardData, dropSide) {
     }
 }
 function adjudicateMove(m, moverOverride) {
+    if (!m || !m.card || !['left','right'].includes(m.dropSide)) return;
     const mover = moverOverride || 'ai';
     const moverHand = (mover === 'player') ? gameState.playerHand : gameState.aiHand;
     const idx = moverHand.findIndex(c => c.id === m.card.id);
@@ -1492,6 +1511,7 @@ function renderCenterPile(side, card, hidden = false) {
     if (!container) return;
 
     const img = document.createElement('img');
+    const previousFace = img.src;
     img.src = card.imgSrc;
     img.className = 'game-card';
     img.style.left = '50%';
@@ -1773,7 +1793,7 @@ function applyRevealShow() {
     hiddenCards.forEach(img => {
         img.style.opacity = '1';
         img.classList.remove('pending-reveal');
-        GameVisuals.flip(img);
+        GameVisuals.flip(img, CARD_BACK_SRC);
     });
 
     // 2. Activate Game

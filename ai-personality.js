@@ -20,7 +20,7 @@
         if (kind === 'slap') {
             base = 1080 - (760 * s);
             spread = 360 - (120 * s);
-            minimum = 230;
+            minimum = 250;
         } else if (kind === 'flip') {
             base = 1120 - (520 * s);
             spread = 430 - (120 * s);
@@ -38,7 +38,7 @@
         let delay = base + bellJitter() * spread;
 
         /* Humans occasionally double-check a board instead of acting on a perfect metronome. */
-        const hesitationChance = (kind === 'slap' ? .045 : .17) - (.07 * s);
+        const hesitationChance = (kind === 'slap' ? .10 : .17) - (.07 * s);
         if (Math.random() < hesitationChance) delay += 240 + Math.random() * (kind === 'slap' ? 260 : 620);
 
         /* Consecutive plays accelerate, but never to an inhuman instant chain. */
@@ -89,14 +89,21 @@
         return legalCandidates(gameState.aiHand.filter(c => c.isFaceUp)).length > 0;
     }
 
+    let slapTimer = null;
+    let pendingLeft = null, pendingRight = null;
     triggerAISlap = function () {
-        const reaction = humanDelay('slap');
-        setTimeout(() => {
-            if (gameState.slapActive && gameState.gameActive) {
+        const left = gameState.centerPileLeft.at(-1), right = gameState.centerPileRight.at(-1);
+        if (slapTimer && left === pendingLeft && right === pendingRight) return;
+        clearTimeout(slapTimer);
+        pendingLeft = left; pendingRight = right;
+        slapTimer = setTimeout(() => {
+            slapTimer = null;
+            if (gameState.slapActive && gameState.gameActive &&
+                gameState.centerPileLeft.at(-1) === left && gameState.centerPileRight.at(-1) === right) {
                 lastDecisionAt = performance.now();
                 resolveSlap('ai');
             }
-        }, reaction);
+        }, humanDelay('slap') + Math.max(0, (gameState.slapReadableAt || 0) - performance.now()));
     };
 
     attemptAIMove = function () {

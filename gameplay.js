@@ -5,15 +5,33 @@ window.GameVisuals = {
         this.animations.get(img)?.cancel();
         this.animations.delete(img);
     },
-    flip(img) {
+    flip(img, previousFace) {
         if (!img?.animate || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
         this.stopFlip(img);
-        const animation = img.animate([
-            {scale:'0.08 1', filter:'brightness(1.18) saturate(.92)'},
-            {scale:'1 1', filter:'brightness(1) saturate(1)'}
-        ], {duration:120, easing:'cubic-bezier(.2,.8,.2,1)'});
-        this.animations.set(img, animation);
-        animation.addEventListener?.('finish', () => this.animations.delete(img), {once:true});
+        // Two faces share one rotation; rules become playable immediately.
+        // A presentation overlay hides the new face only until the edge-on midpoint.
+        if (!previousFace || !img.parentElement) return;
+        const back = img.cloneNode(false);
+        back.removeAttribute('id'); back.removeAttribute('tabindex');
+        back.src = previousFace;
+        back.setAttribute('aria-hidden', 'true');
+        back.style.pointerEvents = 'none';
+        back.style.zIndex = String((Number(img.style.zIndex) || 10) + 1);
+        img.after(back);
+        const base = (typeof getComputedStyle === 'function' ? getComputedStyle(img).transform : '') || '';
+        const prefix = base === 'none' ? '' : base;
+        const timing = {duration:160, easing:'cubic-bezier(.3,.15,.25,1)'};
+        const frontAnimation = img.animate([
+            {transform:prefix + ' perspective(700px) rotateY(-180deg)', backfaceVisibility:'hidden'},
+            {transform:prefix + ' perspective(700px) rotateY(0deg)', backfaceVisibility:'hidden'}
+        ], timing);
+        const backAnimation = back.animate([
+            {transform:prefix + ' perspective(700px) rotateY(0deg)', backfaceVisibility:'hidden'},
+            {transform:prefix + ' perspective(700px) rotateY(180deg)', backfaceVisibility:'hidden'}
+        ], timing);
+        const cancel = () => {frontAnimation.cancel(); backAnimation.cancel(); back.remove();};
+        this.animations.set(img, {cancel});
+        frontAnimation.addEventListener('finish', () => {back.remove(); this.animations.delete(img);}, {once:true});
     },
     land(img) {
         if (!img?.animate || img.classList.contains('pending-reveal') || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
@@ -93,15 +111,27 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    const slapBindings = [
-        [document.getElementById('sb-p2-slaps'), aiSlapSlot],
-        [document.getElementById('sb-p1-slaps'), playerSlapSlot]
-    ];
-    for (const [counter, slot] of slapBindings) {
-        if (!counter || !slot) continue;
-        const update = () => renderSlapStack(slot, counter.textContent);
-        new MutationObserver(update).observe(counter, {childList:true, characterData:true, subtree:true});
-        update();
+    const updateHoldingPiles = () => {
+        if (typeof gameState === 'undefined') return;
+        renderSlapStack(aiSlapSlot, gameState.aiSlapCards || 0);
+        renderSlapStack(playerSlapSlot, gameState.playerSlapCards || 0);
+    };
+    document.addEventListener('slap-piles-changed', updateHoldingPiles);
+    updateHoldingPiles();
+
+    for (const pile of document.querySelectorAll('.center-pile')) {
+        pile.tabIndex = 0;
+        pile.setAttribute('role', 'button');
+        pile.setAttribute('aria-label', 'Attempt slap: tap when the two centre ranks match');
+        const slap = event => {
+            if (event.type === 'pointerdown' && (!event.isPrimary || event.button !== 0)) return;
+            event.preventDefault();
+            if (typeof handleInput === 'function') handleInput({code:'Space', repeat:false, preventDefault(){}});
+        };
+        pile.addEventListener('pointerdown', slap);
+        pile.addEventListener('keydown', event => {
+            if (event.code === 'Enter') slap(event);
+        });
     }
 
     const arrangeChrome = () => {

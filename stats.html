@@ -279,7 +279,7 @@
         }
 
         // 2. Fetch Data
-        db.ref('users/' + targetUid).once('value').then(snapshot => {
+        db.ref('publicPlayers/' + targetUid).once('value').then(snapshot => {
             if (snapshot.exists()) {
                 const data = snapshot.val();
                 renderStats(data);
@@ -297,14 +297,7 @@
         });
 
         function renderStats(data) {
-            // 1. Full Name Logic
-            const fName = data.firstName || "";
-            const lName = data.lastName || "";
-            let displayName = (fName + " " + lName).trim();
-            
-            // Fallback to username if full name is missing
-            if (!displayName) displayName = (data.username || "UNKNOWN").toUpperCase(); 
-            else displayName = displayName.toUpperCase(); // Ensure it matches the style
+            const displayName = (data.username || "UNKNOWN").toUpperCase();
 
             document.getElementById('p-name').innerText = displayName;
             

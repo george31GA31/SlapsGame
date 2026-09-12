@@ -1,0 +1,60 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "users": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+    "publicPlayers": {
+      ".read": true,
+      ".indexOn": ["elo"],
+      "$uid": {
+        ".write": "auth != null && auth.uid === $uid",
+        ".validate": "newData.hasChildren(['username','country','flag','elo','wins','losses','stats_slaps_won','stats_slaps_lost','stats_rounds_won','stats_rounds_lost','stats_total_time_sec'])",
+        "username": { ".validate": "newData.isString() && newData.val().length >= 3 && newData.val().length <= 30" },
+        "country": { ".validate": "newData.isString() && newData.val().length <= 4" },
+        "flag": { ".validate": "newData.isString() && newData.val().length <= 180" },
+        "elo": { ".validate": "newData.isNumber() && newData.val() >= 100 && newData.val() <= 5000" },
+        "wins": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 10000000" },
+        "losses": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 10000000" },
+        "stats_slaps_won": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000000" },
+        "stats_slaps_lost": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000000" },
+        "stats_rounds_won": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000000" },
+        "stats_rounds_lost": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000000" },
+        "stats_total_time_sec": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000000000" },
+        "$other": { ".validate": false }
+      }
+    },
+    "matchHistory": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".indexOn": ["endedAt"],
+        "$match": {
+          ".write": "auth != null && auth.uid === $uid && !data.exists()",
+          ".validate": "newData.hasChildren(['endedAt','opponent','won','roundsWon','roundsLost','slapsWon','slapsLost','source'])",
+          "endedAt": { ".validate": "newData.isNumber() && newData.val() <= now + 60000" },
+          "opponent": { ".validate": "newData.isString() && newData.val().length <= 80" },
+          "won": { ".validate": "newData.isBoolean()" },
+          "roundsWon": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 10000" },
+          "roundsLost": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 10000" },
+          "slapsWon": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 10000" },
+          "slapsLost": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 10000" },
+          "source": { ".validate": "newData.val() === 'peer-match'" },
+          "$other": { ".validate": false }
+        }
+      }
+    },
+    "profilePictures": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid",
+        ".validate": "newData.isString() && newData.val().length <= 150000 && newData.val().beginsWith('data:image/jpeg;base64,')"
+      }
+    },
+    "competitions": { ".read": false, ".write": false },
+    "_competitionLimits": { ".read": false, ".write": false }
+  }
+}

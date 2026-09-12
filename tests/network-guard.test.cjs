@@ -1,0 +1,4 @@
+const test=require('node:test'),assert=require('node:assert/strict');const {valid,limiter}=require('../network-guard.js');
+test('joiner cannot inject authoritative state into host',()=>{for(const type of ['MATCH_OVER','SLAP_UPDATE','ROUND_START','MOVE_APPLY','REVEAL_SHOW'])assert.equal(valid({type},true),false);});
+test('malformed moves, coordinate floods and oversized payloads are rejected',()=>{for(const m of [{type:'MOVE_REQ'},{type:'DRAG',drag:{id:'a',phase:'start',nx:Infinity,ny:0}},{type:'HANDSHAKE',name:'x'.repeat(1000)}])assert.equal(valid(m,true),false);assert.equal(valid({type:'MOVE_REQ',move:{reqId:'a',card:{id:'c'},dropSide:'left'}},true),true);});
+test('per-connection rate limit bounds work and resets each second',()=>{const allow=limiter(2);assert.equal(allow(100),true);assert.equal(allow(100),true);assert.equal(allow(100),false);assert.equal(allow(1100),true);});
