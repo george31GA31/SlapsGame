@@ -4,6 +4,8 @@ This branch is not a claim that production is secure or the new competitions are
 
 ## Free-plan release update
 
+Superseded by the next Spark release described in `RELEASE-SPARK.md`: casual room transactions replace disabled competition entry. The notes below describe the initial release's boundaries.
+
 The owner has selected Firebase Spark only. Do not deploy Functions or upgrade billing.
 Online competition entry is disabled with an explicit availability message; the callable implementation remains in the repository for future work.
 Use `database.rules.free-plan.json` as the complete rules replacement for the previously supplied public-root rules, not the older additions snippet. Firebase publication still requires the owner: it has not been performed here.

@@ -1,237 +1,60 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ISF Online - Home</title>
-    <link rel="icon" type="image/png" href="assets/ISF_favicon.png">
-    <link rel="icon" type="image/png" href="assets/ISF_tab_logo.png">
-    <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link rel="icon" href="ISF_favicon.png">
 
-
-    <script>
-        if (!localStorage.getItem('isf_username')) {
-            window.location.href = 'login.html';
-        }
-    </script>
-
-    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
-    <script src="firebase-init.js"></script>
-    <script src="public-player.js"></script>
-    <script src="elo-engine.js"></script>
-
-    <style>
-        /* Extra styles for the new User Panel in the sidebar */
-        .user-panel {
-            background: #111;
-            border: 1px solid #00ccff;
-            padding: 15px;
-            border-radius: 8px;
-            text-align: center;
-            margin-bottom: 20px;
-            box-shadow: 0 0 15px rgba(0, 204, 255, 0.1);
-        }
-        .user-welcome { color: #888; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; }
-        .user-name-display { color: white; font-size: 1.4rem; font-weight: 900; margin: 5px 0; text-transform: uppercase; font-style: italic; }
-        .user-stats-row { display: flex; justify-content: center; gap: 15px; margin: 10px 0; border-top: 1px solid #333; border-bottom: 1px solid #333; padding: 10px 0; }
-        .stat-box { text-align: center; }
-        .stat-box span { display: block; }
-        .sb-label { font-size: 0.65rem; color: #666; }
-        .sb-val { font-size: 1.1rem; font-weight: bold; color: #00ccff; }
-        
-        .btn-logout-small {
-            background: transparent; border: 1px solid #333; color: #555;
-            font-size: 0.7rem; padding: 5px 12px; cursor: pointer;
-            text-transform: uppercase; transition: 0.2s;
-        }
-        .btn-logout-small:hover { color: #ff4444; border-color: #ff4444; }
-    </style>
-    <link rel="stylesheet" href="theme.css">
-    <script src="preferences.js"></script>
-    <script src="session.js"></script>
-    <script src="ui.js" defer></script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#163e32">
+<title>SLAPS · Get your hands in the game</title>
+<link rel="stylesheet" href="theme.css">
+<link rel="stylesheet" href="style.css">
+<script src="preferences.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script src="firebase-init.js"></script>
+<script src="session.js"></script>
+<script src="public-player.js"></script>
+<script src="home.js" defer></script>
 </head>
-<body class="page-index">
-
-    <div class="app-container">
-        
-        <nav class="sidebar-left">
-            <div class="logo-area-sidebar">
-                <img src="assets/ISF_ONLINE.png" alt="ISF Online" class="sidebar-logo">
-            </div>
-
-            <ul class="nav-links">
-                <li class="active"><a href="#">Home</a></li>
-                <li><a href="how-to-play.html">How to Play</a></li>
-                <li><a href="history.html">Game History</a></li>
-                <li><a href="competitions.html?mode=league">League</a></li><li><a href="shop.html">Shop</a></li>
-                <li><a href="leaderboard.html">Leaderboard</a></li>
-                <li><a href="rules.html">Rules & Regs</a></li>
-            </ul>
-
-            <div class="sidebar-footer">
-                <li><a href="account.html">My Account</a></li>
-                <li><a href="settings.html">Settings</a></li>
-                <li><a href="report-bug.html">Report a Bug</a></li>
-            </div>
-        </nav>
-
-        <main class="hero-area">
-            <div class="card-display">
-                <img src="assets/cards/ace_of_hearts.png" alt="Ace of Hearts" class="hero-card-img">
-            </div>
-        </main>
-
-        <aside class="sidebar-right">
-            
-            <div class="user-panel">
-                <div class="user-welcome">Welcome Back</div>
-                <div class="user-name-display" id="disp-username">LOADING...</div>
-                
-                <div class="user-stats-row">
-                    <div class="stat-box">
-                        <span class="sb-val" id="disp-elo">---</span>
-                        <span class="sb-label">RATING</span>
-                    </div>
-                    <div class="stat-box">
-                        <span class="sb-val" id="disp-wins">---</span>
-                        <span class="sb-label">WINS</span>
-                    </div>
-                    <div class="stat-box">
-                        <span class="sb-val" id="disp-country">---</span>
-                        <span class="sb-label">NATION</span>
-                    </div>
-                </div>
-
-                <button class="btn-logout-small" onclick="logout()">Log Out</button>
-            </div>
-
-            <div class="modes-grid">
-                
-                <div class="mode-box" onclick="window.location.href='multiplayer-setup.html'">
-                    <div class="mode-icon">
-                        <i class="fa-solid fa-handshake"></i>
-                    </div>
-                    <h3>PLAY A<br>FRIEND</h3>
-                    <button class="btn-mode-play">PLAY</button>
-                </div>
-
-                <div class="mode-box" onclick="window.location.href='setup.html'">
-                    <div class="mode-icon">
-                        <i class="fa-solid fa-robot"></i>
-                    </div>
-                    <h3>PLAY AI<br>BOT</h3>
-                    <button class="btn-mode-play">PLAY</button>
-                </div>
-
-                <div class="mode-box" onclick="window.location.href='matchmaking.html'">
-                    <div class="mode-icon">
-                        <i class="fa-solid fa-globe"></i>
-                    </div>
-                    <h3>PLAY<br>ONLINE</h3>
-                    <button class="btn-mode-play">PLAY</button>
-                </div>
-
-                <div class="mode-box" onclick="window.location.href='tournament-setup.html'">
-                    <div class="mode-icon">
-                        <i class="fa-solid fa-trophy"></i>
-                    </div>
-                    <h3>PLAY<br>TOURNAMENT</h3>
-                    <button class="btn-mode-play">PLAY</button>
-                </div>
-
-               <div class="mode-box" onclick="window.location.href='leaderboard.html'">
-    <div class="mode-icon">
-        <i class="fa-solid fa-chart-simple"></i>
-    </div>
-    <h3>GLOBAL<br>RANKINGS</h3>
-    <button class="btn-mode-play">VIEW</button>
+<body class="slaps-home">
+<a class="skip-home" href="#arena">Skip to play</a>
+<div class="home-shell">
+<nav class="home-nav" aria-label="Main navigation">
+<a class="slaps-wordmark" href="index.html" aria-label="SLAPS Home">SLAPS<span>THE CARD GAME</span></a>
+<div class="home-nav-links">
+<a href="index.html" aria-current="page"><span>01</span> The arena</a>
+<a href="competitions.html"><span>02</span> Tournaments</a>
+<a href="competitions.html?mode=league"><span>03</span> League</a>
+<a href="leaderboard.html"><span>04</span> Rankings</a>
+<a href="history.html"><span>05</span> Match history</a>
+<a href="rules.html"><span>06</span> Rules & regulations</a>
+<a href="shop.html"><span>07</span> Shop <small>SOON</small></a>
 </div>
-            </div>
-        </aside>
-
-    </div>
-
-    <script>
-        // 1. Load Username immediately from storage
-        const localName = localStorage.getItem('isf_username');
-        if(localName) document.getElementById('disp-username').innerText = localName;
-
-        // 2. Fetch Live Stats from Firebase
-        auth.onAuthStateChanged((user) => {
-            if (user && !ISFSession.isGuest()) {
-                const userRef = db.ref('users/' + user.uid);
-                userRef.on('value', (snapshot) => {
-                    const data = snapshot.val();
-                    if(data) {
-                        ISFPublicPlayer.sync(user.uid, data).catch(() => {});
-                        document.getElementById('disp-elo').innerText = data.elo || 1000;
-                        document.getElementById('disp-wins').innerText = data.wins || 0;
-                        document.getElementById('disp-country').innerText = data.country || "---";
-                    }
-                });
-            }
-        });
-
-        // 3. Logout Logic
-        function logout() {
-            auth.signOut().then(() => {
-                ISFSession.clear();
-                window.location.href = 'login.html';
-            });
-        }
-        // --- MATCH REPORTER ---
-
-/**
- * Call this function when a Ranked Game ends.
- * @param {number} opponentElo - The rating of the person you fought.
- * @param {number} opponentGameCount - How many games they have played (for the halving rule).
- * @param {boolean} isWin - true if you won, false if you lost.
- */
-function reportMatchResult(opponentElo, opponentGameCount, isWin) {
-    const user = auth.currentUser;
-    if (!user || user.isAnonymous || ISFSession.isGuest()) return; // Never report guest results
-
-    console.log("Reporting Match... Win:", isWin);
-
-    const userRef = db.ref('users/' + user.uid);
-
-    // Use a transaction to safely update stats without glitches
-    userRef.transaction((userData) => {
-        if (userData) {
-            // 1. Get current stats (default to 1000/0/0 if missing)
-            const currentElo = userData.elo || 1000;
-            const wins = userData.wins || 0;
-            const losses = userData.losses || 0;
-            
-            // Calculate MY total games played so we know which K-Factor to use
-            const myGameCount = wins + losses;
-
-            // 2. Calculate New ELO using our engine file
-            const newElo = calculateNewElo(
-                currentElo, 
-                opponentElo, 
-                isWin, 
-                myGameCount, 
-                opponentGameCount 
-            );
-
-            // 3. Update the data to save to Firebase
-            userData.elo = newElo;
-            if (isWin) {
-                userData.wins = wins + 1;
-            } else {
-                userData.losses = losses + 1;
-            }
-            
-            return userData; // Saves the changes
-        }
-        return userData;
-    });
-}
-    </script> 
-</body>
-</html>
+<div class="home-nav-bottom"><a href="account.html">My account ↗</a><a href="settings.html">Settings</a><a href="report-bug.html">Report a bug</a><p>QUICK HANDS.<br>COOL HEAD.</p></div>
+</nav>
+<main class="home-main" id="arena">
+<header class="home-top"><span class="edition">ISF ONLINE / THE ARENA</span><a id="account-link" href="login.html">Sign in ↗</a></header>
+<section class="slaps-hero" aria-labelledby="hero-title">
+<div class="hero-copy"><p class="kicker"><span></span> THE TABLE IS YOURS</p><h1 id="hero-title">THINK FAST.<br><em>SLAP FIRST.</em></h1><p class="hero-description">Two centre piles. No time to hesitate. Play your cards, spot the match, and beat your opponent to the slap.</p><a class="slap-cta" href="setup.html" data-play>PLAY NOW <span>↗</span></a><a class="rules-link" href="rules.html">New to Slaps? Learn the rules →</a></div>
+<div class="hero-table" aria-hidden="true"><span class="table-rim"></span><span class="table-label">YOUR NEXT MOVE</span><img class="table-card card-back" src="assets/cards/back_of_card.png" alt=""><img class="table-card card-left" src="assets/cards/ace_of_spades.png" alt=""><img class="table-card card-right" src="assets/cards/ace_of_hearts.png" alt=""><span class="slap-stamp">SLAP!</span><span class="table-caption">SEE THE MATCH. MAKE YOUR MOVE.</span></div>
+<div class="hero-bottom"><span>01 / PLAY YOUR CARDS</span><span>02 / SPOT THE MATCH</span><span>03 / TAP TO SLAP</span></div>
+</section>
+<div class="home-section-title"><h2>CHOOSE YOUR TABLE</h2><span>One game. Your way to play.</span></div>
+<section class="play-options" aria-label="Game modes">
+<a class="play-option" href="setup.html" data-play><span class="mode-number">01 / PRACTICE</span><span class="mode-glyph">♠</span><h3>Beat the bot.</h3><p>Find your rhythm. Pick your challenge.</p><span class="mode-action">PLAY SOLO ↗</span></a>
+<a class="play-option" href="multiplayer-setup.html" data-play><span class="mode-number">02 / HEAD TO HEAD</span><span class="mode-glyph">♣</span><h3>Call a friend.</h3><p>One room code. A proper showdown.</p><span class="mode-action">PLAY A FRIEND ↗</span></a>
+<a class="play-option" href="matchmaking.html" data-play><span class="mode-number">03 / COMPETE</span><span class="mode-glyph">♦</span><h3>Take on the world.</h3><p>Meet your next online opponent.</p><span class="mode-action">PLAY ONLINE ↗</span></a>
+</section>
+<section class="competition-strip"><div><p class="kicker">MAKE A NIGHT OF IT</p><h2>More players.<br>More to play for.</h2></div><div><a href="competitions.html">8-player tournament ↗</a><a href="competitions.html?mode=league">Start a league ↗</a><a href="tournament-setup.html">Solo tournament ↗</a><p>Casual rooms · Shared results · No ranked ELO changes</p></div></section>
+<footer class="home-footer"><span>SLAPS / INTERNATIONAL SLAPS FEDERATION</span><a href="how-to-play.html">How to play ↗</a></footer>
+</main>
+<aside class="home-rail" aria-label="Your player card and league table">
+<section class="rail-player"><p class="kicker">YOUR PLAYER CARD</p><span class="player-monogram" id="home-initial">?</span><h2 id="disp-username">Take your seat</h2><p id="home-member-status">Sign in to save your record.</p><div class="rail-stats"><div><strong id="disp-elo">—</strong><span>ELO</span></div><div><strong id="disp-wins">—</strong><span>WINS</span></div><div><strong id="disp-country">—</strong><span>NATION</span></div></div><button id="home-logout" hidden>Sign out</button></section>
+<section class="rail-rankings"><div class="rail-heading"><p class="kicker">THE LEAGUE TABLE</p><span>↗</span></div><h2>Players to beat.</h2><p id="ranking-status" role="status">Loading rankings…</p><ol id="home-rankings"></ol><a href="leaderboard.html">View all rankings →</a></section>
+<section class="rail-tip"><span aria-hidden="true">↗</span><p><strong>Eyes on the centre.</strong>Matching ranks? Tap either centre card to attempt a slap. Mouse, touch or keyboard—you're in.</p></section>
+<p id="home-status" role="status"></p>
+</aside>
+</div>
+</body></html>

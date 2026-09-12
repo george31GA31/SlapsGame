@@ -1,10 +1,11 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<link rel="icon" href="ISF_favicon.png">
+
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ISF Online - Sign Up</title>
-    <link rel="icon" type="image/png" href="assets/ISF_favicon.png">
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
@@ -106,7 +107,7 @@
 
             <div class="input-group">
                 <label class="input-label">Unique Username</label>
-                <input type="text" id="su-username" class="auth-input" placeholder="DrJohnSmith" required>
+                <input type="text" id="su-username" class="auth-input" placeholder="DrJohnSmith" minlength="3" maxlength="30" required>
             </div>
 
             <div class="input-group">
@@ -941,8 +942,8 @@
                 showError("Please select a country.");
                 return;
             }
-            if(username.length < 3) {
-                showError("Username must be at least 3 characters.");
+            if(username.length < 3 || username.length > 30) {
+                showError("Username must contain 3–30 characters.");
                 return;
             }
 
@@ -991,5 +992,6 @@
             el.style.display = "block";
         }
     </script>
+<script src="public-player.js"></script>
 </body>
 </html>
