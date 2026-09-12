@@ -1,0 +1,6 @@
+{
+ "competitions":{"$room":{".read":"auth != null && data.child('players').child(auth.uid).exists()",".write":false}},
+ "_competitionLimits":{".read":false,".write":false},
+ "matchHistory":{"$uid":{".read":"auth != null && auth.uid === $uid",".indexOn":["endedAt"],"$match":{".write":"auth != null && auth.uid === $uid && !data.exists()",".validate":"newData.hasChildren(['endedAt','opponent','won','roundsWon','roundsLost','slapsWon','slapsLost','source'])","endedAt":{".validate":"newData.isNumber() && newData.val() <= now + 60000"},"opponent":{".validate":"newData.isString() && newData.val().length <= 80"},"won":{".validate":"newData.isBoolean()"},"roundsWon":{".validate":"newData.isNumber() && newData.val() >= 0 && newData.val() <= 10000"},"roundsLost":{".validate":"newData.isNumber() && newData.val() >= 0 && newData.val() <= 10000"},"slapsWon":{".validate":"newData.isNumber() && newData.val() >= 0 && newData.val() <= 10000"},"slapsLost":{".validate":"newData.isNumber() && newData.val() >= 0 && newData.val() <= 10000"},"source":{".validate":"newData.val() === 'peer-match'"},"$other":{".validate":false}}}},
+ "profilePictures":{"$uid":{".read":"auth != null && auth.uid === $uid",".write":"auth != null && auth.uid === $uid",".validate":"newData.isString() && newData.val().length <= 150000 && newData.val().beginsWith('data:image/jpeg;base64,')"}}
+}

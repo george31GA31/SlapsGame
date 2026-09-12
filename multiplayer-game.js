@@ -37,6 +37,7 @@ function updateMatchStatus() {
 let enemyElo = 1000; 
 let enemyGameCount = 0;
 let matchResultReported = false;
+let onlineHistoryId = null;
 
 // --- 2. FETCH ENEMY STATS ---
 function fetchEnemyStats(enemyId) {
@@ -92,6 +93,14 @@ function reportMatchResultInternal(isWin, onComplete, proofToken) {
     }
 
     matchResultReported = true; 
+    onlineHistoryId ||= (globalThis.crypto?.randomUUID?.() || String(Date.now()));
+    window.db.ref('matchHistory/' + localMatchUid + '/' + onlineHistoryId).set({
+        endedAt: Date.now(), opponent: gameState.opponentName || 'Opponent', won: !!isWin,
+        roundsWon: gameState.p1Rounds || 0, roundsLost: gameState.aiRounds || 0,
+        slapsWon: gameState.p1Slaps || 0, slapsLost: gameState.aiSlaps || 0,
+        source: 'peer-match'
+    }).catch(() => ISFSession.showMatchStatus('Match finished · History save failed'));
+
     console.log("🚀 REPORTING STATS to Database...");
 
     const user = firebase.auth().currentUser;
@@ -260,9 +269,11 @@ window.onload = async function () {
    ================================ */
 
 function initMultiplayer() {
-    const role = (localStorage.getItem('isf_role') || '').toLowerCase();
-    const hostId = (localStorage.getItem('isf_code') || '').trim();
-    const myName = (localStorage.getItem('isf_my_name') || 'Player').trim();
+    const matchParams = new URLSearchParams(location.search);
+    const role = (matchParams.get('role') || localStorage.getItem('isf_role') || '').toLowerCase();
+    const hostId = (matchParams.get('code') || localStorage.getItem('isf_code') || '').trim();
+    const myName = (matchParams.get('name') || localStorage.getItem('isf_my_name') || 'Player').trim().slice(0,80);
+    if (matchParams.has('competition')) unrankedMatch = true;
 
     gameState.myName = myName;
     gameState.opponentName = 'OPPONENT';
@@ -313,13 +324,17 @@ function connectToHost(hostId) {
 }
 
 function bindConnection(conn) {
+    if (gameState.conn && gameState.conn !== conn && gameState.conn.open) { conn.close(); return; }
+    if (gameState.boundPeer && gameState.boundPeer !== conn.peer) { conn.close(); return; }
+    gameState.boundPeer = conn.peer;
     gameState.conn = conn;
 
     conn.on('open', () => {
         sendNet(matchIdentity());
     });
 
-    conn.on('data', (msg) => handleNet(msg));
+    const admit = NetworkGuard.limiter();
+    conn.on('data', (msg) => { if (gameState.conn === conn && admit(Date.now())) { try { handleNet(msg); } catch (error) { console.warn('Rejected malformed match event'); } } });
 
     conn.on('close', () => {
         if (gameState.matchEnded) return;
@@ -341,7 +356,7 @@ function sendNet(obj) {
    ================================ */
 
 function handleNet(msg) {
-    if (!msg) return;
+    if (!NetworkGuard.valid(msg, gameState.isHost)) return;
 
     // --- 1. HANDSHAKE HANDLER ---
     if (msg.type === 'CARD_LAYOUT') { CardLayout.receive(msg, gameState.aiHand); return; }
@@ -369,7 +384,7 @@ function handleNet(msg) {
 
     // --- SECURITY: HANDLE CONCESSION TOKEN ---
     if (msg.type === 'CONCESSION_TOKEN') {
-        console.log("✅ Received Concession Token:", msg.token);
+
         if (isRanked && !matchResultReported) {
             reportMatchResultInternal(true, null, msg.token);
         }
@@ -495,7 +510,7 @@ function handleNet(msg) {
         gameState.matchEnded = false;
         gameState.matchLive = false;         // Reset "Safe Start" flag
         gameState.opponentDisconnected = false;
-        matchResultReported = false;         // <--- THE FIX: Allow new ELO report
+        matchResultReported = false; onlineHistoryId = null; // <--- THE FIX: Allow new ELO report
         gameState.matchStartTime = null;     // Reset Timer start
         stopVisualTimer();                   // Stop old timer
         startVisualTimer();                  // Start new timer logic
@@ -513,6 +528,8 @@ function handleNet(msg) {
 }
 
 function handleInput(e) {
+    if (gameState.connectionSuspended) return;
+    if (e.repeat) return;
     if (e.code === 'Space') {
         e.preventDefault();
         if (e.repeat) return; 
@@ -588,6 +605,9 @@ function adjudicateSlap(who) {
 }
 
 function resolveSlap(winner) {
+    const holding = winner === 'player' ? 'aiSlapCards' : 'playerSlapCards';
+    gameState[holding] = (gameState[holding] || 0) + gameState.centerPileLeft.length + gameState.centerPileRight.length;
+    document.dispatchEvent(new Event('slap-piles-changed'));
     gameState.slapActive = false;
     gameState.gameActive = false;
 
@@ -646,6 +666,7 @@ function resolveSlap(winner) {
 
     const update = {
         type: 'SLAP_UPDATE',
+        playerSlapCards: gameState.playerSlapCards || 0, aiSlapCards: gameState.aiSlapCards || 0,
         winner: winner,
         pTotal: gameState.playerTotal,
         aTotal: gameState.aiTotal,
@@ -716,6 +737,9 @@ function issuePenaltyHostAuth(who) {
 // --- VISUAL APPLICATORS ---
 
 function applySlapUpdate(data) {
+    gameState.playerSlapCards = (gameState.isHost ? data.playerSlapCards : data.aiSlapCards) || 0;
+    gameState.aiSlapCards = (gameState.isHost ? data.aiSlapCards : data.playerSlapCards) || 0;
+    document.dispatchEvent(new Event('slap-piles-changed'));
     gameState.gameActive = false;
     gameState.slapActive = false;
 
@@ -827,6 +851,8 @@ function applyPenaltyUpdate(data) {
 }
 
 async function startRoundHostAuthoritative(oddCard = null) {
+    gameState.playerSlapCards = 0; gameState.aiSlapCards = 0;
+    document.dispatchEvent(new Event("slap-piles-changed"));
     gameState.matchEnded = false;
     gameState.matchLive = true;
     startVisualTimer();
@@ -917,6 +943,8 @@ async function startRoundHostAuthoritative(oddCard = null) {
 }
 
 async function startRoundJoinerFromState(state) {
+    gameState.playerSlapCards = 0; gameState.aiSlapCards = 0;
+    document.dispatchEvent(new Event("slap-piles-changed"));
     importState(state);
    gameState.matchLive = true;
     startVisualTimer();
@@ -1050,6 +1078,7 @@ function dealSmartHand(cards, owner) {
 
 function setCardFaceUp(img, card, owner) {
     img.setAttribute('aria-label', card.rank + ' of ' + card.suit);
+    const previousFace = img.src;
     img.src = card.imgSrc;
     img.classList.remove('card-face-down');
     card.isFaceUp = true;
@@ -1059,7 +1088,7 @@ function setCardFaceUp(img, card, owner) {
         img.onclick = null;
         makeDraggable(img, card);
     } else img.classList.add('opponent-card');
-    GameVisuals.flip(img);
+    GameVisuals.flip(img, previousFace);
 }
 
 function setCardFaceDown(img, card, owner) {
@@ -1073,6 +1102,7 @@ function setCardFaceDown(img, card, owner) {
 }
 
 function tryFlipCard(img, card) {
+    if (gameState.connectionSuspended) return;
     if (card.isFaceUp || card.flipping || !gameState.playerHand.includes(card)) return;
     const liveCards = gameState.playerHand.filter(c => c.isFaceUp || c.flipping).length;
     if (liveCards < 4) {
@@ -1104,6 +1134,9 @@ function makeDraggable(img, cardData) {
 
     // Unified Start Handler
     function dragStart(e) {
+        if (!e.isPrimary || e.button !== 0 || gameState.activePointer != null) return;
+        gameState.activePointer = e.pointerId;
+        e.preventDefault();
         GameVisuals.stopFlip(img);
         // Only prevent default if it's not a button click (allows basic interaction)
         if (e.type === 'touchstart') e.preventDefault(); 
@@ -1176,6 +1209,7 @@ function makeDraggable(img, cardData) {
 
         // Define Move Handler
         function onMove(event) {
+            if (event.pointerId !== gameState.activePointer) return;
             if (event.type === 'touchmove') event.preventDefault(); // Stop Scrolling
             const moveCoords = getExy(event);
             moveAt(moveCoords.x, moveCoords.y, true);
@@ -1183,8 +1217,11 @@ function makeDraggable(img, cardData) {
 
         // Define End Handler
         function onEnd(event) {
-            document.removeEventListener('mousemove', onMove);
-            document.removeEventListener('mouseup', onEnd);
+            if (event.pointerId !== gameState.activePointer) return;
+            gameState.activePointer = null;
+            document.removeEventListener('pointercancel', onEnd);
+            document.removeEventListener('pointermove', onMove);
+            document.removeEventListener('pointerup', onEnd);
             document.removeEventListener('touchmove', onMove);
             document.removeEventListener('touchend', onEnd);
 
@@ -1204,7 +1241,7 @@ function makeDraggable(img, cardData) {
             // Mock an event object for getDropSide logic or replicate it:
             const mockEvent = { clientX: centerX, clientY: centerY };
 
-            if (gameState.gameActive && parseInt(img.style.top) < -10) {
+            if (event.type !== 'pointercancel' && gameState.gameActive && parseInt(img.style.top) < -10) {
                 const dropSide = getDropSide(img, mockEvent); 
                 requestMoveToHost(cardData, dropSide);
             } else {
@@ -1220,17 +1257,16 @@ function makeDraggable(img, cardData) {
         }
 
         // Attach Global Listeners
-        document.addEventListener('mousemove', onMove);
-        document.addEventListener('mouseup', onEnd);
-        document.addEventListener('touchmove', onMove, { passive: false });
-        document.addEventListener('touchend', onEnd);
+        document.addEventListener('pointermove', onMove);
+        document.addEventListener('pointerup', onEnd);
+        document.addEventListener('pointercancel', onEnd);
     }
 
     // Attach Start Listeners
-    img.onmousedown = dragStart;
-    img.ontouchstart = dragStart;
+    img.onpointerdown = dragStart;
 }
 function applyOpponentDrag(d) {
+    if (!d || !Number.isFinite(d.nx) || !Number.isFinite(d.ny)) return;
     const box = document.getElementById('ai-foundation-area');
     if (!box) return;
     const boxRect = box.getBoundingClientRect();
@@ -1249,12 +1285,13 @@ function applyOpponentDrag(d) {
         }
     }
 
+    if (!realCard || !realCard.isFaceUp) return;
     if (d.phase === 'start') {
         if (realCard && realCard.element) realCard.element.style.opacity = '0';
         if (!el) {
             el = document.createElement('img');
             el.className = 'game-card opponent-card'; 
-            el.src = d.src || 'assets/cards/back_of_card.png';
+            el.src = realCard.imgSrc;
             el.style.position = 'absolute';
             el.style.zIndex = 5000;
             el.style.pointerEvents = 'none';
@@ -1316,6 +1353,7 @@ function checkPileLogic(card, targetPile) {
    ================================ */
 
 function requestMoveToHost(cardData, dropSide) {
+    if (gameState.connectionSuspended) return;
     if (dropSide !== 'left' && dropSide !== 'right') {
         if (cardData && cardData.originalLeft != null) {
             const el = cardData.element;
@@ -1353,6 +1391,8 @@ function requestMoveToHost(cardData, dropSide) {
     }
 }
 function adjudicateMove(m, moverOverride) {
+    if (gameState.connectionSuspended) return;
+    if (!m || !m.card || !['left','right'].includes(m.dropSide)) return;
     const mover = moverOverride || 'ai';
     const moverHand = (mover === 'player') ? gameState.playerHand : gameState.aiHand;
     const idx = moverHand.findIndex(c => c.id === m.card.id);
@@ -1541,6 +1581,7 @@ function applyMoveFromHost(a) {
 }
 
 function handlePlayerDeckClick() {
+    if (gameState.connectionSuspended) return;
     if (!gameState.gameActive) {
         if (gameState.playerReady) return;
         gameState.playerReady = true;
@@ -1749,6 +1790,7 @@ function renderCenterPile(side, card, hidden = false) {
     if (!container) return;
 
     const img = document.createElement('img');
+    const previousFace = img.src;
     img.src = card.imgSrc;
     img.className = 'game-card';
     img.style.left = '50%';
@@ -2061,7 +2103,7 @@ function acceptRematch() {
     gameState.matchEnded = false;
     gameState.matchLive = false;         // Reset "Safe Start" flag
     gameState.opponentDisconnected = false;
-    matchResultReported = false;         // <--- THE FIX: Allow new ELO report
+    matchResultReported = false; onlineHistoryId = null; // <--- THE FIX: Allow new ELO report
     gameState.matchStartTime = null;     // Reset Timer start
     stopVisualTimer();                   // Stop old timer
     
@@ -2115,7 +2157,7 @@ function applyRevealShow() {
     hiddenCards.forEach(img => {
         img.style.opacity = '1';
         img.classList.remove('pending-reveal');
-        GameVisuals.flip(img);
+        GameVisuals.flip(img, CARD_BACK_SRC);
     });
 
     gameState.gameActive = true;

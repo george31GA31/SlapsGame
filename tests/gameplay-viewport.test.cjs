@@ -5,10 +5,16 @@ test('shared card dimensions fit the hand at portrait, landscape, tablet and des
  const s=ctx.GameVisuals.cardSize(w,h);assert.ok(s.width*5.5<=w+.01);assert.ok(s.height+12+s.step*3<=h+.01);assert.ok(s.width<=130);assert.equal(s.height,s.width*1.45);
  }
 });
-test('flip is presentation-only, lasts 120ms, can be cancelled, and respects reduced motion',()=>{
- const ctx=visuals();let duration=0,cancels=0;const img={animate(frames,options){duration=options.duration;return{cancel(){cancels++}}}};
- ctx.GameVisuals.flip(img);assert.equal(duration,120);ctx.GameVisuals.stopFlip(img);assert.equal(cancels,1);
- const reduced=visuals(true);reduced.GameVisuals.flip({animate(){throw Error('Reduced motion must not animate')}});
+test('3D flip uses two backface-hidden faces for 160ms and cleans up on interruption',()=>{
+ const ctx=visuals();let cancels=0,removed=0;const calls=[];
+ const animate=(frames,options)=>{calls.push({frames,options});return{cancel(){cancels++},addEventListener(){}}};
+ const back={style:{},removeAttribute(){},setAttribute(){},animate,remove(){removed++}};
+ const img={style:{zIndex:'12'},parentElement:{},cloneNode(){return back},after(){},animate};
+ ctx.GameVisuals.flip(img,'back.png');assert.equal(calls.length,2);assert.equal(back.src,'back.png');
+ assert.ok(calls.every(c=>c.options.duration===160&&c.frames.every(f=>f.backfaceVisibility==='hidden')));
+ assert.match(calls[0].frames[0].transform,/-180deg/);assert.match(calls[1].frames[1].transform,/180deg/);
+ ctx.GameVisuals.stopFlip(img);assert.equal(cancels,2);assert.equal(removed,1);
+ const reduced=visuals(true);reduced.GameVisuals.flip({animate(){throw Error('Reduced motion must not animate')}},'back.png');
 });
 for(const file of ['game.js','tournament-game.js','multiplayer-game.js','tournament-online.js'])test(file+': revealing a card does not delay its playable state',()=>{
  const ctx=visuals(),src=fs.readFileSync(file,'utf8');let wired=false;
@@ -26,4 +32,10 @@ for(const file of ['game.js','tournament-game.js'])test(file+': moving bot card 
  const card={element:el};ctx.animateAIMove(card,'left',()=>done++);
  assert.equal(el.style.width,'80px');assert.equal(el.style.height,'116px');assert.equal(el.style.position,'fixed');assert.equal(done,0);assert.equal(delay,400);timer();assert.equal(done,1);
  ctx.animateSnapBack(card);assert.equal(el.style.width,'');assert.equal(el.style.height,'');assert.equal(el.style.position,'absolute');
+});
+for(const file of ['game.js','tournament-game.js','multiplayer-game.js','tournament-online.js'])test(file+': draw reveal animation receives a back face without delaying play',()=>{
+ const src=fs.readFileSync(file,'utf8'),name=file.includes('multiplayer')||file.includes('online')?'applyRevealShow':'performRevealShow';
+ const start=src.indexOf('function '+name+'('),end=src.indexOf('\nfunction ',start+10);let flipped=false;
+ const img={style:{},classList:{remove(){}}};const ctx={performance:{now:()=>0},document:{querySelectorAll:()=>[img],getElementById:()=>({classList:{remove(){}}})},gameState:{aiLoopRunning:true},GameVisuals:{flip:(image,back)=>{assert.equal(back,'back.png');flipped=true;}},CARD_BACK_SRC:'back.png',checkSlapCondition(){},startAILoop(){},startVisualTimer(){},setTimeout(){}};
+ vm.createContext(ctx);vm.runInContext(src.slice(start,end),ctx);ctx[name]();assert.equal(flipped,true);assert.equal(ctx.gameState.gameActive,true);
 });

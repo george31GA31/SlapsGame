@@ -56,6 +56,7 @@ window.onload = function() {
 };
 
 function handleInput(e) {
+    if (e.repeat) return;
     if (e.code === 'Space') {
         e.preventDefault();
         
@@ -162,6 +163,9 @@ function triggerAISlap() {
 }
 
 function resolveSlap(winner) {
+    const holding = winner === 'player' ? 'aiSlapCards' : 'playerSlapCards';
+    gameState[holding] = (gameState[holding] || 0) + gameState.centerPileLeft.length + gameState.centerPileRight.length;
+    document.dispatchEvent(new Event('slap-piles-changed'));
     gameState.slapActive = false;
     gameState.gameActive = false; 
     
@@ -204,6 +208,8 @@ function resolveSlap(winner) {
 
 // --- STANDARD GAME ENGINE ---
 function startRound() {
+    gameState.playerSlapCards = 0; gameState.aiSlapCards = 0;
+    document.dispatchEvent(new Event("slap-piles-changed"));
     let fullDeck = createDeck();
     shuffle(fullDeck);
     
@@ -318,6 +324,7 @@ function endRound(winner) {
 }
 function setCardFaceUp(img, card, owner) {
     img.setAttribute('aria-label', card.rank + ' of ' + card.suit);
+    const previousFace = img.src;
     img.src = card.imgSrc;
     img.classList.remove('card-face-down');
     card.isFaceUp = true;
@@ -327,7 +334,7 @@ function setCardFaceUp(img, card, owner) {
         img.onclick = null;
         makeDraggable(img, card);
     } else img.classList.add('opponent-card');
-    GameVisuals.flip(img);
+    GameVisuals.flip(img, previousFace);
 }
 
 function setCardFaceDown(img, card, owner) {
@@ -445,12 +452,13 @@ function performRevealPreload() {
 }
 
 function performRevealShow() {
+    gameState.slapReadableAt = performance.now() + 80;
     // 1. Show Hidden Cards
     const hiddenCards = document.querySelectorAll('.pending-reveal');
     hiddenCards.forEach(img => {
         img.style.opacity = '1';
         img.classList.remove('pending-reveal');
-        GameVisuals.flip(img);
+        GameVisuals.flip(img, CARD_BACK_SRC);
     });
 
     // 2. Activate Game
@@ -682,6 +690,8 @@ function getDropSide(imgElement, mouseEvent) {
 }
 function makeDraggable(img, cardData) {
     img.onpointerdown = (e) => {
+        if (!e.isPrimary || e.button !== 0 || gameState.activePointer != null) return;
+        gameState.activePointer = e.pointerId;
         GameVisuals.stopFlip(img);
         e.preventDefault(); gameState.globalZ++; img.style.zIndex = gameState.globalZ; img.style.transition = 'none'; 
         cardData.originalLeft = img.style.left; cardData.originalTop = img.style.top;
@@ -697,11 +707,15 @@ function makeDraggable(img, cardData) {
             img.style.left = newLeft + 'px'; img.style.top = newTop + 'px';
         }
         moveAt(e.clientX, e.clientY);
-        function onMouseMove(event) { moveAt(event.clientX, event.clientY); }
+        function onMouseMove(event) { if(event.pointerId === gameState.activePointer) moveAt(event.clientX, event.clientY); }
         function onMouseUp(event) {
+            if (event.pointerId !== gameState.activePointer) return;
+            gameState.activePointer = null;
+            document.removeEventListener('pointercancel', onMouseUp);
             document.removeEventListener('pointermove', onMouseMove); document.removeEventListener('pointerup', onMouseUp);
+            if (event.type === 'pointercancel') { img.style.left=cardData.originalLeft; img.style.top=cardData.originalTop; return; }
             img.style.transition = 'all 0.1s ease-out'; 
-            if (gameState.gameActive && parseInt(img.style.top) < -10) {
+            if (event.type !== 'pointercancel' && gameState.gameActive && parseInt(img.style.top) < -10) {
     const dropSide = getDropSide(img, event); // 'left' | 'right' | null
     let success = playCardToCenter(cardData, img, dropSide);
     if (!success) { 
@@ -710,7 +724,7 @@ function makeDraggable(img, cardData) {
     }
 }
         }
-        document.addEventListener('pointermove', onMouseMove); document.addEventListener('pointerup', onMouseUp);
+        document.addEventListener('pointermove', onMouseMove); document.addEventListener('pointerup', onMouseUp); document.addEventListener('pointercancel', onMouseUp);
     };
 }
 function checkLegalPlay(card) { if (!gameState.gameActive) return false; return checkPileLogic(card, gameState.centerPileLeft) || checkPileLogic(card, gameState.centerPileRight); }
