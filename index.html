@@ -17,12 +17,14 @@
 <script src="session.js"></script>
 <script src="public-player.js"></script>
 <script src="home.js" defer></script>
+<script src="player-portrait.js" defer></script>
+<link rel="stylesheet" href="site-design.css">
 </head>
 <body class="slaps-home">
 <a class="skip-home" href="#arena">Skip to play</a>
 <div class="home-shell">
 <nav class="home-nav" aria-label="Main navigation">
-<a class="slaps-wordmark" href="index.html" aria-label="SLAPS Home">SLAPS<span>THE CARD GAME</span></a>
+<a class="slaps-wordmark" href="index.html" aria-label="SLAPS Home"><img class="isf-brand" src="assets/isf-logo-dark.png" alt="International Slaps Federation"><img class="isf-brand isf-brand-light" src="assets/isf-logo-light.png" alt="International Slaps Federation"></a>
 <div class="home-nav-links">
 <a href="index.html" aria-current="page"><span>01</span> The arena</a>
 <a href="competitions.html"><span>02</span> Tournaments</a>
@@ -32,13 +34,13 @@
 <a href="rules.html"><span>06</span> Rules & regulations</a>
 <a href="shop.html"><span>07</span> Shop <small>SOON</small></a>
 </div>
-<div class="home-nav-bottom"><a href="account.html">My account ↗</a><a href="settings.html">Settings</a><a href="report-bug.html">Report a bug</a><p>QUICK HANDS.<br>COOL HEAD.</p></div>
+<div class="home-nav-bottom"><a href="account.html">My account ↗</a><a href="settings.html">Settings</a><a href="report-bug.html">Report a bug</a></div>
 </nav>
 <main class="home-main" id="arena">
 <header class="home-top"><span class="edition">ISF ONLINE / THE ARENA</span><a id="account-link" href="login.html">Sign in ↗</a></header>
 <section class="slaps-hero" aria-labelledby="hero-title">
-<div class="hero-copy"><p class="kicker"><span></span> THE TABLE IS YOURS</p><h1 id="hero-title">THINK FAST.<br><em>SLAP FIRST.</em></h1><p class="hero-description">Two centre piles. No time to hesitate. Play your cards, spot the match, and beat your opponent to the slap.</p><a class="slap-cta" href="setup.html" data-play>PLAY NOW <span>↗</span></a><a class="rules-link" href="rules.html">New to Slaps? Learn the rules →</a></div>
-<div class="hero-table" aria-hidden="true"><span class="table-rim"></span><span class="table-label">YOUR NEXT MOVE</span><img class="table-card card-back" src="assets/cards/back_of_card.png" alt=""><img class="table-card card-left" src="assets/cards/ace_of_spades.png" alt=""><img class="table-card card-right" src="assets/cards/ace_of_hearts.png" alt=""><span class="slap-stamp">SLAP!</span><span class="table-caption">SEE THE MATCH. MAKE YOUR MOVE.</span></div>
+<div class="hero-copy"><p class="kicker"><span></span> THE TABLE IS YOURS</p><h1 id="hero-title">Race the Cards.<br><em>Rule the Table.</em></h1><p class="hero-description">Two centre piles. No time to hesitate. Play your cards, spot the match, and beat your opponent to the slap.</p><a class="slap-cta" href="setup.html" data-play>PLAY NOW <span>↗</span></a><a class="rules-link" href="rules.html">New to Slaps? Learn the rules →</a></div>
+<div class="hero-table" aria-hidden="true"><span class="table-rim"></span><img class="hero-brand" src="assets/isf-logo-light.png" alt=""><img class="table-card card-back" src="assets/cards/back_of_card.png" alt=""><img class="table-card card-left" src="assets/cards/ace_of_spades.png" alt=""><img class="table-card card-right" src="assets/cards/ace_of_hearts.png" alt=""><span class="slap-stamp">SLAP!</span></div>
 <div class="hero-bottom"><span>01 / PLAY YOUR CARDS</span><span>02 / SPOT THE MATCH</span><span>03 / TAP TO SLAP</span></div>
 </section>
 <div class="home-section-title"><h2>CHOOSE YOUR TABLE</h2><span>One game. Your way to play.</span></div>
@@ -51,7 +53,7 @@
 <footer class="home-footer"><span>SLAPS / INTERNATIONAL SLAPS FEDERATION</span><a href="how-to-play.html">How to play ↗</a></footer>
 </main>
 <aside class="home-rail" aria-label="Your player card and league table">
-<section class="rail-player"><p class="kicker">YOUR PLAYER CARD</p><span class="player-monogram" id="home-initial">?</span><h2 id="disp-username">Take your seat</h2><p id="home-member-status">Sign in to save your record.</p><div class="rail-stats"><div><strong id="disp-elo">—</strong><span>ELO</span></div><div><strong id="disp-wins">—</strong><span>WINS</span></div><div><strong id="disp-country">—</strong><span>NATION</span></div></div><button id="home-logout" hidden>Sign out</button></section>
+<section class="rail-player"><p class="kicker">YOUR PLAYER CARD</p><div class="home-portrait"><span class="player-monogram" id="home-initial">?</span><img data-own-photo hidden class="player-monogram" alt="Your profile picture"></div><h2 id="disp-username">Take your seat</h2><p id="home-member-status">Sign in to save your record.</p><div class="rail-stats"><div><strong id="disp-elo">—</strong><span>ELO</span></div><div><strong id="disp-wins">—</strong><span>WINS</span></div><div><strong id="disp-country">—</strong><span>NATION</span></div></div><button id="home-logout" hidden>Sign out</button></section>
 <section class="rail-rankings"><div class="rail-heading"><p class="kicker">THE LEAGUE TABLE</p><span>↗</span></div><h2>Players to beat.</h2><p id="ranking-status" role="status">Loading rankings…</p><ol id="home-rankings"></ol><a href="leaderboard.html">View all rankings →</a></section>
 <section class="rail-tip"><span aria-hidden="true">↗</span><p><strong>Eyes on the centre.</strong>Matching ranks? Tap either centre card to attempt a slap. Mouse, touch or keyboard—you're in.</p></section>
 <p id="home-status" role="status"></p>

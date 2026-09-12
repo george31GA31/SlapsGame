@@ -28,8 +28,10 @@
 <script src="public-player.js" defer></script>
 <script src="account.js" defer>
 </script>
+<script src="player-portrait.js" defer></script>
+<link rel="stylesheet" href="site-design.css">
 </head>
-<body class="page-account preferences-page">
+<body class="slaps-page page-account preferences-page"><a class="site-skip" href="#site-content">Skip to content</a><div class="site-shell"><nav class="site-nav" aria-label="Main navigation"><a class="site-brand" href="index.html"><img class="isf-brand" src="assets/isf-logo-dark.png" alt="International Slaps Federation"><img class="isf-brand isf-brand-light" src="assets/isf-logo-light.png" alt="International Slaps Federation"></a><div class="site-links"><a href="index.html"><span>01</span>The arena</a><a href="competitions.html"><span>02</span>Tournaments</a><a href="competitions.html?mode=league"><span>03</span>League</a><a href="leaderboard.html"><span>04</span>Rankings</a><a href="history.html"><span>05</span>Match history</a><a href="rules.html"><span>06</span>Rules & regulations</a><a href="shop.html"><span>07</span>Shop</a><a href="account.html" aria-current="page"><span>08</span>My account</a><a href="settings.html"><span>09</span>Settings</a></div><a class="site-support" href="report-bug.html">Report a bug ↗</a></nav><div class="site-content" id="site-content">
 <main class="preferences-card">
 <h1>My Account</h1>
 <p id="account-status" role="status">Loading your account…</p>
@@ -39,8 +41,8 @@
 </div>
 <form id="account-form" hidden>
 <div class="input-group"><label for="profile-picture">Profile picture</label>
-<img id="profile-picture-preview" alt="Your profile picture" style="width:96px;height:96px;object-fit:cover;border-radius:20px;display:block;margin:12px 0">
-<input id="profile-picture" type="file" accept="image/jpeg,image/png,image/webp"><p>JPEG, PNG or WebP, up to 5 MB. Cropped to a square.</p></div>
+<img data-own-photo hidden id="profile-picture-preview" alt="Your profile picture" style="width:96px;height:96px;object-fit:cover;border-radius:20px;display:block;margin:12px 0">
+<input id="profile-picture" type="file" accept="image/jpeg,image/png,image/webp"><p>JPEG, PNG or WebP, up to 5 MB. Zoom and reposition your photo before saving.</p></div>
 <div class="input-group">
 <label for="firstName">First name</label>
 <input class="auth-input" id="firstName" maxlength="80" required autocomplete="given-name">
@@ -77,6 +79,6 @@
 <a href="index.html">Back to Home</a>
 <a href="settings.html">Settings</a>
 </nav>
-</main>
-</body>
+</main><dialog id="photo-editor" aria-labelledby="photo-title"><h2 id="photo-title">Make it your picture</h2><p>Drag to reposition. Use the slider to zoom.</p><canvas id="photo-canvas" width="256" height="256" tabindex="0" aria-label="Square photo crop. Use arrow keys to reposition; hold Shift for larger steps."></canvas><label for="photo-zoom">Zoom</label><input id="photo-zoom" type="range" min="1" max="4" step="0.01" value="1"><p id="photo-status" role="status"></p><div class="photo-actions"><button id="photo-cancel" type="button">Cancel</button><button id="photo-save" type="button">Save picture</button></div></dialog>
+</div></div></body>
 </html>

@@ -225,28 +225,28 @@ body.page-report-bug .top-bar { position: static; }
 .preferences-card [hidden] {display:none !important;}
 
 /* Theme variables apply only outside gameplay, including inline legacy surfaces. */
-html[data-theme=light]:has(body:not(.game-body)) {color-scheme:light; scrollbar-color:#8aa3b0 #edf3f6;}
-html[data-theme=light] body:not(.game-body) {
+html[data-theme=light]:has(body:not(.game-body):not(.slaps-page):not(.slaps-home)) {color-scheme:light; scrollbar-color:#8aa3b0 #edf3f6;}
+html[data-theme=light] body:not(.game-body):not(.slaps-page):not(.slaps-home) {
     --isf-background:radial-gradient(ellipse at 50% 35%, #fff 0%, #eef5f9 65%, #dfeaf0 100%);
     --isf-panel:linear-gradient(145deg,#fff,#edf4f8); --isf-border:#b8cbd6; --isf-muted:#4e626f; --isf-accent:#007e9e;
     color:#142c3a;
 }
-html[data-theme=light] body:not(.game-body) :is(h1,h2,h3,.menu-title,.p-name,.user-name-display,.nav-links a,.stat-val,.stat-value,.the-code,.round-title) {color:#142c3a !important;}
-html[data-theme=light] body:not(.game-body) :is(.sidebar-left,.sidebar-right,.top-bar,.nav-bar,.action-bar,.example-box,.custom-options,.custom-select-trigger,.auth-input,.modern-input,.lobby-input,.match-card) {background:#f4f8fb !important; color:#142c3a !important; border-color:#b8cbd6;}
-html[data-theme=light] body:not(.game-body) :is(.btn-outline,.btn-join-action,.back-btn,.btn-home,.btn-exit,.btn-logout-small,.btn-back,.btn-cancel) {background:#e3edf3; color:#142c3a;}
-html[data-theme=light] body:not(.game-body) :is(input,textarea)::placeholder {color:#596f7b;}
-html[data-theme=light] body:not(.game-body) :is(.rule-box p,.rule-box li,.rules-intro p,.info-text,.player-name,.input-label,.custom-option,.security-warning) {color:#344f60;}
-html[data-theme=light] body:not(.game-body) .session-status {background:#e4f5fc; color:#185369;}
-html[data-theme=light] body:not(.game-body) .lb-row.me {background:#d7edf5;}
-html[data-theme=light] body:not(.game-body) :is(.diff-number,.diff-label) {color:#23536b !important; text-shadow:none;}
+html[data-theme=light] body:not(.game-body):not(.slaps-page):not(.slaps-home) :is(h1,h2,h3,.menu-title,.p-name,.user-name-display,.nav-links a,.stat-val,.stat-value,.the-code,.round-title) {color:#142c3a !important;}
+html[data-theme=light] body:not(.game-body):not(.slaps-page):not(.slaps-home) :is(.sidebar-left,.sidebar-right,.top-bar,.nav-bar,.action-bar,.example-box,.custom-options,.custom-select-trigger,.auth-input,.modern-input,.lobby-input,.match-card) {background:#f4f8fb !important; color:#142c3a !important; border-color:#b8cbd6;}
+html[data-theme=light] body:not(.game-body):not(.slaps-page):not(.slaps-home) :is(.btn-outline,.btn-join-action,.back-btn,.btn-home,.btn-exit,.btn-logout-small,.btn-back,.btn-cancel) {background:#e3edf3; color:#142c3a;}
+html[data-theme=light] body:not(.game-body):not(.slaps-page):not(.slaps-home) :is(input,textarea)::placeholder {color:#596f7b;}
+html[data-theme=light] body:not(.game-body):not(.slaps-page):not(.slaps-home) :is(.rule-box p,.rule-box li,.rules-intro p,.info-text,.player-name,.input-label,.custom-option,.security-warning) {color:#344f60;}
+html[data-theme=light] body:not(.game-body):not(.slaps-page):not(.slaps-home) .session-status {background:#e4f5fc; color:#185369;}
+html[data-theme=light] body:not(.game-body):not(.slaps-page):not(.slaps-home) .lb-row.me {background:#d7edf5;}
+html[data-theme=light] body:not(.game-body):not(.slaps-page):not(.slaps-home) :is(.diff-number,.diff-label) {color:#23536b !important; text-shadow:none;}
 .page-multiplayer-setup #lobby-actions-container {display:flex; flex-direction:column; gap:18px;}
 .page-multiplayer-setup #join-code {width:100% !important;}
 .page-multiplayer-setup .divider {justify-content:center;}
-html[data-theme=light] body:not(.game-body) :is(.setup-container,.menu-card,.auth-card,.preferences-card,.rule-box,.stat-card,.user-panel) {box-shadow:0 12px 30px #23435a24;}
+html[data-theme=light] body:not(.game-body):not(.slaps-page):not(.slaps-home) :is(.setup-container,.menu-card,.auth-card,.preferences-card,.rule-box,.stat-card,.user-panel) {box-shadow:0 12px 30px #23435a24;}
 
 :is(.page-setup,.page-multiplayer-setup,.page-matchmaking) :is(.setup-container > i,.icon-group) {font-size:3rem !important; color:var(--isf-accent) !important; text-shadow:none !important; margin:0 !important;}
-html[data-theme=light] body:not(.game-body) :is(.stat-label,.col-title) {color:var(--isf-muted) !important;}
-html[data-theme=light] body:not(.game-body) .highlight-green {color:#18743b;}
-html[data-theme=light] body:not(.game-body) .highlight-red {color:#b92332;}
-html[data-theme=light] body:not(.game-body) .rank.top3 {color:#8a6200; text-shadow:none;}
-html[data-theme=light] body:not(.game-body) .match-box:not(.occupied) {background:#e7eff4; color:#526a78; border-color:var(--isf-border);}
+html[data-theme=light] body:not(.game-body):not(.slaps-page):not(.slaps-home) :is(.stat-label,.col-title) {color:var(--isf-muted) !important;}
+html[data-theme=light] body:not(.game-body):not(.slaps-page):not(.slaps-home) .highlight-green {color:#18743b;}
+html[data-theme=light] body:not(.game-body):not(.slaps-page):not(.slaps-home) .highlight-red {color:#b92332;}
+html[data-theme=light] body:not(.game-body):not(.slaps-page):not(.slaps-home) .rank.top3 {color:#8a6200; text-shadow:none;}
+html[data-theme=light] body:not(.game-body):not(.slaps-page):not(.slaps-home) .match-box:not(.occupied) {background:#e7eff4; color:#526a78; border-color:var(--isf-border);}

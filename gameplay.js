@@ -71,50 +71,25 @@ document.addEventListener('DOMContentLoaded', () => {
     if (opponentArea) opponentArea.dataset.zoneLabel = 'OPPONENT FOUNDATION';
     if (playerArea) playerArea.dataset.zoneLabel = 'YOUR FOUNDATION';
 
-    const center = document.querySelector('.center-zone');
-    const deckWrappers = center ? [...center.querySelectorAll('.deck-wrapper')] : [];
-    const makeSlapSlot = who => {
+    const makeSlapSlot = (who, label) => {
         const slot = document.createElement('div');
-        slot.className = `slap-stack-slot slap-stack-${who}`;
-        slot.dataset.who = who;
-        slot.setAttribute('aria-hidden','true');
+        slot.className = 'slapped-count';
+        const caption = document.createElement('span'); caption.textContent = label;
+        const count = document.createElement('strong'); count.id = `slapped-${who}`; count.textContent = '0';
+        slot.append(caption, count);
         return slot;
     };
-    let aiSlapSlot = null;
-    let playerSlapSlot = null;
-    if (center && deckWrappers.length >= 2 && !center.querySelector('.slap-stack-slot')) {
-        aiSlapSlot = makeSlapSlot('ai');
-        playerSlapSlot = makeSlapSlot('player');
-        deckWrappers[0].after(aiSlapSlot);
-        deckWrappers[1].before(playerSlapSlot);
-    } else {
-        aiSlapSlot = center?.querySelector('.slap-stack-ai') || null;
-        playerSlapSlot = center?.querySelector('.slap-stack-player') || null;
-    }
-
-    const renderSlapStack = (slot, value) => {
-        if (!slot) return;
-        const count = Math.max(0, Number.parseInt(value, 10) || 0);
-        slot.replaceChildren();
-        const visible = Math.min(count, 4);
-        for (let i = 0; i < visible; i++) {
-            const card = document.createElement('span');
-            card.className = 'slap-card-mini';
-            card.style.setProperty('--slap-index', String(i));
-            slot.append(card);
-        }
-        if (count > 0) {
-            const badge = document.createElement('span');
-            badge.className = 'slap-stack-count';
-            badge.textContent = String(count);
-            slot.append(badge);
-        }
-    };
+    const counts = document.createElement('aside');
+    counts.className = 'slapped-cards-widget';
+    counts.setAttribute('aria-label', 'Physical cards held from slaps');
+    counts.setAttribute('aria-live', 'polite');
+    counts.append(makeSlapSlot('player', 'My slapped cards'), makeSlapSlot('ai', 'Opponent’s slapped cards'));
+    footer.append(counts);
 
     const updateHoldingPiles = () => {
         if (typeof gameState === 'undefined') return;
-        renderSlapStack(aiSlapSlot, gameState.aiSlapCards || 0);
-        renderSlapStack(playerSlapSlot, gameState.playerSlapCards || 0);
+        document.getElementById('slapped-ai').textContent = Math.max(0, Number(gameState.aiSlapCards) || 0);
+        document.getElementById('slapped-player').textContent = Math.max(0, Number(gameState.playerSlapCards) || 0);
     };
     document.addEventListener('slap-piles-changed', updateHoldingPiles);
     updateHoldingPiles();
