@@ -319,64 +319,6 @@ body.game-body::before {
     letter-spacing:.05em;
 }
 
-/* Slap piles are visual table positions driven by the live slap counters. */
-.game-body .slap-stack-slot {
-    position:relative;
-    flex:0 0 calc(var(--card-width) * .67);
-    width:calc(var(--card-width) * .67);
-    height:calc(var(--card-height) * .78);
-    border:1px dashed rgba(239,255,244,.18);
-    border-radius:7px;
-    background:rgba(0,0,0,.055);
-    box-shadow:inset 0 0 10px rgba(0,0,0,.13);
-    pointer-events:none;
-}
-
-.game-body .slap-stack-slot::before {
-    content:"SLAPS";
-    position:absolute;
-    left:50%;
-    top:50%;
-    transform:translate(-50%,-50%) rotate(-90deg);
-    color:rgba(236,255,242,.19);
-    font-size:clamp(6px,.95dvh,9px);
-    font-weight:900;
-    letter-spacing:.12em;
-    white-space:nowrap;
-}
-
-.game-body .slap-card-mini {
-    position:absolute;
-    left:9%;
-    top:7%;
-    width:82%;
-    height:86%;
-    border-radius:5px;
-    background:#f2efe5 url('assets/cards/back_of_card.png') center/cover no-repeat;
-    border:1px solid rgba(255,255,255,.22);
-    box-shadow:0 2px 5px rgba(0,0,0,.35);
-    transform:translate(calc(var(--slap-index) * 1.5px),calc(var(--slap-index) * -1.2px)) rotate(calc((var(--slap-index) - 2) * 2deg));
-}
-
-.game-body .slap-stack-count {
-    position:absolute;
-    right:-4px;
-    bottom:-4px;
-    z-index:8;
-    min-width:18px;
-    height:18px;
-    padding:0 4px;
-    display:grid;
-    place-items:center;
-    border-radius:999px;
-    background:#0c1611;
-    border:1px solid rgba(255,255,255,.22);
-    color:#fff;
-    font-size:9px;
-    font-weight:900;
-    box-shadow:0 2px 5px rgba(0,0,0,.35);
-}
-
 /* Pixel variables retain the same dimensions in hand, pile, drag or fixed animation. */
 .game-body .game-card,
 .game-body .center-pile .game-card {
@@ -425,7 +367,21 @@ body.game-body::before {
     align-items:center;
     gap:12px;
     min-width:0;
+    position:relative;
+    padding-right:190px;
 }
+
+.game-body .slapped-cards-widget {position:absolute;right:0;bottom:0;padding:5px 8px;max-width:185px;border:1px solid #ffffff1c;border-radius:8px;background:#10281dcc;color:#d8e6dc;font-size:10px;line-height:1.45;pointer-events:none}
+.game-body .slapped-count {display:flex;justify-content:space-between;gap:10px}
+.game-body .slapped-count strong {font-variant-numeric:tabular-nums;color:#f6f3df}
+@media(max-width:600px) {
+ .game-body .match-footer {justify-content:flex-start;gap:4px;padding-right:142px}
+ .game-body .slapped-cards-widget {font-size:8px;padding:4px 5px;max-width:140px}
+ .game-body .slapped-count {gap:5px}
+ .game-body .bottom-left-actions {gap:4px;flex-wrap:wrap}
+ .game-body .bottom-left-actions button {font-size:9px;padding:7px}
+}
+.game-body .match-versus [data-own-photo] {width:64px;height:64px;aspect-ratio:1;object-fit:cover;border-radius:14px;display:block;margin:0 auto 8px;border:1px solid #a9bc99}
 
 .game-body .bottom-left-actions {
     position:static;
@@ -497,7 +453,6 @@ body.game-body::before {
     .game-body .stat-label {font-size:7px;letter-spacing:.02em;}
     .game-body .center-zone {padding:0 2px;gap:2px;}
     .game-body .battlefield {gap:3px;padding:2px;}
-    .game-body .slap-stack-slot {flex-basis:calc(var(--card-width) * .55);width:calc(var(--card-width) * .55);}
 }
 
 @media (hover:none) {
@@ -516,12 +471,10 @@ body.game-body::before {
 .game-body .game-card { touch-action:none; -webkit-user-drag:none; }
 .game-body .center-pile { cursor:pointer; touch-action:none; }
 .game-body .center-pile:focus-visible { outline:3px solid #ffe28a; outline-offset:4px; }
-.game-body .slap-stack-slot::before { content:'PENALTY'; }
 .game-body .match-footer button { min-height:44px; }
 @media (max-width:600px) and (orientation:portrait) {
-    .game-body .center-zone { display:grid; grid-template-columns:auto auto minmax(0,1fr) auto auto; gap:3px; padding:3px; }
-    .game-body .slap-stack-slot { width:calc(var(--card-width)*.42); }
-    .game-body .battlefield { padding:0; gap:7px; }
+    .game-body .center-zone { display:grid; grid-template-columns:var(--card-width) minmax(0,1fr) var(--card-width); gap:3px; padding:3px; }
+    .game-body .battlefield { width:100%; padding:0; gap:7px; }
 }
 .game-body .match-context { grid-column:1/-1;text-align:center;color:#d5c693;font-size:11px;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
 .game-body .match-result-summary { background:linear-gradient(145deg,#203c2f,#0a2018);border:1px solid #d8b471;border-radius:18px;padding:clamp(12px,3vh,28px);margin-bottom:18px; }
@@ -536,3 +489,9 @@ body.game-body::before {
 .game-body .match-intro button {display:block;margin:24px auto 16px;min-height:48px;background:#edcd82;color:#132a1d;}
 .game-body .match-intro a {color:#bccebe;font-size:13px;}
 @media(max-height:450px){.game-body .match-intro-card{padding:16px}.game-body .intro-label{margin-bottom:10px}.game-body .match-intro .match-versus strong:not(:nth-child(2)){min-height:65px}.game-body .match-intro button{margin:10px auto}}
+.game-body [data-own-photo][hidden] {display:none!important}
+@media(max-width:600px) {
+ .game-body .match-footer {padding-right:0;flex-wrap:wrap}
+ .game-body .slapped-cards-widget {position:static;margin-left:auto;font-size:10px;max-width:none;order:3}
+ .game-body .bottom-left-actions button {font-size:9px;padding:7px;min-height:44px}
+}

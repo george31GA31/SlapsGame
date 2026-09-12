@@ -1,5 +1,5 @@
 window.ISFPreferences = Object.freeze({
-    getTheme() {try {return localStorage.getItem('slaps_theme') === 'light' ? 'light' : 'dark';} catch {return 'dark';}},
+    getTheme() {try {return localStorage.getItem('slaps_theme') === 'dark' ? 'dark' : 'light';} catch {return 'light';}},
     setTheme(theme) {localStorage.setItem('slaps_theme', theme === 'light' ? 'light' : 'dark'); this.apply();},
     apply() {document.documentElement.dataset.theme = this.getTheme();}
 });
