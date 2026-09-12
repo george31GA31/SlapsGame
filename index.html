@@ -20,6 +20,7 @@
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
     <script src="firebase-init.js"></script>
+    <script src="public-player.js"></script>
     <script src="elo-engine.js"></script>
 
     <style>
@@ -166,6 +167,7 @@
                 userRef.on('value', (snapshot) => {
                     const data = snapshot.val();
                     if(data) {
+                        ISFPublicPlayer.sync(user.uid, data).catch(() => {});
                         document.getElementById('disp-elo').innerText = data.elo || 1000;
                         document.getElementById('disp-wins').innerText = data.wins || 0;
                         document.getElementById('disp-country').innerText = data.country || "---";

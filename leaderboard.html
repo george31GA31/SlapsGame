@@ -71,7 +71,7 @@
         const myUsername = localStorage.getItem('isf_username'); 
 
         // 1. QUERY FIREBASE
-        const leaderboardQuery = db.ref('users').orderByChild('elo');
+        const leaderboardQuery = db.ref('publicPlayers').orderByChild('elo');
 
         leaderboardQuery.on('value', (snapshot) => {
             listContainer.innerHTML = ''; 
@@ -86,18 +86,10 @@
                 const uid = child.key; 
                 // -----------------------------
 
-                // Construct Real Name safely
-                const fName = data.firstName || "";
-                const lName = data.lastName || "";
-                let fullName = (fName + " " + lName).trim();
-                
-                // Fallback if they have no real name saved
-                if (!fullName) fullName = data.username; 
-
                 players.push({
                     uid: uid, // Save the ID here
                     username: data.username || "Unknown",
-                    realName: fullName, 
+                    realName: data.username || "Unknown",
                     flagSrc: data.flag || "assets/flags/United States of America.png",
                     elo: data.elo ?? 1000,
                     wins: data.wins || 0,

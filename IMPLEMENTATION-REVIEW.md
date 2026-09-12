@@ -2,6 +2,14 @@
 
 This branch is not a claim that production is secure or the new competitions are live.
 
+## Free-plan release update
+
+The owner has selected Firebase Spark only. Do not deploy Functions or upgrade billing.
+Online competition entry is disabled with an explicit availability message; the callable implementation remains in the repository for future work.
+Use `database.rules.free-plan.json` as the complete rules replacement for the previously supplied public-root rules, not the older additions snippet. Firebase publication still requires the owner: it has not been performed here.
+Public leaderboard and opponent lookups now use `publicPlayers`; private `users`, history and photos are owner-only under those rules. Existing accounts publish an allowlisted public card when visiting Home while signed in; dormant users will be absent until they do so. No historical account records are deleted.
+These are privacy boundaries, not trusted ranked results: users can still modify their own statistics. The rules JSON parses locally but has not been validated in a Firebase emulator or against the live project. Do not claim production security verification.
+
 ## Audit findings
 
 The previous app used PeerJS/WebRTC, host-authoritative move/slap decisions, full dealt-card state shared with the guest, and client-written Firebase ELO/statistics. A guest could send host-only events; additional connections could replace the opponent; ghost cards accepted remote image URLs. Disconnects immediately awarded a win. There are no deployed database rules, server credentials or Firebase administration access in this checkout.

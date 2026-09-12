@@ -34,6 +34,7 @@
         action(form.querySelector('button'),async()=>{
             // Update only editable fields: ELO, history and statistics stay intact.
             await db.ref('users/'+user.uid).update(patch);
+            if(globalThis.ISFPublicPlayer) await ISFPublicPlayer.sync(user.uid,{...(await db.ref('users/'+user.uid).once('value')).val(),...patch});
             if(!member())return;
             localStorage.setItem('isf_username',patch.username);localStorage.setItem('isf_my_name',patch.username);
             try {await user.updateProfile({displayName:patch.username});message('Profile saved.');}

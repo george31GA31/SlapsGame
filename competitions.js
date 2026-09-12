@@ -1,4 +1,8 @@
 (() => {
+ // This release stays on Spark: no callable backend is deployed.
+ document.getElementById('entry').hidden=true;
+ document.getElementById('status').textContent='Online tournaments and leagues are not available in this free-plan release. Solo tournaments and one-to-one multiplayer remain available from Home.';
+ return;
  const $=id=>document.getElementById(id);let room=null,roomId=null,uid=null,watch=null,activeMatch=null,busy=false;
  const endpoint=firebase.app().functions('europe-west1').httpsCallable('competitionAction');
  const saved=new URLSearchParams(location.search);$('mode').value=saved.get('mode')==='league'?'league':'tournament';

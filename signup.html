@@ -951,7 +951,7 @@
                     const user = userCredential.user;
                     user.updateProfile({ displayName: username });
 
-                    db.ref('users/' + user.uid).set({
+                    const profile = {
                         username: username,
                         firstName: fname,
                         lastName: lname,
@@ -962,6 +962,15 @@
                         wins: 0,
                         losses: 0,
                         joined: new Date().toISOString()
+                    };
+                    db.ref().update({
+                        ['users/' + user.uid]: profile,
+                        ['publicPlayers/' + user.uid]: {
+                            username: profile.username, country: profile.country, flag: profile.flag,
+                            elo: profile.elo, wins: profile.wins, losses: profile.losses,
+                            stats_slaps_won: 0, stats_slaps_lost: 0, stats_rounds_won: 0,
+                            stats_rounds_lost: 0, stats_total_time_sec: 0
+                        }
                     }).then(() => {
                         localStorage.setItem('isf_username', username);
                         localStorage.setItem('isf_is_guest', 'false');

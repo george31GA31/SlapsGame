@@ -51,7 +51,7 @@ function fetchEnemyStats(enemyId) {
     }
 
     // Go to the database and get their info
-    window.db.ref('users/' + enemyId).once('value')
+    window.db.ref('publicPlayers/' + enemyId).once('value')
         .then((snapshot) => {
             if (snapshot.exists()) {
                 const data = snapshot.val();
@@ -62,12 +62,12 @@ function fetchEnemyStats(enemyId) {
                 enemyGameCount = (data.wins || 0) + (data.losses || 0);
                 
                 // 2. GET LAST NAME (Fallback to Username if missing)
-                const realLastName = data.lastName ? data.lastName.toUpperCase() : (data.username || "OPPONENT");
+                const publicName = (data.username || "OPPONENT").toUpperCase();
                 
-                console.log(`Enemy Found! Name: ${realLastName}, ELO: ${enemyElo}`);
+                console.log(`Enemy Found! Name: ${publicName}, ELO: ${enemyElo}`);
 
                 // 3. UPDATE GAME STATE IMMEDIATELY
-                gameState.opponentName = realLastName;
+                gameState.opponentName = publicName;
                 
                 // 4. REFRESH THE SCOREBOARD TO SHOW NAME + ELO
                 updateScoreboardWidget();
@@ -145,6 +145,9 @@ function reportMatchResultInternal(isWin, onComplete, proofToken) {
         }
         return userData;
     }, (error, committed, snapshot) => {
+        if (!error && committed && snapshot && typeof snapshot.val === 'function' && window.ISFPublicPlayer) {
+            ISFPublicPlayer.sync(user.uid, snapshot.val()).catch(() => ISFSession.showMatchStatus('Match finished · Rankings update failed'));
+        }
         if (onComplete) onComplete();
     });
 }
