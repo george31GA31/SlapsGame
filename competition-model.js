@@ -1,7 +1,8 @@
-(() => {
+(function(){
 /* Pure competition reducer. Only the authenticated server may persist this state. */
 const MAX_IDLE=45000,ABANDON_MS=120000;
 const assert=(v,m)=>{if(!v)throw Error(m);};
+const sameReport=(a,b)=>a&&b&&a.winner===b.winner&&['rounds','slaps'].every(key=>[0,1].every(i=>a[key]?.[i]===b[key]?.[i]));
 function fixtures(ids){
  const list=[...ids];if(list.length%2)list.push(null);const out=[];
  for(let round=0;round<list.length-1;round++){
@@ -39,11 +40,21 @@ function complete(room,m,winner,rounds,slaps,reason){
  }else if(room.matches.every(x=>x.status==='complete'))room.status='complete';
 }
 function reduce(previous,uid,name,action,now){
- const room=previous?structuredClone(previous):null;
+ const room=previous?JSON.parse(JSON.stringify(previous)):null;
+ // Realtime Database omits empty arrays, empty objects and null bracket slots.
+ if(room){
+  room.players||={};
+  room.matches=Array.isArray(room.matches)?room.matches.filter(Boolean):Object.values(room.matches||{});
+  for(const m of room.matches){
+   m.players=[m.players?.[0]||null,m.players?.[1]||null];
+   for(const key of ['rounds','slaps'])if(m[key])m[key]=[m[key][0]||0,m[key][1]||0];
+   for(const report of Object.values(m.reports||{}))for(const key of ['rounds','slaps'])if(report[key])report[key]=[report[key][0]||0,report[key][1]||0];
+  }
+ }
  assert(typeof uid==='string'&&uid.length>0,'Sign in required');
  if(action.type==='create'){
   assert(!room,'Room already exists');assert(['league','tournament'].includes(action.mode),'Unknown mode');
-  return {version:1,mode:action.mode,status:'lobby',host:uid,createdAt:now,players:{[uid]:{id:uid,name:name.slice(0,80),joinedAt:now,lastSeen:now,ready:false}},matches:[]};
+  return {version:1,mode:action.mode,status:'lobby',host:uid,createdAt:now,playerCount:1,players:{[uid]:{id:uid,name:name.slice(0,80),joinedAt:now,lastSeen:now,ready:false}},matches:[]};
  }
  assert(room,'Competition not found');room.actionAt=now;
  if(action.type==='join'){
@@ -58,6 +69,7 @@ function reduce(previous,uid,name,action,now){
   else room.players[uid].lastSeen=now-MAX_IDLE-1;
  }
  const connected=Object.values(room.players).filter(p=>now-p.lastSeen<=MAX_IDLE).sort((a,b)=>a.joinedAt-b.joinedAt||a.id.localeCompare(b.id));
+ room.playerCount=Object.keys(room.players).length;
  if(!connected.some(p=>p.id===room.host))room.host=connected[0]?.id||null;
  if(action.type==='ready') {assert(room.status==='lobby','Already started');room.players[uid].ready=!!action.ready;}
  if(action.type==='start'){
@@ -68,13 +80,14 @@ function reduce(previous,uid,name,action,now){
   room.matches=room.mode==='league'?fixtures(ids):bracket(ids);room.status='active';
  }
  if(['enter','result','forfeit','abandon'].includes(action.type)){
-  assert(room.status==='active','Competition is not active');
   const m=room.matches.find(m=>m.id===action.matchId);assert(m&&m.players.includes(uid),'Not your match');
   if(action.type==='result'&&m.status==='complete'&&m.winner===action.winner&&JSON.stringify(m.rounds)===JSON.stringify(action.rounds)&&JSON.stringify(m.slaps)===JSON.stringify(action.slaps))return room;
+  assert(room.status==='active','Competition is not active');
   assert(['scheduled','playing','disputed'].includes(m.status),'Match is not available');
   if(action.type==='enter'){
+   assert(m.status!=='disputed','Resolve the disputed result before entering');
    assert(!room.matches.some(x=>x.id!==m.id&&x.status==='playing'&&x.players.includes(uid)),'Finish your current match first');
-   m.entered||={};m.entered[uid]=now;m.startedAt||=now;m.status='playing';
+   m.entered||={};m.entered[uid]||=now;m.startedAt||=now;m.status='playing';
   }else if(action.type==='forfeit'){
    const winner=m.players.find(id=>id!==uid);complete(room,m,winner,m.players.map(id=>id===winner?2:0),[0,0],'concession');
   }else if(action.type==='abandon'){
@@ -86,15 +99,15 @@ function reduce(previous,uid,name,action,now){
    assert(m.entered?.[uid],'Enter the match first');assert(m.players.includes(action.winner),'Invalid winner');
    for(const stats of [action.rounds,action.slaps])assert(Array.isArray(stats)&&stats.length===2&&stats.every(n=>Number.isInteger(n)&&n>=0&&n<=10000),'Invalid statistics');
    m.reports||={};const report={winner:action.winner,rounds:action.rounds,slaps:action.slaps};
-   assert(!m.reports[uid]||JSON.stringify(m.reports[uid])===JSON.stringify(report),'A submitted result cannot be changed');
+   assert(!m.reports[uid]||sameReport(m.reports[uid],report),'A submitted result cannot be changed');
    m.reports[uid]=report;
    const [a,b]=m.players.map(id=>m.reports[id]);
-   if(a&&b){if(JSON.stringify(a)===JSON.stringify(b))complete(room,m,a.winner,a.rounds,a.slaps,'agreed');else m.status='disputed';}
+   if(a&&b){if(sameReport(a,b))complete(room,m,a.winner,a.rounds,a.slaps,'agreed');else m.status='disputed';}
   }
  }
  assert(['join','heartbeat','leave','ready','start','enter','result','forfeit','abandon'].includes(action.type),'Unknown action');
  room.version++;return room;
 }
-window.CompetitionModel={standings};
+window.CompetitionModel={reduce,fixtures,bracket,standings};
 
 })();

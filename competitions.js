@@ -1,10 +1,6 @@
 (() => {
- // This release stays on Spark: no callable backend is deployed.
- document.getElementById('entry').hidden=true;
- document.getElementById('status').textContent='Online tournaments and leagues are not available in this free-plan release. Solo tournaments and one-to-one multiplayer remain available from Home.';
- return;
  const $=id=>document.getElementById(id);let room=null,roomId=null,uid=null,watch=null,activeMatch=null,busy=false;
- const endpoint=firebase.app().functions('europe-west1').httpsCallable('competitionAction');
+ const endpoint=action=>CasualCompetitions.action(action);
  const saved=new URLSearchParams(location.search);$('mode').value=saved.get('mode')==='league'?'league':'tournament';
  $('title').textContent=$('mode').value==='league'?'League arena':'Tournament arena';
  const status=text=>$('status').textContent=text;
@@ -12,17 +8,17 @@
   if(!uid){status('Sign in to join a competition.');return null;}
   try{const {data}=await endpoint({...action,roomId});roomId=data.roomId;room=data.room;
    sessionStorage.setItem('slaps-competition',roomId);subscribe();render();status('Connected · '+roomId);return data;
-  }catch(error){status(error.code==='functions/not-found'||error.code==='functions/internal'?'Competition service is unavailable. Please try again once the backend is online.':error.message||'Connection interrupted. Please retry.');return null;}
+  }catch(error){status(/permission/i.test(error.code||error.message||'')?'Rooms are unavailable until the updated free-plan Firebase rules are published.':error.message||'Connection interrupted. Please retry.');return null;}
  }
  function subscribe(){
   if(watch?.id===roomId)return;
   if(watch)watch.ref.off('value',watch.callback);
-  const ref=db.ref('competitions/'+roomId),callback=s=>{if(s.exists()){room=s.val();render();}};
+  const ref=db.ref('casualCompetitions/'+roomId),callback=s=>{if(s.exists()){room=s.val();render();}};
   ref.on('value',callback,()=>status('Live updates unavailable. Reconnecting…'));watch={ref,callback,id:roomId};
  }
  auth.onAuthStateChanged(async user=>{
   uid=user&&!user.isAnonymous?user.uid:null;
-  if(!uid){if(watch)watch.ref.off();watch=null;room=null;$('room').hidden=true;status('Sign in to join a competition.');return;}
+  if(!uid){if(watch)watch.ref.off();watch=null;room=null;roomId=null;activeMatch=null;$('match-layer').hidden=true;$('match-frame').src='about:blank';$('room').hidden=true;$('entry').hidden=false;status('Sign in to join a competition.');return;}
   status('Ready to join.');const previous=saved.get('room')||sessionStorage.getItem('slaps-competition');
   if(previous){roomId=previous;await act({type:'join'});}
  });
@@ -36,6 +32,9 @@
  function el(tag,text,cls){const node=document.createElement(tag);if(text!=null)node.textContent=text;if(cls)node.className=cls;return node;}
  function render(){
   if(!room)return;$('entry').hidden=true;$('room').hidden=false;
+  room.players||={};room.matches=Object.values(room.matches||{}).filter(Boolean);
+  for(const m of room.matches)m.players=[m.players?.[0]||null,m.players?.[1]||null];
+  $('room').classList.toggle('league-room',room.mode==='league');
   $('title').textContent=room.mode==='league'?'League arena':'Tournament arena';
   $('room-code').textContent='ROOM '+roomId+' · '+Object.keys(room.players).length+' PLAYERS';
   $('host').textContent='Host · '+(room.players[room.host]?.name||'Reconnecting');
@@ -43,7 +42,7 @@
   $('start').hidden=room.status!=='lobby'||room.host!==uid;
   $('players').replaceChildren(...Object.values(room.players).map(p=>el('p',p.name+(p.ready?' ✓':''),'muted')));
   $('champion').replaceChildren();
-  if(room.champion)$('champion').append(el('h2','Champion · '+room.players[room.champion].name));
+  if(room.champion)$('champion').append(el('h2','Champion · '+(room.players[room.champion]?.name||'Player')));
   $('standings').replaceChildren();
   if(room.mode==='league'&&room.status!=='lobby'){
    const section=el('section',null,'panel table-scroll'),table=el('table'),thead=el('thead'),tr=el('tr');
@@ -57,7 +56,7 @@
   for(const round of groups){const col=el('section',null,'bracket-round');if(round)col.append(el('h2',['','Quarter-finals','Semi-finals','Final · ♛'][round]));const stack=el('div',null,room.mode==='tournament'?'bracket-matches':'cards');
    for(const m of room.matches.filter(m=>round?m.round===round:($('fixture-filter').value==='all'||($('fixture-filter').value==='mine'&&m.players.includes(uid))||($('fixture-filter').value==='upcoming'&&m.status!=='complete')||($('fixture-filter').value==='completed'&&m.status==='complete')))){
     const card=el('article',null,'fixture');card.dataset.match=m.id;card.append(el('small',(room.mode==='league'?'Matchday '+m.round+' · ':'')+m.status));
-    for(let i=0;i<2;i++){const id=m.players[i];const player=el('div',null,'match-player'+(id===m.winner?' winner':''));player.append(el('span',id?room.players[id].name.charAt(0):'?','player-initial'),el('span',id?(room.players[id].name+(m.rounds?' · '+m.rounds[i]:'')):'Awaiting winner'));card.append(player);}
+    for(let i=0;i<2;i++){const id=m.players[i],name=room.players[id]?.name||'Player';const player=el('div',null,'match-player'+(id===m.winner?' winner':''));player.append(el('span',id?name.charAt(0):'?','player-initial'),el('span',id?(name+(m.rounds?' · '+m.rounds[i]:'')):'Awaiting winner'));card.append(player);}
     if(m.players.includes(uid)&&['scheduled','playing','disputed'].includes(m.status)){
      const play=el('button',m.status==='disputed'?'Result disputed':'Enter match');play.disabled=m.status==='disputed';play.onclick=()=>launch(m);card.append(play);
      if(m.status==='playing'){const absence=el('button','Claim absent opponent');absence.onclick=()=>act({type:'abandon',matchId:m.id});card.append(absence);}
