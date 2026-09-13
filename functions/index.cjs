@@ -19,6 +19,7 @@ exports.competitionAction=onCall({region:'europe-west1',maxInstances:10},async r
  });
  if(!quota.committed)throw new HttpsError('resource-exhausted','Too many requests. Please wait a moment.');
  const profile=(await db.ref('users/'+uid+'/username').get()).val();
+ if(['create','join','ready'].includes(action.type))action.elo=(await db.ref('users/'+uid+'/elo').get()).val()??1000;
  let failure=null;
  const result=await db.ref('competitions/'+id).transaction(old=>{
   try{return reduce(old,uid,String(profile||request.auth.token.name||'Player'),action,now);}
@@ -28,7 +29,7 @@ exports.competitionAction=onCall({region:'europe-west1',maxInstances:10},async r
  const room=result.snapshot.val();
  const historyUpdates={};
  for(const match of room.matches||[]){
-  if(match.status!=='complete')continue;
+  if(match.status!=='complete'||match.reason==='bye')continue;
   match.players.forEach((player,i)=>{
    historyUpdates['matchHistory/'+player+'/'+id+'-'+match.id]={endedAt:match.endedAt||room.createdAt,opponent:room.players[match.players[1-i]].name,won:match.winner===player,roundsWon:match.rounds[i],roundsLost:match.rounds[1-i],slapsWon:match.slaps[i],slapsLost:match.slaps[1-i],source:'competition'};
   });

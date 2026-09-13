@@ -30,14 +30,14 @@ const {reduce,standings}=require('../functions/competition.cjs');
   await Promise.all([act(a,'a',code,{type:'enter',matchId:'L0-0'}),act(b,'b',code,{type:'enter',matchId:'L0-0'})]);
   const result={type:'result',matchId:'L0-0',winner:'a',rounds:[2,1],slaps:[4,2]};
   await Promise.all([act(a,'a',code,result),act(b,'b',code,result)]);
-  room=await act(a,'a',code,result);assert.equal(room.status,'complete');
+  room=await act(a,'a',code,result);assert.equal(room.status,'active');room=await act(a,'a',code,{type:'forfeit',matchId:'L0-0-return'});assert.equal(room.status,'complete');
   // Eight concurrent joins serialize without losing players.
   const t='111111ABCDEF';await act(a,'a',t,{type:'create',mode:'tournament'});
   await Promise.all(Array.from({length:7},(_,i)=>act(user('p'+i),'p'+i,t,{type:'join'})));
   room=(await a.ref('casualCompetitions/'+t).once('value')).val();assert.equal(Object.keys(room.players).length,8);
   for(const uid of Object.keys(room.players))await act(user(uid),uid,t,{type:'ready',ready:true});
   room=await act(a,'a',t,{type:'start'});
-  for(const id of ['Q0','Q1','Q2','Q3','S0','S1','F0']){
+  for(const id of ['R1-0','R1-1','R1-2','R1-3','R2-0','R2-1','R3-0']){
    const m=Object.values(room.matches).find(m=>m.id===id),ids=Object.values(m.players);
    for(const uid of ids)await act(user(uid),uid,t,{type:'enter',matchId:id});
    for(const uid of ids)room=await act(user(uid),uid,t,{type:'result',matchId:id,winner:ids[0],rounds:[2,0],slaps:[3,1]});
@@ -48,12 +48,12 @@ const {reduce,standings}=require('../functions/competition.cjs');
   room=(await a.ref('casualCompetitions/'+league).once('value')).val();
   const ids=Object.keys(room.players);
   for(const uid of ids)await act(user(uid),uid,league,{type:'ready',ready:true});
-  room=await act(a,'a',league,{type:'start'});assert.equal(room.matches.length,190);
+  room=await act(a,'a',league,{type:'start'});assert.equal(room.matches.length,380);
   room=await act(a,'a',league,{type:'leave'});assert.notEqual(room.host,'a');assert.equal(Object.keys(room.players).length,20);
   for(const match of room.matches)room=await act(user(match.players[0]),match.players[0],league,{type:'forfeit',matchId:match.id});
   assert.equal(room.status,'complete');assert.equal(standings(room).length,20);
-  assert.equal(standings(room).reduce((n,p)=>n+p.points,0),190);
-  assert.ok(standings(room).every(p=>p.played===19));
-  console.log('Firebase emulator: privacy, concurrent joins/results, full knockout, 190 league results, host transfer and final retry passed.');
+  assert.equal(standings(room).reduce((n,p)=>n+p.points,0),380);
+  assert.ok(standings(room).every(p=>p.played===38));
+  console.log('Firebase emulator: privacy, concurrent joins/results, full knockout, 380 league results, host transfer and final retry passed.');
  }finally{await env.cleanup();clearTimeout(deadline);}
 })().catch(e=>{console.error(e);process.exitCode=1;});

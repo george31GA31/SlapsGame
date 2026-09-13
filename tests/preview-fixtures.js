@@ -6,6 +6,7 @@ const qaPlayers=Array.from({length:80},(_,i)=>({username:'PLAYER'+i,firstName:'T
 const qaAuth={get currentUser(){return currentUser},onAuthStateChanged(cb){setTimeout(()=>cb(currentUser),0);return()=>{}},signOut:async()=>{currentUser=null},signInWithEmailAndPassword:async()=>{currentUser=qaUser;return{user:qaUser}}};
 const qaSnapshot={exists:()=>true,val:()=>qaPlayers[0],forEach:cb=>qaPlayers.forEach((p,i)=>cb({key:'qa-'+i,val:()=>p}))};
 const qaRef={orderByChild(){return this},limitToLast(){return this},on(event,cb){setTimeout(()=>cb(qaSnapshot),0)},once:async()=>qaSnapshot,transaction(){throw Error('Unexpected account write in visual QA')}};
+qaRef.off=()=>{};qaRef.set=async()=>{};
 window.firebase={initializeApp(){},auth:()=>qaAuth,database:()=>({ref:()=>qaRef})};
 window.Peer=class { constructor(id){this.id=id||'qa-peer'} on(name,cb){if(name==='open')setTimeout(()=>cb(this.id),0)} once(){} destroy(){} connect(){return{open:false,on(){},send(){}}} };
 if (/friend-tournament\.html$/.test(location.pathname)) {
