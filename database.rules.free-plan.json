@@ -154,17 +154,23 @@
             },
             "$other": {
               ".validate": false
+            },
+            "elo": {
+              ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000000000"
+            },
+            "seed": {
+              ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 64"
             }
           }
         },
         "matches": {
-          ".validate": "!newData.child('190').exists()"
+          ".validate": "!newData.child('380').exists()"
         },
         "$other": {
           ".validate": false
         },
         "playerCount": {
-          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 20 && (newData.parent().child('mode').val() === 'league' || newData.val() <= 8)"
+          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 64 && (newData.parent().child('mode').val() === 'tournament' || newData.val() <= 20)"
         }
       }
     }

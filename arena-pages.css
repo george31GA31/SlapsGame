@@ -1,0 +1,52 @@
+/* Competitive menu system. No gameplay selectors or engine changes. */
+.slaps-page .site-content{padding:clamp(20px,3.5vw,52px);}
+.slaps-page .site-links a{border-radius:0;border-left:3px solid transparent;letter-spacing:.015em}
+.slaps-page .site-links a[aria-current]{border-left-color:#e9ee90}
+.slaps-page :is(.panel,details,.auth-card,.setup-container,.menu-card,.setup-card,.preferences-card,.t-card,.stat-card,.rule-box,.lb-container,.fixture,.notice,.bracket-container){border-radius:0;box-shadow:none}
+.slaps-page :is(.auth-card,.setup-container,.menu-card,.preferences-card){width:min(100%,780px);border-top:4px solid var(--menu-accent);padding:clamp(24px,4vw,48px)}
+.slaps-page :is(h1,.title,.menu-title){font-weight:950;text-transform:uppercase;font-style:italic;letter-spacing:-.05em}
+.slaps-page h2{text-transform:uppercase;font-weight:850;font-size:clamp(20px,2.2vw,30px)}
+.slaps-page :is(header,.header-bar){border-bottom:1px solid var(--menu-line);margin-bottom:28px;padding-bottom:24px}
+.slaps-page .eyebrow{font-size:11px;letter-spacing:.16em;font-weight:900}
+.slaps-page :is(button,.button,.btn-auth,.btn-blue,.btn-blue-gradient,.btn-action-large,.btn-submit,.btn-start,.btn-play,.btn-back,.btn-home,.back-btn){border-radius:0;color:#102c20!important;font-weight:850;letter-spacing:.04em;text-transform:uppercase;background:#e9ee90;box-shadow:0 3px 0 #8e9b58;padding:14px 20px;line-height:1.4}
+.slaps-page :is(button,.button):hover{filter:brightness(1.05);transform:translateY(-1px)}
+.slaps-page :is(button,.button):disabled{opacity:1!important;background:#c6ccba!important;color:#344236!important;box-shadow:none;cursor:not-allowed}
+.slaps-page :is(.btn-outline,.btn-cancel,.btn-text,.btn-exit){background:var(--menu-input);color:var(--menu-ink)!important;box-shadow:none}
+.slaps-page .password-toggle{background:transparent;color:var(--menu-muted)!important;box-shadow:none;padding:8px}
+.slaps-page :is(input:not([type=range]):not([type=checkbox]):not([type=radio]),select,textarea,.custom-select-trigger,.custom-options){border-radius:0;border-color:var(--menu-line);padding:12px 14px;color:var(--menu-ink);background:var(--menu-input)}
+.slaps-page :is(input,textarea)::placeholder{color:var(--menu-muted);opacity:1}
+.slaps-page :is(option,.custom-option:hover){background:var(--menu-input);color:var(--menu-ink)}
+.slaps-page :is(label,.input-label){display:block;margin:20px 0 8px;font-weight:700}
+.slaps-page :is(.row,.photo-actions){gap:16px}
+.slaps-page :is(.notice,.example-box,.note,.host-code-display){border-radius:0;background:var(--menu-nav);color:var(--menu-ink);border-left:3px solid var(--menu-accent)}
+.slaps-page :is(.lb-row:hover,.lb-row.me){background:var(--menu-nav);color:var(--menu-ink)}
+.slaps-page :is(th,td){padding:15px 12px;font-variant-numeric:tabular-nums}
+.slaps-page th{background:var(--menu-nav);color:var(--menu-ink);font-weight:800}
+.slaps-page .panel{padding:24px;margin-bottom:24px}
+.slaps-page .preferences-card h2{border-top:1px solid var(--menu-line);padding-top:28px;margin-top:36px}
+.slaps-page .competition-entry{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--menu-line);margin:28px 0;background:var(--menu-surface)}
+.entry-create,.entry-join{padding:clamp(24px,3vw,40px);display:flex;flex-direction:column;align-items:flex-start;gap:16px}
+.entry-join{border-left:1px solid var(--menu-line);background:var(--menu-nav)}
+.competition-entry :is(h2,p,label){margin:0!important}
+.competition-entry button{margin-top:auto}
+.competition-entry input{width:100%;letter-spacing:.08em}
+.competition-page .hub{max-width:none}
+.competition-page header h1{font-size:clamp(38px,5vw,76px);margin:12px 0 20px}
+.competition-summary{padding:18px 0;border-block:1px solid var(--menu-line);font-weight:800;grid-column:1/-1}
+.competition-page #players{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:0}
+.competition-page #players p{border-bottom:1px solid var(--menu-line);padding:10px;margin:0;font-size:13px;overflow-wrap:anywhere}
+.competition-page #room{min-width:0}
+.competition-page .bracket{gap:36px;padding:16px 4px 28px;max-width:100%;scroll-snap-type:x proximity}
+.competition-page .bracket-round{scroll-snap-align:start}
+.competition-page .bracket-round h2{font-size:18px;white-space:nowrap;border-bottom:2px solid var(--menu-accent);padding:12px 0}
+.competition-page .fixture{padding:18px;border-left:3px solid var(--menu-line)}
+.competition-page .match-player{overflow-wrap:anywhere}
+.competition-page .player-initial{border-radius:0;flex-shrink:0}
+.competition-page .bye-label{border-left:3px solid var(--menu-accent);padding-left:10px;font-size:12px;font-weight:800}
+.league-page .league-room{grid-template-columns:minmax(300px,1fr) minmax(380px,1.3fr)}
+.league-page #standings{grid-row:4/6;position:sticky;top:20px}
+.league-page #fixture-controls{grid-row:4}
+.league-page #fixtures{grid-row:5}
+.league-page #standings .panel{padding:0}
+@media(max-width:1000px){.league-page .league-room{display:flex;flex-direction:column}.league-page #standings{order:0;position:static;width:100%}.league-page #fixtures{width:100%}}
+@media(max-width:640px){.slaps-page .site-content{padding:24px 16px}.slaps-page .competition-entry{grid-template-columns:1fr}.entry-join{border-left:0;border-top:1px solid var(--menu-line)}.competition-entry button{width:100%}.slaps-page .cards{grid-template-columns:minmax(0,1fr)}.slaps-page .player-info{padding-left:8px;min-width:0;overflow-wrap:anywhere}.slaps-page .rank{width:36px}.slaps-page .country{width:32px}.slaps-page .elo-score{width:65px;padding-right:0;font-size:19px}.slaps-page .lb-row{padding:14px 10px}.slaps-page .site-links a{border-radius:0}.competition-page .bracket{gap:24px}}

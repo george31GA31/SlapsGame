@@ -10,6 +10,11 @@ const mock = () => fs.readFileSync(path.join(__dirname,'preview-fixtures.js'),'u
 const mime = {'.html':'text/html','.js':'text/javascript','.css':'text/css','.png':'image/png','.pdf':'application/pdf'};
 http.createServer((req,res)=>{
  const url = new URL(req.url,'http://localhost');
+ if(url.pathname==='/__audit'){
+  const pages=fs.readdirSync(root).filter(f=>f.endsWith('.html')&&fs.readFileSync(path.join(root,f),'utf8').includes('class="slaps-page'));
+  const width=Number(url.searchParams.get('w'))||390,start=Number(url.searchParams.get('start'))||0;
+  res.writeHead(200,{'Content-Type':'text/html'}).end('<!doctype html><body style="margin:0;background:#555">'+pages.slice(start,start+6).map(page=>`<section><h2>${page} · ${width}px</h2><iframe title="${page}" style="width:${width}px;height:1000px;border:0" src="/${page}?qaMember=1"></iframe></section>`).join('')+'</body>');return;
+ }
  let file = path.resolve(root, '.' + decodeURIComponent(url.pathname === '/' ? '/login.html' : url.pathname));
  if(!file.startsWith(root+path.sep)){res.writeHead(403).end();return}
  if(url.pathname === '/__mobile') {

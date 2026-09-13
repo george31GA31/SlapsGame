@@ -6,6 +6,10 @@
   async action(action){
    const user=auth.currentUser;
    if(!user||user.isAnonymous)throw Error('Sign in to join a competition.');
+   if(['create','join','ready'].includes(action.type)){
+    const profile=(await db.ref('publicPlayers/'+user.uid).once('value')).val();
+    action={...action,elo:Number.isFinite(profile?.elo)?profile.elo:1000};
+   }
    const roomId=action.roomId||(action.type==='create'?Array.from(crypto.getRandomValues(new Uint8Array(6)),b=>b.toString(16).padStart(2,'0')).join('').toUpperCase():'');
    if(!/^[A-F0-9]{12}$/.test(roomId))throw Error('Enter a valid 12-character room code.');
    const ref=db.ref('casualCompetitions/'+roomId);
