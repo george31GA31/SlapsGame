@@ -5,6 +5,7 @@
 // --- 1. ELO VARIABLES ---
 // Fail closed until both peers have exchanged registered account identities.
 const guestAtMatchStart = ISFSession.isGuest();
+const MATCH_PROTOCOL = 3;
 let isRanked = false;
 let localMatchUid = null;
 let opponentUid = null;
@@ -15,7 +16,7 @@ let enemyStatsReady = false;
 function matchIdentity() {
     const guest = guestAtMatchStart || ISFSession.isGuest() || !localMatchUid;
     return { type: 'HANDSHAKE', name: gameState.myName,
-        uid: guest ? null : localMatchUid, isGuest: guest, protocol: 2 };
+        uid: guest ? null : localMatchUid, isGuest: guest, protocol: MATCH_PROTOCOL };
 }
 
 function canRecordMatch() {
@@ -204,6 +205,7 @@ const gameState = {
     opponentName: "OPPONENT",
 
     handshakeDone: false,
+    protocolCompatible: false,
     roundStarted: false,
     opponentDisconnected: false,
 
@@ -364,9 +366,17 @@ function handleNet(msg) {
     // --- 1. HANDSHAKE HANDLER ---
     if (msg.type === 'CARD_LAYOUT') { CardLayout.receive(msg, gameState.aiHand); return; }
     if (msg.type === 'HANDSHAKE') {
+        if (msg.protocol !== MATCH_PROTOCOL) {
+            gameState.protocolCompatible = false;
+            gameState.gameActive = false;
+            ISFSession.showMatchStatus('MATCH VERSION MISMATCH · Reload both players');
+            showRoundMessage("MATCH VERSION MISMATCH", "Both players need to reload Slaps before starting this match.");
+            return;
+        }
+        gameState.protocolCompatible = true;
         gameState.opponentName = typeof msg.name === 'string' ? msg.name : 'OPPONENT';
         // Old/unknown clients cannot opt a guest into a ranked match.
-        opponentIsGuest = msg.isGuest !== false || !msg.uid || msg.protocol !== 2;
+        opponentIsGuest = msg.isGuest !== false || !msg.uid || msg.protocol !== MATCH_PROTOCOL;
         opponentUid = typeof msg.uid === 'string' ? msg.uid : null;
         unrankedMatch = unrankedMatch || opponentIsGuest;
         isRanked = !unrankedMatch && !!localMatchUid && !!opponentUid;
@@ -395,7 +405,7 @@ function handleNet(msg) {
     }
 
     // --- STANDARD GAME HANDLERS ---
-    if (msg.type === 'ROUND_START') { if (!gameState.isHost) startRoundJoinerFromState(msg.state); return; }
+    if (msg.type === 'ROUND_START') { if (!gameState.isHost && gameState.protocolCompatible) startRoundJoinerFromState(msg.state); return; }
     if (msg.type === 'READY') { gameState.aiReady = true; document.getElementById('ai-draw-deck')?.classList.add('deck-ready'); checkDrawConditionMultiplayer(); return; }
     if (msg.type === 'HOST_COUNTDOWN') { startCountdownFromHost(); return; }
     if (msg.type === 'REVEAL_PRELOAD') { applyRevealPreload(msg.result); return; }
@@ -405,7 +415,9 @@ function handleNet(msg) {
     if (msg.type === 'MOVE_APPLY') { applyMoveFromHost(msg.apply); return; }
     if (msg.type === 'MOVE_REJECT') { rejectMoveFromHost(msg.reject); return; }
     if (msg.type === 'OPPONENT_REJECT') { cleanupGhost(msg.card); return; }
-    if (msg.type === 'OPPONENT_FLIP') { const card = gameState.aiHand.find(c => c.id === msg.cardId); if (card && card.element && !card.isFaceUp && gameState.aiHand.filter(c => c.isFaceUp).length < 4) setCardFaceUp(card.element, card, 'ai'); return; }
+    if (msg.type === 'FLIP_REQ') { if (gameState.isHost) adjudicateFlip(msg.flip, 'ai'); return; }
+    if (msg.type === 'FLIP_APPLY') { applyFlipFromHost(msg.flip); return; }
+    if (msg.type === 'FLIP_REJECT') { rejectFlipFromHost(msg.flip); return; }
     if (msg.type === 'SLAP_REQ') { if (gameState.isHost) adjudicateSlap('ai'); return; }
     if (msg.type === 'SLAP_UPDATE') { applySlapUpdate(msg); return; }
     if (msg.type === 'PENALTY_UPDATE') { applyPenaltyUpdate(msg); return; }
@@ -580,17 +592,7 @@ function renderBadges(who, y, r) {
 }
 
 function checkSlapCondition() {
-    if (gameState.centerPileLeft.length === 0 || gameState.centerPileRight.length === 0) {
-        gameState.slapActive = false;
-        return;
-    }
-    const topL = gameState.centerPileLeft[gameState.centerPileLeft.length - 1];
-    const topR = gameState.centerPileRight[gameState.centerPileRight.length - 1];
-    if (topL.rank === topR.rank) {
-        gameState.slapActive = true;
-    } else {
-        gameState.slapActive = false;
-    }
+    gameState.slapActive = SlapsEngine.isSlapAvailable(gameState.centerPileLeft, gameState.centerPileRight);
 }
 
 /* ================================
@@ -908,7 +910,7 @@ async function startRoundHostAuthoritative(oddCard = null) {
 
     resetCenterPiles();
 
-    const centerCard = leftoverCard || oddCard;
+    const centerCard = oddCard || leftoverCard;
     if (centerCard) {
         gameState.centerPileLeft.push(centerCard);
         renderCenterPile('left', centerCard);
@@ -1106,12 +1108,57 @@ function setCardFaceDown(img, card, owner) {
 
 function tryFlipCard(img, card) {
     if (gameState.connectionSuspended) return;
-    if (card.isFaceUp || card.flipping || !gameState.playerHand.includes(card)) return;
-    const liveCards = gameState.playerHand.filter(c => c.isFaceUp || c.flipping).length;
-    if (liveCards < 4) {
-        setCardFaceUp(img, card, 'player');
-        sendNet({ type: 'OPPONENT_FLIP', cardId: card.id });
+    if (!card || card.isFaceUp || card.flipping || card.flipPending || !gameState.playerHand.includes(card)) return;
+
+    // Host can validate immediately. Guests send the intent even if their local
+    // face-up count is temporarily stale because a preceding move is in flight.
+    // ReliablePeer preserves MOVE_REQ -> FLIP_REQ ordering for the host referee.
+    if (gameState.isHost) {
+        adjudicateFlip({ cardId: card.id }, 'player');
+        return;
     }
+
+    if (!SlapsEngine.isTopOfLane(gameState.playerHand, card)) return;
+    card.flipPending = true;
+    sendNet({ type: 'FLIP_REQ', flip: { cardId: card.id } });
+}
+
+function adjudicateFlip(flip, moverOverride) {
+    if (!gameState.isHost || gameState.connectionSuspended || !flip || !flip.cardId) return;
+    const mover = moverOverride || 'player';
+    const hand = mover === 'player' ? gameState.playerHand : gameState.aiHand;
+    const card = hand.find(c => c.id === flip.cardId);
+    const decision = card ? SlapsEngine.canFlipCard(hand, card) : { ok: false, reason: 'not_in_hand' };
+
+    if (!decision.ok || !gameState.matchLive) {
+        if (mover === 'ai') sendNet({ type: 'FLIP_REJECT', flip: { cardId: flip.cardId, reason: decision.reason || 'not_playable' } });
+        return;
+    }
+
+    if (card.element) setCardFaceUp(card.element, card, mover);
+    else card.isFaceUp = true;
+
+    sendNet({ type: 'FLIP_APPLY', flip: { cardId: card.id, mover } });
+}
+
+function applyFlipFromHost(flip) {
+    if (!flip || !flip.cardId) return;
+    const localMover = flip.mover === 'player' ? 'ai' : 'player';
+    const hand = localMover === 'player' ? gameState.playerHand : gameState.aiHand;
+    const card = hand.find(c => c.id === flip.cardId);
+    if (!card) return;
+
+    card.flipPending = false;
+    if (!card.isFaceUp) {
+        if (card.element) setCardFaceUp(card.element, card, localMover);
+        else card.isFaceUp = true;
+    }
+}
+
+function rejectFlipFromHost(flip) {
+    if (!flip || !flip.cardId) return;
+    const card = gameState.playerHand.find(c => c.id === flip.cardId);
+    if (card) card.flipPending = false;
 }
 
 function cardKey(c) {
@@ -1345,10 +1392,7 @@ function checkLegalPlay(card) {
 }
 
 function checkPileLogic(card, targetPile) {
-    if (targetPile.length === 0) return false;
-    const targetCard = targetPile[targetPile.length - 1];
-    const diff = Math.abs(card.value - targetCard.value);
-    return (diff === 1 || diff === 12);
+    return SlapsEngine.canPlayOnPile(card, targetPile);
 }
 
 /* ================================
@@ -1356,7 +1400,7 @@ function checkPileLogic(card, targetPile) {
    ================================ */
 
 function requestMoveToHost(cardData, dropSide) {
-    if (gameState.connectionSuspended) return;
+    if (gameState.connectionSuspended || !cardData || cardData.pendingMove) return;
     if (dropSide !== 'left' && dropSide !== 'right') {
         if (cardData && cardData.originalLeft != null) {
             const el = cardData.element;
@@ -1390,6 +1434,7 @@ function requestMoveToHost(cardData, dropSide) {
     if (gameState.isHost) {
         adjudicateMove(req, 'player');
     } else {
+        cardData.pendingMove = req.reqId;
         sendNet({ type: 'MOVE_REQ', move: req });
     }
 }
@@ -1466,14 +1511,10 @@ function applyMoveAuthoritative(mover, cardObj, side, reqId) {
     updateScoreboard();
     checkSlapCondition();
 
-    // 5. CHECK FOR SIMULTANEOUS SHORTAGE TRIGGER
-    if (gameState.playerDeck.length === 0 && gameState.aiDeck.length === 0) {
-        if (gameState.centerPileLeft.length > 0 || gameState.centerPileRight.length > 0) {
-            triggerSuddenDeathSplit(); 
-        }
-    }
+    // Empty-deck transitions are handled by the authoritative reveal/draw
+    // state machine. Do not start a second transition from a card move.
 
-    // 6. WIN / END ROUND LOGIC
+    // 5. WIN / END ROUND LOGIC
     const currentHand = (mover === 'player') ? gameState.playerHand : gameState.aiHand;
     const handEmpty = (currentHand.length === 0);
     
@@ -1556,6 +1597,8 @@ function applyMoveFromHost(a) {
 
     if (idx !== -1) {
         cardObj = hand[idx];
+        cardObj.pendingMove = null;
+        cardObj.flipPending = false;
         hand.splice(idx, 1); 
     } else {
         cardObj = unpackCard(a.card);
@@ -2182,6 +2225,8 @@ function rejectMoveFromHost(j) {
     }
     if (!card) card = gameState.lastDraggedCard;
 
+    if (card) card.pendingMove = null;
+
     if (card && card.element) {
         card.element.style.transition = 'all 0.3s ease-out';
         card.element.style.left = card.originalLeft;
@@ -2264,13 +2309,9 @@ function triggerSecondCycleReset() {
     console.log("Borrowed decks empty again. Triggering Cycle 2 Reset.");
 
     const pot = [...gameState.centerPileLeft, ...gameState.centerPileRight];
-    
-    let oddCard = null;
-    if (pot.length % 2 !== 0) {
-        oddCard = pot.pop(); 
-    }
-
-    const half = pot.length / 2;
+    const split = SlapsEngine.splitPot(pot);
+    const oddCard = split.oddCard;
+    const half = split.playerShare.length;
 
     gameState.playerTotal = gameState.playerHand.length + half;
     gameState.aiTotal = gameState.aiHand.length + half;
@@ -2289,7 +2330,7 @@ function triggerSecondCycleReset() {
     
     setTimeout(() => {
         modal.classList.add('hidden');
-        startRoundHostAuthoritative(); 
+        startRoundHostAuthoritative(oddCard); 
     }, 2000);
 }
 function applyBorrowedUI(pStart = null, aStart = null) {

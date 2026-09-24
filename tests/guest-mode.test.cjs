@@ -22,14 +22,14 @@ function fixture(guest = false) {
         setTimeout(){},clearTimeout(){},setInterval(){return 1},clearInterval(){}, crypto:require('node:crypto').webcrypto, Date, Map, Set, Math, alert(){} };
     ctx.window = ctx;
     vm.createContext(ctx);
-    for(const file of ['session.js','elo-engine.js','network-guard.js','multiplayer-game.js']) vm.runInContext(fs.readFileSync(path.join(root,file),'utf8'),ctx,{filename:file});
+    for(const file of ['session.js','elo-engine.js','slaps-engine.js','network-guard.js','multiplayer-game.js']) vm.runInContext(fs.readFileSync(path.join(root,file),'utf8'),ctx,{filename:file});
     vm.runInContext('localMatchUid = guestAtMatchStart ? null : "member"; gameState.roundStarted=true; gameState.isHost=true;',ctx);
     return {ctx,run: code=>vm.runInContext(code,ctx),writes:()=>writes,profile:()=>profile};
 }
 for(const [label,localGuest,opponentGuest] of [['guest vs member',true,false],['member vs guest',false,true],['guest vs guest',true,true]]) {
     test(`${label}: results, concessions, disconnects and rematches never write statistics`,async()=>{
         const f=fixture(localGuest);
-        f.ctx.handleNet({type:'HANDSHAKE',name:'Opponent',uid:opponentGuest?null:'opponent',isGuest:opponentGuest,protocol:2});
+        f.ctx.handleNet({type:'HANDSHAKE',name:'Opponent',uid:opponentGuest?null:'opponent',isGuest:opponentGuest,protocol:3});
         await Promise.resolve();
         const before={...f.profile()};
         for(const won of [true,false]) { let completed=false;f.ctx.reportMatchResultInternal(won,()=>completed=true,'proof');assert.ok(completed); }
@@ -49,7 +49,7 @@ for(const [label,localGuest,opponentGuest] of [['guest vs member',true,false],['
     });
 }
 test('registered match still changes ELO, win count and extended stats once',async()=>{
-    const f=fixture();f.ctx.handleNet({type:'HANDSHAKE',name:'Opponent',uid:'opponent',isGuest:false,protocol:2});
+    const f=fixture();f.ctx.handleNet({type:'HANDSHAKE',name:'Opponent',uid:'opponent',isGuest:false,protocol:3});
     await Promise.resolve();
     f.run('gameState.p1Slaps=2;gameState.p1Rounds=1;gameState.matchStartTime=Date.now()-10000');
     f.ctx.reportMatchResultInternal(true,null,'proof');
@@ -62,7 +62,7 @@ test('missing identity and legacy handshakes are unranked',()=>{
     f.ctx.reportMatchResultInternal(false,null,'proof');assert.equal(f.writes(),0);
 });
 test('account switch during a match cannot write to the replacement account',async()=>{
-    const f=fixture();f.ctx.handleNet({type:'HANDSHAKE',name:'Opponent',uid:'opponent',isGuest:false,protocol:2});await Promise.resolve();
+    const f=fixture();f.ctx.handleNet({type:'HANDSHAKE',name:'Opponent',uid:'opponent',isGuest:false,protocol:3});await Promise.resolve();
     f.ctx.auth.currentUser={uid:'different'};f.ctx.reportMatchResultInternal(false,null,'proof');assert.equal(f.writes(),0);
 });
 test('starting guest mode signs out and provides a distinct guest identity',async()=>{
@@ -105,6 +105,31 @@ test('simultaneous plays onto the same centre card accept only the first legal r
  f.ctx.adjudicateMove({card:{id:'a'},targetId:'top',dropSide:'left',reqId:'a1'},'ai');
  assert.equal(f.run('accepted.length'),1);assert.equal(f.run('accepted[0]'),'player');
 });
+test('guest move followed immediately by uncover flip is accepted in host order',()=>{
+ const f=fixture(true);
+ f.run(`
+ gameState.isHost=true;gameState.matchLive=true;gameState.gameActive=true;
+ gameState.playerDeck=[{id:'pd'}];gameState.aiDeck=[{id:'ad'}];
+ gameState.centerPileLeft=[{id:'top',rank:'6',value:6}];gameState.centerPileRight=[{id:'right',rank:'9',value:9}];
+ gameState.aiHand=[
+   {id:'next',suit:'hearts',rank:'4',value:4,isFaceUp:false,laneIndex:0,owner:'ai'},
+   {id:'played',suit:'clubs',rank:'5',value:5,isFaceUp:true,laneIndex:0,owner:'ai'},
+   {id:'f1',suit:'clubs',rank:'8',value:8,isFaceUp:true,laneIndex:1,owner:'ai'},
+   {id:'f2',suit:'diamonds',rank:'9',value:9,isFaceUp:true,laneIndex:2,owner:'ai'},
+   {id:'f3',suit:'spades',rank:'10',value:10,isFaceUp:true,laneIndex:3,owner:'ai'}
+ ];
+ `);
+ f.ctx.adjudicateMove({card:{id:'played'},targetId:'top',dropSide:'left',reqId:'move-1'},'ai');
+ assert.equal(f.run("gameState.aiHand.some(c=>c.id==='played')"),false);
+ f.ctx.adjudicateFlip({cardId:'next'},'ai');
+ assert.equal(f.run("gameState.aiHand.find(c=>c.id==='next').isFaceUp"),true);
+});
+
+test('online move path no longer calls the undefined legacy sudden-death function',()=>{
+ const source=fs.readFileSync(path.join(root,'multiplayer-game.js'),'utf8');
+ assert.equal(source.includes('triggerSuddenDeathSplit('),false);
+});
+
 test('slap holdings count physical cards for the loser independently of slap wins',()=>{
  const f=fixture(true);f.ctx.document.dispatchEvent=()=>{};f.ctx.Event=class{constructor(type){this.type=type;}};
  f.run("gameState.playerDeck=[{}];gameState.aiDeck=[{}];gameState.centerPileLeft=[{},{}];gameState.centerPileRight=[{},{},{}];gameState.gameActive=true;");

@@ -138,18 +138,8 @@ function renderBadges(who, y, r) {
 }
 
 function checkSlapCondition() {
-    if (gameState.centerPileLeft.length === 0 || gameState.centerPileRight.length === 0) {
-        gameState.slapActive = false;
-        return;
-    }
-    const topL = gameState.centerPileLeft[gameState.centerPileLeft.length - 1];
-    const topR = gameState.centerPileRight[gameState.centerPileRight.length - 1];
-    if (topL.rank === topR.rank) {
-        gameState.slapActive = true;
-        triggerAISlap();
-    } else {
-        gameState.slapActive = false;
-    }
+    gameState.slapActive = SlapsEngine.isSlapAvailable(gameState.centerPileLeft, gameState.centerPileRight);
+    if (gameState.slapActive) triggerAISlap();
 }
 
 function triggerAISlap() {
@@ -357,7 +347,7 @@ function createDeck() {
     SUITS.forEach(suit => { RANKS.forEach((rank, index) => { deck.push(new Card(suit, rank, index + 2)); }); });
     return deck;
 }
-function shuffle(array) { for (let i = array.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [array[i], array[j]] = [array[j], array[i]]; } }
+function shuffle(array) { return SlapsEngine.shuffleInPlace(array); }
 function updateScoreboard() { 
     document.getElementById('score-player').innerText = gameState.playerTotal; 
     document.getElementById('score-ai').innerText = gameState.aiTotal; 
@@ -402,9 +392,8 @@ function setCardFaceDown(img, card, owner) {
     }
 }
 function tryFlipCard(img, card) {
-    if (card.isFaceUp || card.flipping || !gameState.playerHand.includes(card)) return;
-    const liveCards = gameState.playerHand.filter(c => c.isFaceUp || c.flipping).length;
-    if (liveCards < 4) setCardFaceUp(img, card, 'player');
+    const decision = SlapsEngine.canFlipCard(gameState.playerHand, card);
+    if (decision.ok) setCardFaceUp(img, card, 'player');
 }
 
 function handlePlayerDeckClick() {
@@ -813,7 +802,7 @@ function makeDraggable(img, cardData) {
 }
 function checkLegalPlay(card) { if (!gameState.gameActive) return false; return checkPileLogic(card, gameState.centerPileLeft) || checkPileLogic(card, gameState.centerPileRight); }
 function checkPileLogic(card, targetPile) {
-    if (targetPile.length === 0) return false; const targetCard = targetPile[targetPile.length - 1]; const diff = Math.abs(card.value - targetCard.value); return (diff === 1 || diff === 12);
+    return SlapsEngine.canPlayOnPile(card, targetPile);
 }
 function playCardToCenter(card, imgElement, dropSide) {
     if (!card.isFaceUp) return false;
