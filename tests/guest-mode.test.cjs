@@ -22,14 +22,14 @@ function fixture(guest = false) {
         setTimeout(){},clearTimeout(){},setInterval(){return 1},clearInterval(){}, crypto:require('node:crypto').webcrypto, Date, Map, Set, Math, alert(){} };
     ctx.window = ctx;
     vm.createContext(ctx);
-    for(const file of ['session.js','elo-engine.js','network-guard.js','multiplayer-game.js']) vm.runInContext(fs.readFileSync(path.join(root,file),'utf8'),ctx,{filename:file});
+    for(const file of ['session.js','elo-engine.js','slaps-engine.js','network-guard.js','multiplayer-game.js']) vm.runInContext(fs.readFileSync(path.join(root,file),'utf8'),ctx,{filename:file});
     vm.runInContext('localMatchUid = guestAtMatchStart ? null : "member"; gameState.roundStarted=true; gameState.isHost=true;',ctx);
     return {ctx,run: code=>vm.runInContext(code,ctx),writes:()=>writes,profile:()=>profile};
 }
 for(const [label,localGuest,opponentGuest] of [['guest vs member',true,false],['member vs guest',false,true],['guest vs guest',true,true]]) {
     test(`${label}: results, concessions, disconnects and rematches never write statistics`,async()=>{
         const f=fixture(localGuest);
-        f.ctx.handleNet({type:'HANDSHAKE',name:'Opponent',uid:opponentGuest?null:'opponent',isGuest:opponentGuest,protocol:2});
+        f.ctx.handleNet({type:'HANDSHAKE',name:'Opponent',uid:opponentGuest?null:'opponent',isGuest:opponentGuest,protocol:3});
         await Promise.resolve();
         const before={...f.profile()};
         for(const won of [true,false]) { let completed=false;f.ctx.reportMatchResultInternal(won,()=>completed=true,'proof');assert.ok(completed); }
@@ -49,7 +49,7 @@ for(const [label,localGuest,opponentGuest] of [['guest vs member',true,false],['
     });
 }
 test('registered match still changes ELO, win count and extended stats once',async()=>{
-    const f=fixture();f.ctx.handleNet({type:'HANDSHAKE',name:'Opponent',uid:'opponent',isGuest:false,protocol:2});
+    const f=fixture();f.ctx.handleNet({type:'HANDSHAKE',name:'Opponent',uid:'opponent',isGuest:false,protocol:3});
     await Promise.resolve();
     f.run('gameState.p1Slaps=2;gameState.p1Rounds=1;gameState.matchStartTime=Date.now()-10000');
     f.ctx.reportMatchResultInternal(true,null,'proof');
@@ -62,7 +62,7 @@ test('missing identity and legacy handshakes are unranked',()=>{
     f.ctx.reportMatchResultInternal(false,null,'proof');assert.equal(f.writes(),0);
 });
 test('account switch during a match cannot write to the replacement account',async()=>{
-    const f=fixture();f.ctx.handleNet({type:'HANDSHAKE',name:'Opponent',uid:'opponent',isGuest:false,protocol:2});await Promise.resolve();
+    const f=fixture();f.ctx.handleNet({type:'HANDSHAKE',name:'Opponent',uid:'opponent',isGuest:false,protocol:3});await Promise.resolve();
     f.ctx.auth.currentUser={uid:'different'};f.ctx.reportMatchResultInternal(false,null,'proof');assert.equal(f.writes(),0);
 });
 test('starting guest mode signs out and provides a distinct guest identity',async()=>{
