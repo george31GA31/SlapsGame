@@ -47,6 +47,41 @@ window.GameVisuals = {
     }
 };
 
+/* A rules decision must never look like an unresponsive card.  This is kept
+   separate from the rules engine so bots, online matches and future modes can
+   use the same plain-English feedback without putting UI work in the engine. */
+window.SlapsFeedback = {
+    timer: null,
+    flipReason(reason) {
+        return {
+            covered: 'That card is still covered. Reveal the card on top of that stack first.',
+            face_up_limit: 'You already have four cards open.',
+            pending_move: 'That card is already being played.',
+            already_face_up: 'That card is already open.',
+            not_in_hand: 'That card is no longer available.',
+            not_playable: 'That card cannot be revealed right now.',
+            stale_state: 'The match updated. Your cards have been refreshed.'
+        }[reason] || 'That action is not available right now.';
+    },
+    show(message, tone = 'warning') {
+        if (!message || !document.body) return;
+        let el = document.getElementById('game-rule-feedback');
+        if (!el) {
+            el = document.createElement('div');
+            el.id = 'game-rule-feedback';
+            el.className = 'game-rule-feedback';
+            el.setAttribute('role', 'status');
+            el.setAttribute('aria-live', 'polite');
+            document.body.append(el);
+        }
+        clearTimeout(this.timer);
+        el.textContent = message;
+        el.dataset.tone = tone;
+        el.classList.add('is-visible');
+        this.timer = setTimeout(() => el.classList.remove('is-visible'), 2400);
+    }
+};
+
 document.addEventListener('DOMContentLoaded', () => {
     const body = document.body;
     const board = document.querySelector('.game-board');

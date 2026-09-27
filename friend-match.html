@@ -179,7 +179,9 @@
             if(peer) peer.destroy();
             
             // Go to the Actual Game
-            window.location.href = 'friend-tournament-game.html';
+            // The old tournament match engine used an obsolete flip protocol.
+            // Keep the bracket route, but always enter the maintained match page.
+            window.location.href = 'multiplayer-game.html?legacyTournament=1';
         }
     </script>
 </div></div></body>

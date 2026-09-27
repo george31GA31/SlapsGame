@@ -2,6 +2,13 @@
 <html lang="en">
 <head>
 <link rel="icon" href="ISF_favicon.png">
+    <script>
+        // Retired legacy route: preserve any old bookmarks while routing them
+        // into the maintained multiplayer protocol before game code can load.
+        const legacyMatchParams = new URLSearchParams(location.search);
+        legacyMatchParams.set('legacyTournament', '1');
+        location.replace('multiplayer-game.html?' + legacyMatchParams.toString());
+    </script>
 
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">

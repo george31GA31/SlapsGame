@@ -48,6 +48,10 @@
     ready=true;clearTimeout(grace);grace=null;clearInterval(retry);gameState.connectionSuspended=false;
     for(const event of journal)if(event.seq>packet.received)raw(event);
     if(!sent)sendNet(matchIdentity());
+    // Ordered replay covers brief packet loss.  A snapshot then resolves any
+    // pending local input or UI state that cannot be reconstructed from a
+    // partially completed animation after reconnecting.
+    if(!gameState.isHost&&typeof requestAuthoritativeSync==='function')requestAuthoritativeSync('reconnected');
     status('Connected · '+(gameState.isHost?'Hosting match':'Online match'));
     return;
    }

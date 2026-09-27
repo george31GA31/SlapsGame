@@ -388,12 +388,17 @@ function setCardFaceDown(img, card, owner) {
     img.src = CARD_BACK_SRC; img.classList.add('card-face-down'); card.isFaceUp = false;
     if (owner === 'player') {
         img.onclick = () => tryFlipCard(img, card);
-        CardLayout.attach(img, card, null);
+        CardLayout.attach(img, card, null, { lockFoundation: true });
     }
 }
 function tryFlipCard(img, card) {
     const decision = SlapsEngine.canFlipCard(gameState.playerHand, card);
-    if (decision.ok) setCardFaceUp(img, card, 'player');
+    if (!decision.ok) {
+        SlapsFeedback?.show(SlapsFeedback.flipReason(decision.reason));
+        return false;
+    }
+    setCardFaceUp(img, card, 'player');
+    return true;
 }
 
 function handlePlayerDeckClick() {

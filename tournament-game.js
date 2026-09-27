@@ -300,7 +300,7 @@ function createDeck() {
     SUITS.forEach(suit => { RANKS.forEach((rank, index) => { deck.push(new Card(suit, rank, index + 2)); }); });
     return deck;
 }
-function shuffle(array) { for (let i = array.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [array[i], array[j]] = [array[j], array[i]]; } }
+function shuffle(array) { return SlapsEngine.shuffleInPlace(array); }
 function updateScoreboard() { 
     document.getElementById('score-player').innerText = gameState.playerTotal; 
     document.getElementById('score-ai').innerText = gameState.aiTotal; 
@@ -341,13 +341,17 @@ function setCardFaceDown(img, card, owner) {
     img.src = CARD_BACK_SRC; img.classList.add('card-face-down'); card.isFaceUp = false;
     if (owner === 'player') {
         img.onclick = () => tryFlipCard(img, card);
-        CardLayout.attach(img, card, null);
+        CardLayout.attach(img, card, null, { lockFoundation: true });
     }
 }
 function tryFlipCard(img, card) {
-    if (card.isFaceUp || card.flipping || !gameState.playerHand.includes(card)) return;
-    const liveCards = gameState.playerHand.filter(c => c.isFaceUp || c.flipping).length;
-    if (liveCards < 4) setCardFaceUp(img, card, 'player');
+    const decision = SlapsEngine.canFlipCard(gameState.playerHand, card);
+    if (!decision.ok) {
+        SlapsFeedback?.show(SlapsFeedback.flipReason(decision.reason));
+        return false;
+    }
+    setCardFaceUp(img, card, 'player');
+    return true;
 }
 
 function handlePlayerDeckClick() {

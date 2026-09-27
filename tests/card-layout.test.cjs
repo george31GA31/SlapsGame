@@ -34,3 +34,11 @@ test('face-up cards bypass layout gestures and retain existing play controls',()
  const f=fixture(),card={id:'id',isFaceUp:true,element:f.el};let sent=0;
  f.api.attach(f.el,card,()=>sent++);f.fire('pointerdown',{clientX:5,clientY:5,pointerId:1});f.fire('pointermove',{clientX:100,clientY:100});assert.equal(sent,0);assert.equal(card.layout,undefined);
 });
+test('locked foundation cards keep their real stack position and preserve a normal tap',()=>{
+ const f=fixture(),card={id:'id',isFaceUp:false,element:f.el};let sent=0,suppressed=false;
+ f.api.attach(f.el,card,()=>sent++,{lockFoundation:true});
+ f.fire('pointerdown',{clientX:5,clientY:5,pointerId:1});f.fire('pointermove',{clientX:420,clientY:220,pointerId:1});f.fire('pointerup',{pointerId:1});
+ f.fire('click',{stopImmediatePropagation(){suppressed=true}});
+ assert.equal(sent,0);assert.equal(suppressed,false);assert.equal(card.layout,undefined);
+ assert.match(f.el['aria-label']||'',/Face-down|^$/);
+});

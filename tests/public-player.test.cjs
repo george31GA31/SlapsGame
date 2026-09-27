@@ -9,6 +9,7 @@ test('free-plan rules separate public cards from owner-only account records',()=
  const r=JSON.parse(fs.readFileSync('database.rules.free-plan.json')).rules;
  assert.equal(r['.read'],false);assert.equal(r['.write'],false);
  assert.equal(r.publicPlayers['.read'],true);
+ assert.match(r.publicPlayers.$uid['.write'],/newData\.child\('elo'\)\.val\(\) === data\.child\('elo'\)\.val\(\)/);
  assert.equal(r.users.$uid['.read'],'auth != null && auth.uid === $uid');
  assert.equal(r.publicPlayers.$uid.$other['.validate'],false);
  assert.equal(r.competitions['.write'],false);
@@ -20,18 +21,19 @@ test('migration restores every registered player without copying account secrets
  assert.equal(output.alice.elo,0);assert.equal(output.bob.wins,4);
  assert.equal(JSON.stringify(output).includes('secret'),false);assert.equal(JSON.stringify(output).includes('Private'),false);
 });
-test('player mirror follows auth and profile changes on any page, with no duplicate writes',async()=>{
+test('player mirror follows auth and profile changes without giving the browser ranking writes',async()=>{
  const writes=[],callbacks={},auth={currentUser:{uid:'alice',isAnonymous:false},onAuthStateChanged(cb){this.changed=cb;}};
- const root={auth,db:{ref(path){return {on(n,cb){callbacks[path]=cb;},off(){},set:async data=>writes.push({path,data})};}}};
+ const root={auth,db:{ref(path){return {on(n,cb){callbacks[path]=cb;},off(){},once:async()=>({exists:()=>false,val:()=>null}),set:async data=>writes.push({path,method:'set',data}),update:async data=>writes.push({path,method:'update',data})};}}};
  const ctx={window:root};vm.createContext(ctx);vm.runInContext(fs.readFileSync('public-player.js','utf8'),ctx);
  auth.changed(auth.currentUser);
  const snapshot={exists:()=>true,val:()=>({username:'Alice',wins:1,email:'secret'})};
- callbacks['users/alice'](snapshot);callbacks['users/alice'](snapshot);await Promise.resolve();
+ callbacks['users/alice'](snapshot);callbacks['users/alice'](snapshot);await new Promise(resolve=>setImmediate(resolve));
  assert.equal(writes.length,1);assert.equal(writes[0].path,'publicPlayers/alice');
  auth.currentUser={uid:'bob',isAnonymous:false};auth.changed(auth.currentUser);
  callbacks['users/alice']({...snapshot,val:()=>({username:'Alice',wins:2})});
  callbacks['users/bob']({...snapshot,val:()=>({username:'Bob',wins:3})});
- await Promise.resolve();assert.equal(writes.length,2);assert.equal(writes[1].path,'publicPlayers/bob');
+ await new Promise(resolve=>setImmediate(resolve));assert.equal(writes.length,2);assert.equal(writes[1].path,'publicPlayers/bob');
+ assert.equal(writes[0].data.elo,1000);assert.equal(writes[0].data.wins,0);
 });
 test('every page has exactly the requested favicon and the root asset exists',()=>{
  for(const file of fs.readdirSync('.').filter(f=>f.endsWith('.html'))){
