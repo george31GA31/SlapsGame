@@ -21,11 +21,27 @@ window.CardLayout = (() => {
         place(card, 1 - clamp(message.x), 1 - clamp(message.y));
         return true;
     }
-    function attach(el, card, send) {
+    function attach(el, card, send, options = {}) {
+        const lockFoundation = options.lockFoundation === true;
         let moved = false;
         el.tabIndex = 0;
-        el.setAttribute('aria-label', 'Face-down card. Drag or use arrow keys to reposition; tap or Enter to flip when permitted.');
-        el.style.touchAction = 'none';
+        el.setAttribute('aria-label', lockFoundation
+            ? 'Face-down card. Tap or press Enter to reveal it when permitted.'
+            : 'Face-down card. Drag or use arrow keys to reposition; tap or Enter to flip when permitted.');
+        el.style.touchAction = lockFoundation ? 'manipulation' : 'none';
+        if (lockFoundation) {
+            // Foundation order is game state, not presentation.  Moving a
+            // facedown card visually used to make a covered card look legal.
+            // Keep it in its real stack so a tap always communicates truthfully.
+            el.addEventListener('keydown', e => {
+                if (card.isFaceUp || card.flipping) return;
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    el.click();
+                }
+            });
+            return;
+        }
         el.addEventListener('click', e => {
             if (moved) {e.preventDefault(); e.stopImmediatePropagation(); moved = false;}
         }, true);

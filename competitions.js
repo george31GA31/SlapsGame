@@ -9,12 +9,12 @@
   try{const {data}=await endpoint({...action,roomId});roomId=data.roomId;room=data.room;
    if(room.mode!==$('mode').value){location.replace((room.mode==='league'?'league.html':'tournament.html')+'?room='+encodeURIComponent(roomId));return null;}
    sessionStorage.setItem('slaps-'+room.mode,roomId);subscribe();render();status('Connected · '+roomId);return data;
-  }catch(error){status(/permission/i.test(error.code||error.message||'')?'Rooms are unavailable until the updated free-plan Firebase rules are published.':error.message||'Connection interrupted. Please retry.');return null;}
+  }catch(error){status(/permission|function/i.test(error.code||error.message||'')?'The secure competition service is not available yet. Please try again shortly.':error.message||'Connection interrupted. Please retry.');return null;}
  }
  function subscribe(){
   if(watch?.id===roomId)return;
   if(watch)watch.ref.off('value',watch.callback);
-  const ref=db.ref('casualCompetitions/'+roomId),callback=s=>{if(s.exists()){room=s.val();render();}};
+  const ref=db.ref('competitions/'+roomId),callback=s=>{if(s.exists()){room=s.val();render();}};
   ref.on('value',callback,()=>status('Live updates unavailable. Reconnecting…'));watch={ref,callback,id:roomId};
  }
  auth.onAuthStateChanged(async user=>{
@@ -99,7 +99,9 @@
  }
  addEventListener('message',async event=>{
   if(event.origin!==location.origin||event.source!==$('match-frame').contentWindow||!activeMatch)return;
-  const data=event.data;if(!data||data.type!=='COMPETITION_RESULT')return;
+  const data=event.data;
+  if(data?.type==='COMPETITION_EXIT'){$('match-layer').hidden=true;$('match-frame').src='about:blank';activeMatch=null;return;}
+  if(!data||data.type!=='COMPETITION_RESULT')return;
   const m=activeMatch,side=m.players.indexOf(uid);
   const numbers=[data.roundsWon,data.roundsLost,data.slapsWon,data.slapsLost];
   if(!numbers.every(n=>Number.isInteger(n)&&n>=0&&n<=10000))return;

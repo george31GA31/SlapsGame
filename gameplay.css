@@ -361,6 +361,29 @@ body.game-body::before {
 .game-body .card-face-down:active {cursor:grabbing;}
 .game-body .card-face-down:focus-visible {outline:3px solid #7de8ad;outline-offset:2px;}
 
+.game-rule-feedback {
+    position:fixed;
+    left:50%;
+    bottom:max(18px, env(safe-area-inset-bottom));
+    z-index:9000;
+    max-width:min(440px, calc(100vw - 28px));
+    padding:9px 13px;
+    border:1px solid rgba(255,221,135,.56);
+    border-radius:9px;
+    background:rgba(24,20,12,.94);
+    color:#fff5d4;
+    font-size:clamp(11px,1.6dvh,14px);
+    line-height:1.25;
+    text-align:center;
+    pointer-events:none;
+    opacity:0;
+    transform:translate(-50%, 12px);
+    transition:opacity 130ms ease,transform 130ms ease;
+    box-shadow:0 9px 22px rgba(0,0,0,.35);
+}
+.game-rule-feedback[data-tone="error"] {border-color:rgba(255,129,129,.65);color:#ffe3e3;}
+.game-rule-feedback.is-visible {opacity:1;transform:translate(-50%, 0);}
+
 .game-body .match-footer {
     display:flex;
     justify-content:center;

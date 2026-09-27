@@ -18,8 +18,9 @@ exports.competitionAction=onCall({region:'europe-west1',maxInstances:10},async r
   return !old||now-old.at>=10000?{at:now,count:1}:{at:old.at,count:old.count+1};
  });
  if(!quota.committed)throw new HttpsError('resource-exhausted','Too many requests. Please wait a moment.');
- const profile=(await db.ref('users/'+uid+'/username').get()).val();
- if(['create','join','ready'].includes(action.type))action.elo=(await db.ref('users/'+uid+'/elo').get()).val()??1000;
+ const publicProfile=(await db.ref('publicPlayers/'+uid).get()).val()||{};
+ const profile=publicProfile.username;
+ if(['create','join','ready'].includes(action.type))action.elo=Number.isFinite(publicProfile.elo)?publicProfile.elo:1000;
  let failure=null;
  const result=await db.ref('competitions/'+id).transaction(old=>{
   try{return reduce(old,uid,String(profile||request.auth.token.name||'Player'),action,now);}

@@ -29,7 +29,7 @@ function fixture(guest = false) {
 for(const [label,localGuest,opponentGuest] of [['guest vs member',true,false],['member vs guest',false,true],['guest vs guest',true,true]]) {
     test(`${label}: results, concessions, disconnects and rematches never write statistics`,async()=>{
         const f=fixture(localGuest);
-        f.ctx.handleNet({type:'HANDSHAKE',name:'Opponent',uid:opponentGuest?null:'opponent',isGuest:opponentGuest,protocol:3});
+        f.ctx.handleNet({type:'HANDSHAKE',name:'Opponent',uid:opponentGuest?null:'opponent',isGuest:opponentGuest,protocol:4});
         await Promise.resolve();
         const before={...f.profile()};
         for(const won of [true,false]) { let completed=false;f.ctx.reportMatchResultInternal(won,()=>completed=true,'proof');assert.ok(completed); }
@@ -48,21 +48,31 @@ for(const [label,localGuest,opponentGuest] of [['guest vs member',true,false],['
         assert.equal(f.run('isRanked'),false);
     });
 }
-test('registered match still changes ELO, win count and extended stats once',async()=>{
-    const f=fixture();f.ctx.handleNet({type:'HANDSHAKE',name:'Opponent',uid:'opponent',isGuest:false,protocol:3});
+test('browser-hosted matches never change ELO or official statistics',async()=>{
+    const f=fixture();f.ctx.handleNet({type:'HANDSHAKE',name:'Opponent',uid:'opponent',isGuest:false,protocol:4});
     await Promise.resolve();
     f.run('gameState.p1Slaps=2;gameState.p1Rounds=1;gameState.matchStartTime=Date.now()-10000');
     f.ctx.reportMatchResultInternal(true,null,'proof');
     f.ctx.reportMatchResultInternal(true,null,'proof');
-    assert.equal(f.writes(),1);assert.ok(f.profile().elo>1000);assert.equal(f.profile().wins,4);
-    assert.equal(f.profile().stats_slaps_won,12);assert.equal(f.profile().stats_rounds_won,9);assert.ok(f.profile().stats_total_time_sec>=110);
+    assert.equal(f.writes(),0);assert.equal(f.profile().elo,1000);assert.equal(f.profile().wins,3);
+    assert.equal(f.profile().stats_slaps_won,10);assert.equal(f.profile().stats_rounds_won,8);assert.equal(f.profile().stats_total_time_sec,100);
 });
 test('missing identity and legacy handshakes are unranked',()=>{
     const f=fixture();f.ctx.handleNet({type:'HANDSHAKE',name:'Unknown',uid:'opponent'});
     f.ctx.reportMatchResultInternal(false,null,'proof');assert.equal(f.writes(),0);
 });
+test('only the current peer protocol starts a match',()=>{
+    const current=fixture();current.run('gameState.isHost=false');
+    current.ctx.handleNet({type:'HANDSHAKE',name:'Opponent',uid:'opponent',isGuest:false,protocol:4});
+    assert.equal(current.run('gameState.protocolCompatible'),true);
+    assert.equal(current.run('gameState.handshakeDone'),true);
+    const legacy=fixture();legacy.run('gameState.isHost=false');
+    legacy.ctx.handleNet({type:'HANDSHAKE',name:'Opponent',uid:'opponent',isGuest:false,protocol:3});
+    assert.equal(legacy.run('gameState.protocolCompatible'),false);
+    assert.equal(legacy.run('gameState.handshakeDone'),false);
+});
 test('account switch during a match cannot write to the replacement account',async()=>{
-    const f=fixture();f.ctx.handleNet({type:'HANDSHAKE',name:'Opponent',uid:'opponent',isGuest:false,protocol:3});await Promise.resolve();
+    const f=fixture();f.ctx.handleNet({type:'HANDSHAKE',name:'Opponent',uid:'opponent',isGuest:false,protocol:4});await Promise.resolve();
     f.ctx.auth.currentUser={uid:'different'};f.ctx.reportMatchResultInternal(false,null,'proof');assert.equal(f.writes(),0);
 });
 test('starting guest mode signs out and provides a distinct guest identity',async()=>{
@@ -123,6 +133,63 @@ test('guest move followed immediately by uncover flip is accepted in host order'
  assert.equal(f.run("gameState.aiHand.some(c=>c.id==='played')"),false);
  f.ctx.adjudicateFlip({cardId:'next'},'ai');
  assert.equal(f.run("gameState.aiHand.find(c=>c.id==='next').isFaceUp"),true);
+});
+
+test('guest sends an immediate uncover flip to the host even before its local move mirror arrives',()=>{
+ const f=fixture(true);
+ f.run(`
+  gameState.isHost=false;gameState.matchLive=true;gameState.gameActive=true;
+  var outgoing=[];sendNet=function(message){outgoing.push(message)};
+  const next={id:'next',isFaceUp:false,laneIndex:0};
+  const played={id:'played',isFaceUp:true,laneIndex:0,pendingMove:'move-1'};
+  gameState.playerHand=[next,played,{id:'f1',isFaceUp:true,laneIndex:1},{id:'f2',isFaceUp:true,laneIndex:2},{id:'f3',isFaceUp:true,laneIndex:3}];
+  tryFlipCard(null,next);
+ `);
+ assert.equal(f.run('outgoing.length'),1);
+ assert.equal(f.run('outgoing[0].type'),'FLIP_REQ');
+ assert.equal(f.run('outgoing[0].flip.cardId'),'next');
+ assert.ok(f.run('outgoing[0].flip.reqId'));
+ assert.ok(f.run("gameState.playerHand.find(c=>c.id==='next').flipPending"));
+});
+
+test('guest snapshots do not contain the opponent’s hidden cards',()=>{
+ const f=fixture(true);
+ f.run(`
+  gameState.isHost=true;
+  gameState.playerDeck=[{id:'opp-deck',suit:'clubs',rank:'ace',value:14}];
+  gameState.aiDeck=[{id:'my-deck',suit:'hearts',rank:'2',value:2}];
+  gameState.playerHand=[
+   {id:'opp-hidden',suit:'clubs',rank:'king',value:13,isFaceUp:false,laneIndex:0},
+   {id:'opp-open',suit:'spades',rank:'queen',value:12,isFaceUp:true,laneIndex:1}
+  ];
+  gameState.aiHand=[{id:'my-hidden',suit:'diamonds',rank:'jack',value:11,isFaceUp:false,laneIndex:0}];
+  var snapshot=buildGuestState();
+ `);
+ assert.equal(f.run('snapshot.aiDeck[0].rank'),undefined);
+ assert.equal(f.run('snapshot.aiHand.find(c=>c.id==="opp-hidden").rank'),undefined);
+ assert.equal(f.run('snapshot.aiHand.find(c=>c.id==="opp-open").rank'),'queen');
+ assert.equal(f.run('snapshot.playerHand[0].rank'),'jack');
+});
+
+test('a revision gap requests an authoritative snapshot instead of applying stale state',()=>{
+ const f=fixture(true);
+ f.run(`
+  gameState.isHost=false;gameState.lastAppliedRevision=2;
+  var outgoing=[];sendNet=function(message){outgoing.push(message)};
+  handleNet({type:'MOVE_APPLY',revision:4,apply:{}});
+ `);
+ assert.equal(f.run('outgoing.length'),1);
+ assert.equal(f.run('outgoing[0].type'),'SYNC_REQ');
+ assert.equal(f.run('outgoing[0].reason'),'revision_gap');
+ assert.equal(f.run('gameState.lastAppliedRevision'),2);
+});
+
+test('legacy friend-tournament matches route to the maintained protocol',()=>{
+ const legacy=fs.readFileSync(path.join(root,'friend-tournament-game.html'),'utf8');
+ const launcher=fs.readFileSync(path.join(root,'friend-match.html'),'utf8');
+ assert.match(legacy,/location\.replace\('multiplayer-game\.html\?'/);
+ assert.match(launcher,/multiplayer-game\.html\?legacyTournament=1/);
+ assert.match(fs.readFileSync(path.join(root,'tournament-game.html'),'utf8'),/src="slaps-engine\.js"/);
 });
 
 test('online move path no longer calls the undefined legacy sudden-death function',()=>{
