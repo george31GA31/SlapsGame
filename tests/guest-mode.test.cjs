@@ -19,7 +19,8 @@ function fixture(guest = false) {
     const ctx = { console: {log(){}, warn(){}, error(){}}, localStorage:{getItem:k=>saved.get(k)??null,setItem:(k,v)=>saved.set(k,String(v)),removeItem:k=>saved.delete(k)},
         document:{getElementById:id=>{if(!elements.has(id))elements.set(id,element());return elements.get(id)},querySelector:()=>element(),querySelectorAll:()=>[],createElement:element,body:element(),addEventListener(){}},
         auth, db, firebase:{auth:()=>auth,database:()=>db}, location:{href:''}, addEventListener(){},
-        setTimeout(){},clearTimeout(){},setInterval(){return 1},clearInterval(){}, crypto:require('node:crypto').webcrypto, Date, Map, Set, Math, alert(){} };
+        setTimeout(){},clearTimeout(){},setInterval(){return 1},clearInterval(){}, crypto:require('node:crypto').webcrypto, Date, Map, Set, Math, alert(){},
+        GameVisuals:{flip(){},stopFlip(){}},CardLayout:{attach(){}} };
     ctx.window = ctx;
     vm.createContext(ctx);
     for(const file of ['session.js','elo-engine.js','slaps-engine.js','network-guard.js','multiplayer-game.js']) vm.runInContext(fs.readFileSync(path.join(root,file),'utf8'),ctx,{filename:file});
@@ -169,6 +170,20 @@ test('guest snapshots do not contain the opponent’s hidden cards',()=>{
  assert.equal(f.run('snapshot.aiHand.find(c=>c.id==="opp-hidden").rank'),undefined);
  assert.equal(f.run('snapshot.aiHand.find(c=>c.id==="opp-open").rank'),'queen');
  assert.equal(f.run('snapshot.playerHand[0].rank'),'jack');
+});
+
+test('a guest keeps the host lane layout, so each visible top matches the host rule state',async()=>{
+ const f=fixture(true);f.ctx.document.dispatchEvent=()=>{};f.ctx.Event=class{constructor(type){this.type=type;}};f.run('gameState.isHost=false;preloadCardImages=async()=>{};');
+ const card=(id,lane,isFaceUp)=>({id,suit:'hearts',rank:'2',value:2,isFaceUp,laneIndex:lane});
+ const state={playerTotal:26,aiTotal:26,playerDeck:[],aiDeck:[],playerHand:[
+  card('lane-3-top',3,true),card('lane-2-bottom',2,false),card('lane-2-top',2,true),
+  card('lane-1-bottom',1,false),card('lane-1-middle',1,false),card('lane-1-top',1,true),
+  card('lane-0-bottom',0,false),card('lane-0-middle',0,false),card('lane-0-next',0,false),card('lane-0-top',0,true)
+ ],aiHand:[],centerPileLeft:[],centerPileRight:[],gameActive:false,matchLive:true,playerReady:false,aiReady:false,drawLock:false};
+ await f.ctx.startRoundJoinerFromState(state);
+ const lanes=JSON.parse(f.run('JSON.stringify(Object.fromEntries(gameState.playerHand.map(c=>[c.id,c.laneIndex])))'));
+ assert.equal(lanes['lane-0-next'],0);assert.equal(lanes['lane-0-top'],0);
+ assert.equal(lanes['lane-1-top'],1);assert.equal(lanes['lane-2-top'],2);assert.equal(lanes['lane-3-top'],3);
 });
 
 test('a revision gap requests an authoritative snapshot instead of applying stale state',()=>{

@@ -1059,7 +1059,10 @@ async function startRoundJoinerFromState(state) {
 
     await preloadCardImages([...gameState.playerHand, ...gameState.aiHand]);
     if (roundEpoch !== gameState.roundEpoch) return;
-    renderImportedState(false);
+    // The host sends the actual lane membership and exposed cards. Re-dealing
+    // this list locally changes which card appears to be on top of a stack,
+    // so a guest can click a card the host still considers covered.
+    renderImportedState(true);
     
     const bp = document.getElementById('borrowed-player');
     const ba = document.getElementById('borrowed-ai');
