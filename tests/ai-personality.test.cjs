@@ -2,27 +2,24 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
+const SlapsEngine = require('../slaps-engine.js');
 
 function loadAI(difficulty = 5) {
     const ctx = {
         gameState: {
+            phase: 'active',
             difficulty,
             aiInChain: false,
             playerHand: [{ value: 9 }, { value: 3 }],
             aiHand: [
                 { id: 'a', isFaceUp: true, value: 5, laneIndex: 0 },
-                { id: 'b', isFaceUp: true, value: 8, laneIndex: 1 },
+                { id: 'b', isFaceUp: false, value: 8, laneIndex: 1 },
                 { id: 'c', isFaceUp: true, value: 12, laneIndex: 1 }
             ],
             centerPileLeft: [{ value: 4 }],
             centerPileRight: [{ value: 9 }]
         },
-        checkPileLogic(card, pile) {
-            if (!pile.length) return false;
-            const top = pile[pile.length - 1];
-            const difference = Math.abs(card.value - top.value);
-            return difference === 1 || difference === 12;
-        },
+        SlapsEngine,
         performance: { now: () => 1000 },
         setTimeout() {},
         clearTimeout() {},
@@ -46,11 +43,12 @@ test('AI personality exposes helpers and overrides the bot decision functions', 
 
 test('AI personality only proposes moves that are legal on the current piles', () => {
     const ctx = loadAI();
-    const moves = ctx.SlapsAI.legalCandidates(ctx.gameState.aiHand);
+    const moves = ctx.SlapsAI.legalCandidates();
     assert.ok(moves.length > 0);
     for (const move of moves) {
         const pile = move.t === 'left' ? ctx.gameState.centerPileLeft : ctx.gameState.centerPileRight;
-        assert.equal(ctx.checkPileLogic(move.c, pile), true);
+        assert.equal(ctx.SlapsEngine.canPlayOnPile(move.c, pile), true);
+        assert.equal(move.c.isFaceUp, true);
     }
 });
 

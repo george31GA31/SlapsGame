@@ -341,6 +341,20 @@ body.game-body::before {
     transition:box-shadow 90ms ease,filter 90ms ease,scale 90ms ease,translate 90ms ease;
 }
 
+.game-body #player-foundation-area [data-covered="true"],
+.game-body .foundation-drag-preview,
+.game-body .foundation-flip-preview {
+    pointer-events:none !important;
+}
+
+.game-body .foundation-drag-preview {
+    position:fixed;
+    z-index:4000 !important;
+    translate:0 0;
+    scale:1;
+    transition:none;
+}
+
 .game-body .player-card:hover {
     translate:0 -2px;
     box-shadow:0 7px 12px rgba(0,0,0,.4),0 1px 1px rgba(255,255,255,.28) inset;
