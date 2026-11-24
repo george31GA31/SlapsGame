@@ -12,7 +12,11 @@ window.GameVisuals = {
         // A presentation overlay hides the new face only until the edge-on midpoint.
         if (!previousFace || !img.parentElement) return;
         const back = img.cloneNode(false);
-        back.removeAttribute('id'); back.removeAttribute('tabindex');
+        for (const attribute of ['id', 'tabindex', 'data-card-id', 'data-covered', 'data-lane']) {
+            back.removeAttribute(attribute);
+        }
+        back.classList.remove('player-card', 'opponent-card', 'is-held');
+        back.classList.add('foundation-flip-preview');
         back.src = previousFace;
         back.setAttribute('aria-hidden', 'true');
         back.style.pointerEvents = 'none';
@@ -34,7 +38,9 @@ window.GameVisuals = {
         frontAnimation.addEventListener('finish', () => {back.remove(); this.animations.delete(img);}, {once:true});
     },
     land(img) {
-        if (!img?.animate || img.classList.contains('pending-reveal') || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+        if (!img?.animate || img.classList.contains('pending-reveal') ||
+            img.classList.contains('foundation-flip-preview') ||
+            window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
         img.animate([
             {translate:'0 -6px', scale:'.985', opacity:.9},
             {translate:'0 0', scale:'1', opacity:1}
@@ -54,7 +60,7 @@ window.SlapsFeedback = {
     timer: null,
     flipReason(reason) {
         return {
-            covered: 'That card is still covered. Reveal the card on top of that stack first.',
+            covered: 'That card is still covered. Play the top card from this stack first.',
             face_up_limit: 'You already have four cards open.',
             pending_move: 'That card is already being played.',
             already_face_up: 'That card is already open.',

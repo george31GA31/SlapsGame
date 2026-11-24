@@ -20,7 +20,7 @@
 </head>
 <body class="page-game game-body" ondragstart="return false;" ondrop="return false;">
     <div class="bottom-left-actions">
-    <button class="btn-action-small btn-quit" onclick="window.location.href='index.html'">
+    <button class="btn-action-small btn-quit" onclick="concedeSoloMatch()">
         <i class="fa-solid fa-door-open"></i> Quit Match
     </button>
     <button class="btn-action-small" onclick="window.location.reload()">
@@ -92,6 +92,7 @@
     </div>
 
     <script src="slaps-engine.js"></script>
+    <script src="foundation-input.js"></script>
     <script src="game.js"></script>
     <script src="ai-personality.js"></script>
 <script src="match-presentation.js"></script>

@@ -1,5 +1,14 @@
 
 window.__qaErrors=[];addEventListener('error',e=>window.__qaErrors.push(e.message));
+// Reproduce a shuffled deal while using the normal game controls and engine.
+const qaSeed = new URLSearchParams(location.search).get('qaSeed');
+if (qaSeed !== null && /^\d{1,10}$/.test(qaSeed)) {
+    let state = Number(qaSeed) >>> 0;
+    Math.random = () => {
+        state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+        return state / 4294967296;
+    };
+}
 const qaUser={uid:'qa-member',isAnonymous:false,displayName:'Test Player'};
 let currentUser=null;
 const qaPlayers=Array.from({length:80},(_,i)=>({username:'PLAYER'+i,firstName:'Test',lastName:'Player '+i,elo:1000+i,wins:i,losses:0,flag:'assets/flags/United States of America.png'}));
