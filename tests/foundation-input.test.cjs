@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { attach, dropSide } = require('../foundation-input.js');
+const { attach, dropSide, measure, recheck, render } = require('../foundation-input.js');
 
 const rect = (left, top, width, height) => ({
     left, top, right: left + width, bottom: top + height, width, height
@@ -44,9 +44,19 @@ function fixture() {
     const first = toyCard(doc);
     const second = toyCard(doc);
     const plays = [];
+    const moves = [];
     const phases = [];
+    let reveals = 0;
+    let accessible = true;
     let legal = true;
-    const options = { canLift: () => legal, play: side => plays.push(side), onDrag: info => phases.push(info.phase) };
+    const options = {
+        canMove: () => accessible,
+        canLeave: () => legal,
+        play: side => plays.push(side),
+        move: position => moves.push(position),
+        reveal: () => { reveals++; },
+        onDrag: info => phases.push(info.phase)
+    };
     attach(first, options);
     attach(second, options);
     const down = (card, pointerId, isPrimary = true) => card.dispatchEvent(event('pointerdown', {
@@ -55,7 +65,8 @@ function fixture() {
     const update = (type, pointerId, clientX, clientY) => view.dispatchEvent(event(type, {
         pointerId, clientX, clientY, pointerType: 'touch'
     }));
-    return { first, second, down, update, plays, phases, previews, allow: value => { legal = value; } };
+    return { first, second, down, update, plays, moves, phases, previews, reveals: () => reveals,
+        allow: value => { accessible = legal = value; }, leave: value => { legal = value; } };
 }
 
 test('drop targets use centre rectangles and can catch a card held by a corner', () => {
@@ -77,7 +88,7 @@ test('touch drag may leave Foundation and release on either centre target', () =
         assert.equal(f.previews.at(-1).isConnected, false);
     }
     assert.deepEqual(f.plays, ['left', 'right']);
-    assert.deepEqual(f.phases, ['start', 'move', 'end', 'start', 'move', 'end']);
+    assert.deepEqual(f.phases.filter(phase => phase !== 'move'), ['start', 'end', 'start', 'end']);
 });
 
 test('a competing pointer, cancelled gesture and draw-area drop never consume a card', () => {
@@ -100,6 +111,7 @@ test('a competing pointer, cancelled gesture and draw-area drop never consume a 
     f.down(f.first, 4);
     f.update('pointermove', 4, 135, 130);
     f.update('pointerup', 4, 75, 248);
+    assert.equal(f.moves.length, 1);
     f.down(f.first, 5);
     f.update('pointermove', 5, 202, 130);
     f.update('pointerup', 5, 316, 130);
@@ -119,4 +131,61 @@ test('unavailable and repeated actions do not take the pointer lock or play', ()
     f.first.dispatchEvent(event('keydown', { key: ' ' }));
     f.first.dispatchEvent(event('keydown', { key: 'ArrowLeft' }));
     assert.deepEqual(f.plays, ['left']);
+});
+
+test('an unplayable or face-down card can be rearranged, and tapping instead reveals it', () => {
+    const f = fixture();
+    f.leave(false);
+    f.down(f.first, 1);
+    f.update('pointermove', 1, 243, 259);
+    f.update('pointerup', 1, 243, 259);
+    assert.deepEqual(f.plays, []);
+    assert.equal(f.moves.length, 1);
+    assert.ok(f.moves[0].x > 3 && f.moves[0].y > 0.5);
+    assert.equal(f.reveals(), 0);
+
+    f.down(f.first, 2);
+    f.update('pointerup', 2, 52, 230);
+    assert.equal(f.reveals(), 1);
+    assert.equal(f.moves.length, 1);
+});
+
+test('a forced reveal can invalidate the held card; the preview clamps and the release does not play', () => {
+    const f = fixture();
+    f.down(f.first, 1);
+    f.update('pointermove', 1, 145, 124);
+    const preview = f.previews.at(-1);
+    assert.match(preview.style.translate, /-106px$/);
+    f.leave(false);
+    recheck();
+    const offsetY = Number(preview.style.translate.split(' ')[1].slice(0, -2));
+    assert.ok(offsetY + 220 >= foundation.top);
+    f.update('pointerup', 1, 145, 124);
+    assert.equal(f.first.style.visibility, '');
+    assert.deepEqual(f.moves, []);
+    assert.deepEqual(f.plays, []);
+});
+
+test('spatial rendering projects the same overlap and z-order on wide and narrow viewports', () => {
+    const board = {
+        clientWidth: 1000, clientHeight: 170, clientLeft: 1, clientTop: 1,
+        dataset: {}, style: { setProperty() {} },
+        getBoundingClientRect() { return rect(0, 0, this.clientWidth, this.clientHeight); }
+    };
+    const bounds = measure(board);
+    assert.ok(bounds.width > 10 && bounds.height >= 1.4999);
+    const lower = { element: { style: {} }, foundation: { x: 1, y: 0.2, z: 1 } };
+    const upper = { element: { style: {} }, foundation: { x: 1.5, y: 0.2, z: 7 } };
+    const verifyOverlap = () => {
+        const width = parseFloat(lower.element.style.width);
+        const distance = parseFloat(upper.element.style.left) - parseFloat(lower.element.style.left);
+        assert.ok(Math.abs(distance / width - 0.5) < 1e-9);
+        assert.equal(upper.element.style.zIndex, '11');
+    };
+    render(board, [upper, lower], card => card.foundation, { bounds });
+    verifyOverlap();
+    Object.assign(board, { clientWidth: 380, clientHeight: 245 });
+    render(board, [upper, lower], card => card.foundation, { bounds });
+    verifyOverlap();
+    assert.equal(board.dataset.spatialFoundation, 'true');
 });

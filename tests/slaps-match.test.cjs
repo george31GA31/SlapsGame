@@ -18,11 +18,17 @@ function fixture(layout, filler = 'aiDeck') {
     const remaining = Object.values(zones).flat();
     for (const zone of Object.values(zones)) zone.length = 0;
     for (const [zone, entries] of Object.entries(layout)) {
-        for (const [rank, laneIndex = 0, isFaceUp = zone.endsWith('Hand'), owner = zone.startsWith('ai') ? 'ai' : 'player'] of entries) {
+        const depths = new Map();
+        for (const [rank, column = 0, isFaceUp = zone.endsWith('Hand'), owner = zone.startsWith('ai') ? 'ai' : 'player'] of entries) {
             const index = remaining.findIndex(card => card.rank === rank);
             assert.notEqual(index, -1, `fixture has no remaining ${rank}`);
             const [card] = remaining.splice(index, 1);
-            Object.assign(card, { owner, laneIndex, isFaceUp });
+            Object.assign(card, { owner, isFaceUp });
+            if (zone.endsWith('Hand')) {
+                const depth = depths.get(column) || 0;
+                depths.set(column, depth + 1);
+                card.foundation = { x: 0.2 + column * 1.25, y: 0.4 + depth * 0.075, z: zones[zone].length + 1 };
+            }
             zones[zone].push(card);
         }
     }
@@ -31,6 +37,12 @@ function fixture(layout, filler = 'aiDeck') {
     state.phase = 'active';
     state.roundStarted = true;
     state.slapActive = Engine.isSlapAvailable(state.centerPileLeft, state.centerPileRight);
+    for (const seat of SEATS) {
+        const holding = state[seat + 'Holding'].length;
+        const draws = state.playerDeck.concat(state.aiDeck).filter(card => card.owner === seat).length;
+        state[seat + 'SlapCards'] = holding;
+        state[seat + 'Total'] = state[seat + 'Hand'].length + draws + holding;
+    }
     return state;
 }
 
@@ -46,7 +58,9 @@ function assertCards(state, context = '', identities) {
         const exposed = Engine.getExposedCards(hand);
         assert.ok(Engine.countFaceUp(hand) <= 4, context);
         assert.ok(hand.every(card => card.owner === seat), context);
-        assert.ok(hand.every(card => !card.isFaceUp || exposed.includes(card)), context);
+        const bounds = Engine.getFoundationBounds(state, seat);
+        assert.ok(hand.every(card => Engine.isValidFoundationPosition(card.foundation, bounds)), context);
+        assert.equal(new Set(hand.map(card => card.foundation.z)).size, hand.length, context);
         assert.ok(state[seat + 'Holding'].every(card => card.owner === seat && !card.isFaceUp), context);
         assert.ok(state[seat + 'RoundCards'].every(card => card.owner === seat && !card.isFaceUp), context);
         assert.equal(state[seat + 'SlapCards'], state[seat + 'Holding'].length, context);
@@ -68,7 +82,8 @@ test('starts with 26 distinct owned cards per player, 4–3–2–1 Foundations,
     assert.equal(Engine.startRound(state, random).reason, 'round_unavailable');
     for (const seat of SEATS) {
         const hand = state[seat + 'Hand'];
-        assert.deepEqual([0, 1, 2, 3].map(lane => hand.filter(card => card.laneIndex === lane).length), [4, 3, 2, 1]);
+        const columns = [...new Set(hand.map(card => card.foundation.x))];
+        assert.deepEqual(columns.map(x => hand.filter(card => card.foundation.x === x).length), [4, 3, 2, 1]);
         assert.equal(Engine.countFaceUp(hand), 4);
         assert.equal(state[seat + 'Deck'].length, 16);
     }
@@ -96,8 +111,6 @@ test('plays from exposed sub-piles, rejects the wrong Centre, and preserves cove
     assert.equal(Engine.playFoundation(state, 'player', first, 'left').reason, 'not_playable');
     assert.equal(Engine.playFoundation(state, 'player', jack, 'right').reason, 'not_playable');
     assert.equal(Engine.playFoundation(state, 'ai', first, 'left').reason, 'not_in_hand');
-    // Repositioning never changes the Foundation array, and an untouched lane never covers another lane.
-    Object.assign(replacement, { layout: { x: 0.2, y: 0.9 } });
     assert.equal(Engine.getExposedCards(state.playerHand).includes(first), true);
     assert.equal(Engine.countFaceUp(state.playerHand), 2);
     assert.equal(Engine.flipFoundation(state, 'player', replacement).reason, 'covered');
@@ -209,7 +222,7 @@ test('playing away from matching Centre ranks closes the earlier slap opportunit
     assertCards(state);
 });
 
-test('Draw Deck restart is blocked by legal plays and exposed flips, and succeeds on a true stalemate', () => {
+test('a natural restart waits for legal plays and exposed flips, then succeeds on a true stalemate', () => {
     const state = fixture({
         playerHand: [['queen', 0, false], ['7', 1]], aiHand: [['jack']],
         playerDeck: [['2']], aiDeck: [['2']], centerPileLeft: [['6']], centerPileRight: [['4']]
@@ -376,18 +389,220 @@ test('concessions award the opponent a round only after an opening reveal', () =
     }
 });
 
-test('1,000 seeded full matches conserve cards and always expose an action or restart', t => {
-    const summary = { matches: 0, actions: 0, rounds: 0, slaps: 0, loans: 0, recycled: 0, redeals: 0 };
-    for (let seed = 1; seed <= 1000; seed++) {
+test('clearing an original pile frees capacity to move an unplayable cover and restore four face-up cards', () => {
+    const state = fixture({
+        playerHand: [['5', 0, false], ['9', 0], ['jack', 1], ['queen', 2], ['7', 3]],
+        aiHand: [['10']], centerPileLeft: [['6']], centerPileRight: [['2']]
+    });
+    const [lower, blocker, jack, queen, seven] = state.playerHand;
+    const vacant = seven.foundation;
+    const untouched = [jack.foundation, queen.foundation];
+    assert.equal(Engine.playFoundation(state, 'player', seven, 'left').ok, true);
+    assert.equal(Engine.countFaceUp(state.playerHand), 3);
+    assert.equal(Engine.canTakeOutside(state, 'player', blocker), false);
+    assert.equal(Engine.flipFoundation(state, 'player', lower).reason, 'covered');
+    const position = Engine.moveFoundation(state, 'player', blocker, { x: vacant.x, y: vacant.y, z: 50000 });
+    assert.equal(position.ok, true);
+    assert.notEqual(position.position.z, 50000);
+    assert.deepEqual([position.position.x, position.position.y], [vacant.x, vacant.y]);
+    assert.deepEqual([jack.foundation, queen.foundation], untouched);
+    assert.equal(Engine.flipFoundation(state, 'player', lower).ok, true);
+    assert.equal(Engine.countFaceUp(state.playerHand), 4);
+    assert.equal(blocker.owner, 'player');
+    assertCards(state);
+});
+
+test('geometry distinguishes a movable strip from full exposure and combined occlusion', () => {
+    const state = fixture({ playerHand: [['7', 0, false], ['9', 1], ['10', 2]], aiHand: [['ace']] });
+    const [lower, left, right] = state.playerHand;
+    lower.foundation = { x: 1, y: 0.4, z: 1 };
+    left.foundation = { x: 0.5, y: 0.4, z: 2 };
+    right.foundation = { x: 1.5, y: 0.4, z: 3 };
+    assert.deepEqual(Engine.getFoundationExposure(state.playerHand, lower), { accessible: false, exposed: false });
+    assert.equal(Engine.moveFoundation(state, 'player', lower, { x: 2.5, y: 0 }).reason, 'covered');
+    assert.equal(Engine.moveFoundation(state, 'ai', right, { x: 3.7, y: 0.4 }).reason, 'not_in_hand');
+    assert.equal(Engine.moveFoundation(state, 'player', right, { x: 3.7, y: 0.4 }).ok, true);
+    assert.deepEqual(Engine.getFoundationExposure(state.playerHand, lower), { accessible: true, exposed: false });
+    assert.equal(Engine.flipFoundation(state, 'player', lower).reason, 'covered');
+    assert.equal(Engine.canTakeOutside(state, 'player', lower), false);
+    const previous = lower.foundation;
+    for (const invalid of [{ x: -0.001, y: 0 }, { x: 2, y: 1.16 }, { x: NaN, y: 0 }, { x: '2', y: 0 }]) {
+        assert.equal(Engine.moveFoundation(state, 'player', lower, invalid).reason, 'outside_foundation');
+        assert.equal(lower.foundation, previous);
+    }
+    assert.equal(Engine.moveFoundation(state, 'player', lower, { x: 5.2, y: 0.1 }).ok, true);
+    assert.equal(lower.isFaceUp, false);
+    assert.deepEqual(Engine.getFoundationExposure(state.playerHand, lower), { accessible: true, exposed: true });
+    assert.deepEqual(JSON.parse(JSON.stringify(lower.foundation)), lower.foundation);
+});
+
+test('per-seat Foundation boards permit placements that fit the seat and preserve their bounds', () => {
+    const random = seeded(42);
+    const state = Engine.initializeMatch({}, random);
+    const player = { width: 10, height: 1.55 };
+    assert.equal(Engine.startRound(state, random, { player: { width: 3, height: 1 } }).reason, 'invalid_foundation_bounds');
+    assert.equal(Engine.startRound(state, random, { player }).ok, true);
+    const [playerTop] = Engine.getExposedCards(state.playerHand);
+    const [opponentTop] = Engine.getExposedCards(state.aiHand);
+    const farSide = { x: 8.9, y: 0.5 };
+    assert.equal(Engine.moveFoundation(state, 'player', playerTop, farSide).ok, true);
+    assert.equal(Engine.moveFoundation(state, 'ai', opponentTop, farSide).reason, 'outside_foundation');
+    assert.deepEqual(Engine.getFoundationBounds(state, 'player'), player);
+    assertCards(state);
+});
+
+test('positioning a face-up card under a new cover does not create capacity for a fifth', () => {
+    const state = fixture({ playerHand: [['3'], ['4', 1], ['5', 2], ['6', 3], ['7', 4, false]] });
+    const [under, cover, , , fifth] = state.playerHand;
+    assert.equal(Engine.moveFoundation(state, 'player', cover, under.foundation).ok, true);
+    assert.deepEqual(Engine.getFoundationExposure(state.playerHand, under), { accessible: false, exposed: false });
+    assert.equal(Engine.countFaceUp(state.playerHand), 4);
+    assert.equal(Engine.flipFoundation(state, 'player', fifth).reason, 'face_up_limit');
+    assert.equal(fifth.isFaceUp, false);
+});
+
+test('preparation moves a blocker before a natural stalemate and never reads a hidden rank', () => {
+    const state = fixture({
+        playerHand: [['6', 0, false], ['8', 0], ['ace', 1, false], ['queen', 1]],
+        aiHand: [['king']], centerPileLeft: [['2']], centerPileRight: [['4']]
+    });
+    const [covered] = state.playerHand;
+    assert.deepEqual(Engine.availableMoves(state, 'player'), []);
+    assert.equal(Engine.canRestart(state), false);
+    for (let count = 0; count < 4; count++) {
+        const view = state.playerHand.map(card => ({
+            id: card.id, isFaceUp: card.isFaceUp, foundation: { ...card.foundation },
+            get rank() { throw new Error('Foundation preparation must not read rank'); }
+        }));
+        const action = Engine.planFoundationPreparation(view, Engine.getFoundationBounds(state, 'player'));
+        assert.ok(action);
+        const model = state.playerHand.find(card => card.id === action.card.id);
+        const result = action.type === 'move' ? Engine.moveFoundation(state, 'player', model, action.position)
+            : Engine.flipFoundation(state, 'player', model);
+        assert.equal(result.ok, true);
+        if (count === 0) {
+            assert.equal(action.type, 'move');
+            assert.equal(covered.isFaceUp, false);
+        }
+    }
+    assert.equal(Engine.countFaceUp(state.playerHand), 4);
+    assert.equal(Engine.planFoundationPreparation(state.playerHand), null);
+    assertCards(state);
+});
+
+test('preparation fills and settles even after arbitrary overlaps instead of cycling blockers', () => {
+    for (let seed = 1; seed <= 400; seed++) {
         const random = seeded(seed);
         const state = Engine.initializeMatch({}, random);
+        const bounds = seed % 2 ? { width: 6.4, height: 2.15 } : { width: 10, height: 1.55 };
+        Engine.startRound(state, random, { ai: bounds });
+        Engine.revealDraw(state, { random });
+        const hand = state.aiHand;
+        hand.forEach((card, index) => {
+            card.foundation = { x: random() * (bounds.width - 1), y: random() * (bounds.height - 1), z: index + 1 };
+            card.isFaceUp = index <= seed % 4;
+        });
+        let attempts = 0;
+        for (; attempts < 35; attempts++) {
+            const choice = Engine.planFoundationPreparation(hand, bounds);
+            if (!choice) break;
+            const result = choice.type === 'move' ? Engine.moveFoundation(state, 'ai', choice.card, choice.position)
+                : Engine.flipFoundation(state, 'ai', choice.card);
+            assert.equal(result.ok, true, `seed ${seed}, attempt ${attempts}, ${result.reason}`);
+        }
+        assert.equal(Engine.countFaceUp(hand), 4, `seed ${seed}`);
+        assert.ok(attempts < 35, `seed ${seed} cycled blockers`);
+        assertCards(state, `seed ${seed}`);
+    }
+});
+
+test('either seat can force one coordinated reveal while both have moves, and a second request on that basis is stale', () => {
+    const state = fixture({
+        playerHand: [['7']], aiHand: [['5']], playerDeck: [['10']], aiDeck: [['10']],
+        centerPileLeft: [['6']], centerPileRight: [['2']]
+    });
+    const [held] = state.playerHand;
+    const original = held.foundation;
+    const basis = state.revealRevision;
+    const oldLeft = state.centerPileLeft[0];
+    const oldRight = state.centerPileRight[0];
+    assert.equal(Engine.canTakeOutside(state, 'player', held), true);
+    assert.ok(Engine.availableMoves(state, 'ai').length);
+    assert.equal(Engine.revealDraw(state, { expectedReveal: basis }).reason, 'moves_available');
+    const forced = Engine.revealDraw(state, { force: true, expectedReveal: basis });
+    assert.equal(forced.ok, true);
+    assert.equal(forced.revealRevision, basis + 1);
+    assert.equal(forced.slapAvailable, true);
+    assert.deepEqual(state.centerPileLeft, [oldLeft, forced.cards.ai]);
+    assert.deepEqual(state.centerPileRight, [oldRight, forced.cards.player]);
+    assert.equal(Engine.revealDraw(state, { force: true, expectedReveal: basis }).reason, 'stale_reveal');
+    assert.equal(Engine.canTakeOutside(state, 'player', held), false);
+    assert.equal(Engine.playFoundation(state, 'player', held, 'left').reason, 'not_playable');
+    assert.equal(held.foundation, original);
+    const slap = Engine.takeSlap(state, 'ai');
+    assert.equal(slap.ok, true);
+    assert.equal(held.foundation, original);
+    assert.equal(Engine.revealDraw(state, { force: true, expectedReveal: forced.revealRevision }).reason, 'stale_reveal');
+    assertCards(state);
+});
+
+test('a forced reveal cannot roll back an already completed round', () => {
+    const state = fixture({
+        playerHand: [['7']], aiHand: [['5']], playerDeck: [['10']], aiDeck: [['10']],
+        centerPileLeft: [['6']], centerPileRight: [['2']]
+    });
+    const basis = state.revealRevision;
+    assert.equal(Engine.playFoundation(state, 'player', state.playerHand[0], 'left').finishedRound, true);
+    assert.equal(Engine.revealDraw(state, { force: true, expectedReveal: basis }).reason, 'inactive');
+    assert.equal(state.p1Rounds, 1);
+    assertCards(state);
+});
+
+test('forced reveals apply the top-half loan and recycle both empty Draw Decks without repositioning Foundations', () => {
+    const shorted = fixture({
+        playerHand: [['7']], aiHand: [['ace']], aiDeck: [['3'], ['2'], ['10']],
+        centerPileLeft: [['6']], centerPileRight: [['4']]
+    }, 'aiHolding');
+    const card = shorted.playerHand[0];
+    const position = card.foundation;
+    const [extra, donorReveal, loan] = shorted.aiDeck;
+    assert.equal(Engine.canTakeOutside(shorted, 'player', card), true);
+    const split = Engine.revealDraw(shorted, { force: true });
+    assert.equal(split.cards.player, loan);
+    assert.equal(split.cards.ai, donorReveal);
+    assert.deepEqual(shorted.aiDeck, [extra]);
+    assert.equal(loan.owner, 'ai');
+    assert.equal(card.foundation, position);
+    assertCards(shorted);
+
+    const exhausted = fixture({
+        playerHand: [['7']], aiHand: [['ace']], centerPileLeft: [['5'], ['6']], centerPileRight: [['2']]
+    }, 'aiHolding');
+    const centre = exhausted.centerPileLeft.concat(exhausted.centerPileRight);
+    const opponentPose = exhausted.aiHand[0].foundation;
+    assert.equal(Engine.canRestart(exhausted), false);
+    const recycled = Engine.revealDraw(exhausted, { force: true, random: seeded(21) });
+    assert.equal(recycled.recycled, true);
+    assert.equal(exhausted.aiHand[0].foundation, opponentPose);
+    const temporary = exhausted.centerPileLeft.concat(exhausted.centerPileRight, exhausted.playerDeck, exhausted.aiDeck);
+    assert.ok(temporary.every(entry => centre.includes(entry) && entry.owner === null));
+    assertCards(exhausted);
+});
+
+test('2,400 seeded full matches exercise spatial Foundations and strategic restarts without losing cards', t => {
+    const total = 2400;
+    const summary = { matches: 0, actions: 0, rounds: 0, slaps: 0, loans: 0, recycled: 0, redeals: 0, moves: 0, forced: 0 };
+    for (let seed = 1; seed <= total; seed++) {
+        const random = seeded(seed);
+        const state = Engine.initializeMatch({}, random);
+        const bounds = seed % 2 === 0 ? { player: { width: 10, height: 1.55 }, ai: { width: 10, height: 1.55 } } : {};
         const identities = new Map(Object.values(Engine.cardZones(state)).flat().map(card => [card.id, card]));
         let actions = 0;
         while (state.phase !== 'match_over' && actions < 10000) {
             const context = `seed ${seed}, action ${actions}, phase ${state.phase}`;
             let outcome;
             if (state.phase === 'round_over') {
-                outcome = Engine.startRound(state, random);
+                outcome = Engine.startRound(state, random, bounds);
             } else if (state.phase === 'awaiting_reveal') {
                 outcome = Engine.revealDraw(state, { random });
             } else if (state.slapActive && random() < 0.9) {
@@ -396,15 +611,23 @@ test('1,000 seeded full matches conserve cards and always expose an action or re
             } else {
                 const decisions = SEATS.flatMap(seat => {
                     const hand = state[seat + 'Hand'];
-                    const plays = Engine.availableMoves(state, seat).map(move => ({ ...move, seat, play: true }));
-                    const flips = Engine.getExposedCards(hand).filter(card => Engine.canFlipCard(hand, card).ok)
-                        .map(card => ({ card, seat, play: false }));
-                    return plays.concat(flips);
+                    const plays = Engine.availableMoves(state, seat).map(move => ({ ...move, seat, type: 'play' }));
+                    const preparation = Engine.planFoundationPreparation(hand, Engine.getFoundationBounds(state, seat));
+                    if (preparation) plays.push({ ...preparation, seat });
+                    return plays;
                 });
-                if (decisions.length) {
+                if (decisions.length && random() < (seed % 10) / 300) {
+                    const expectedReveal = state.revealRevision;
+                    outcome = Engine.revealDraw(state, { random, force: true, expectedReveal });
+                    summary.forced++;
+                } else if (decisions.length) {
                     const choice = decisions[Math.floor(random() * decisions.length)];
-                    outcome = choice.play ? Engine.playFoundation(state, choice.seat, choice.card, choice.side, random)
-                        : Engine.flipFoundation(state, choice.seat, choice.card);
+                    if (choice.type === 'play') outcome = Engine.playFoundation(state, choice.seat, choice.card, choice.side, random);
+                    else if (choice.type === 'flip') outcome = Engine.flipFoundation(state, choice.seat, choice.card);
+                    else {
+                        outcome = Engine.moveFoundation(state, choice.seat, choice.card, choice.position);
+                        summary.moves++;
+                    }
                 } else {
                     assert.equal(Engine.canRestart(state), true, context);
                     outcome = Engine.revealDraw(state, { random });
@@ -424,7 +647,8 @@ test('1,000 seeded full matches conserve cards and always expose an action or re
         summary.matches++;
         summary.actions += actions;
     }
-    assert.equal(summary.matches, 1000);
+    assert.equal(summary.matches, total);
     t.diagnostic(JSON.stringify(summary));
-    assert.ok(summary.rounds > 1000 && summary.slaps > 1000 && summary.loans > 1000 && summary.recycled > 0);
+    assert.ok(summary.rounds > total && summary.slaps > total && summary.loans > total && summary.recycled > 0);
+    assert.ok(summary.moves > total && summary.forced > total);
 });

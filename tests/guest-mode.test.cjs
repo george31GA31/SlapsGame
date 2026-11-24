@@ -20,7 +20,12 @@ function fixture(guest = false) {
         document:{getElementById:id=>{if(!elements.has(id))elements.set(id,element());return elements.get(id)},querySelector:()=>element(),querySelectorAll:()=>[],createElement:element,body:element(),addEventListener(){},dispatchEvent(){}},
         auth, db, firebase:{auth:()=>auth,database:()=>db}, location:{href:''}, addEventListener(){},
         setTimeout(){},clearTimeout(){},setInterval(){return 1},clearInterval(){}, crypto:require('node:crypto').webcrypto, Date, Map, Set, Math:Object.create(Math), alert(){}, Event,
-        GameVisuals:{flip(){},stopFlip(){}},CardLayout:{attach(){}},SlapsDrag:{attach(){}} };
+        GameVisuals:{flip(){},stopFlip(){}},CardLayout:{attach(){}},SlapsDrag:{
+            attach(element, handlers) { element.drag = handlers; },
+            render(container, hand, positionFor) {
+                for (const card of hand) if (card.element) card.element.renderedPosition = { ...positionFor(card) };
+            }
+        } };
     ctx.window = ctx;
     vm.createContext(ctx);
     for(const file of ['session.js','elo-engine.js','slaps-engine.js','network-guard.js','multiplayer-game.js']) vm.runInContext(fs.readFileSync(path.join(root,file),'utf8'),ctx,{filename:file});
@@ -30,7 +35,7 @@ function fixture(guest = false) {
 for(const [label,localGuest,opponentGuest] of [['guest vs member',true,false],['member vs guest',false,true],['guest vs guest',true,true]]) {
     test(`${label}: results, concessions, disconnects and rematches never write statistics`,async()=>{
         const f=fixture(localGuest);
-        f.ctx.handleNet({type:'HANDSHAKE',name:'Opponent',uid:opponentGuest?null:'opponent',isGuest:opponentGuest,protocol:5});
+        f.ctx.handleNet({type:'HANDSHAKE',name:'Opponent',uid:opponentGuest?null:'opponent',isGuest:opponentGuest,protocol:6});
         await Promise.resolve();
         const before={...f.profile()};
         for(const won of [true,false]) { let completed=false;f.ctx.reportMatchResultInternal(won,()=>completed=true,'proof');assert.ok(completed); }
@@ -50,7 +55,7 @@ for(const [label,localGuest,opponentGuest] of [['guest vs member',true,false],['
     });
 }
 test('browser-hosted matches never change ELO or official statistics',async()=>{
-    const f=fixture();f.ctx.handleNet({type:'HANDSHAKE',name:'Opponent',uid:'opponent',isGuest:false,protocol:5});
+    const f=fixture();f.ctx.handleNet({type:'HANDSHAKE',name:'Opponent',uid:'opponent',isGuest:false,protocol:6});
     await Promise.resolve();
     f.run('gameState.p1Slaps=2;gameState.p1Rounds=1;gameState.matchStartTime=Date.now()-10000');
     f.ctx.reportMatchResultInternal(true,null,'proof');
@@ -64,16 +69,16 @@ test('missing identity and legacy handshakes are unranked',()=>{
 });
 test('only the current peer protocol starts a match',()=>{
     const current=fixture();current.run('gameState.isHost=false');
-    current.ctx.handleNet({type:'HANDSHAKE',name:'Opponent',uid:'opponent',isGuest:false,protocol:5});
+    current.ctx.handleNet({type:'HANDSHAKE',name:'Opponent',uid:'opponent',isGuest:false,protocol:6});
     assert.equal(current.run('gameState.protocolCompatible'),true);
     assert.equal(current.run('gameState.handshakeDone'),true);
     const legacy=fixture();legacy.run('gameState.isHost=false');
-    legacy.ctx.handleNet({type:'HANDSHAKE',name:'Opponent',uid:'opponent',isGuest:false,protocol:4});
+    legacy.ctx.handleNet({type:'HANDSHAKE',name:'Opponent',uid:'opponent',isGuest:false,protocol:5});
     assert.equal(legacy.run('gameState.protocolCompatible'),false);
     assert.equal(legacy.run('gameState.handshakeDone'),false);
 });
 test('account switch during a match cannot write to the replacement account',async()=>{
-    const f=fixture();f.ctx.handleNet({type:'HANDSHAKE',name:'Opponent',uid:'opponent',isGuest:false,protocol:5});await Promise.resolve();
+    const f=fixture();f.ctx.handleNet({type:'HANDSHAKE',name:'Opponent',uid:'opponent',isGuest:false,protocol:6});await Promise.resolve();
     f.ctx.auth.currentUser={uid:'different'};f.ctx.reportMatchResultInternal(false,null,'proof');assert.equal(f.writes(),0);
 });
 test('starting guest mode signs out and provides a distinct guest identity',async()=>{
@@ -104,7 +109,7 @@ test('authentication restoration completes before multiplayer identity is sent',
 });
 test('online host rejects attempts to play a face-down card',()=>{
     const f=fixture(true);
-    f.run(`gameState.gameActive=true;gameState.aiHand=[{id:'hidden',isFaceUp:false,value:5}];gameState.centerPileLeft=[{id:'top',value:6}];applyMoveAuthoritative=function(){throw Error('Hidden card must not be played')};`);
+    f.run(`gameState.gameActive=true;gameState.phase='active';gameState.aiHand=[{id:'hidden',isFaceUp:false,value:5}];gameState.centerPileLeft=[{id:'top',value:6}];`);
     f.ctx.adjudicateMove({card:{id:'hidden'},targetId:'top',dropSide:'left',reqId:'test'},'ai');
     assert.equal(f.run('gameState.aiHand.length'),1);
     assert.equal(f.run('gameState.centerPileLeft.length'),1);
@@ -182,18 +187,19 @@ test('guest snapshots do not contain faces from either hidden hand or Draw Deck'
  assert.equal(f.run('snapshot.playerHand[0].rank'),undefined);
 });
 
-test('a guest keeps the host lane layout, so each visible top matches the host rule state',async()=>{
+test('a guest keeps arbitrary authoritative positions, including cards from different original stacks',()=>{
  const f=fixture(true);f.run('gameState.isHost=false;');
- const card=(id,lane,isFaceUp)=>({id,suit:'hearts',rank:'2',value:2,isFaceUp,laneIndex:lane});
+ const card=(id,x,y,z,isFaceUp)=>({id,suit:'hearts',rank:'2',value:2,isFaceUp,foundation:{x,y,z}});
  const state={playerTotal:26,aiTotal:26,playerDeck:[],aiDeck:[],playerHand:[
-  card('lane-3-top',3,true),card('lane-2-bottom',2,false),card('lane-2-top',2,true),
-  card('lane-1-bottom',1,false),card('lane-1-middle',1,false),card('lane-1-top',1,true),
-  card('lane-0-bottom',0,false),card('lane-0-middle',0,false),card('lane-0-next',0,false),card('lane-0-top',0,true)
+  card('bottom',1.2,0.4,1,false),card('top',1.7,0.6,3,true),card('parked',4.4,0.2,2,true)
  ],aiHand:[],centerPileLeft:[],centerPileRight:[],gameActive:false,matchLive:true,playerReady:false,aiReady:false,drawLock:false};
- await f.ctx.startRoundJoinerFromState(state);
- const lanes=JSON.parse(f.run('JSON.stringify(Object.fromEntries(gameState.playerHand.map(c=>[c.id,c.laneIndex])))'));
- assert.equal(lanes['lane-0-next'],0);assert.equal(lanes['lane-0-top'],0);
- assert.equal(lanes['lane-1-top'],1);assert.equal(lanes['lane-2-top'],2);assert.equal(lanes['lane-3-top'],3);
+ f.ctx.startRoundJoinerFromState(state);
+ const positions = JSON.parse(f.run('JSON.stringify(gameState.playerHand.map(card=>card.element.renderedPosition))'));
+ assert.deepEqual(positions, state.playerHand.map(card=>card.foundation));
+ assert.equal(f.run('gameState.playerHand[0].element.dataset.covered'), 'true');
+ assert.equal(f.run('gameState.playerHand[0].element.dataset.accessible'), 'true');
+ assert.equal(f.run('gameState.playerHand[0].element.dataset.exposed'), 'false');
+ assert.equal(f.run('gameState.playerHand[1].element.dataset.exposed'), 'true');
 });
 
 test('a revision gap requests an authoritative snapshot instead of applying stale state',()=>{
@@ -276,13 +282,25 @@ function pairedMatch(seed = 1) {
     return {host, guest, packets, flush, tally, cardsAreUnique};
 }
 
+function openPairedMatch(pair) {
+    const {host, guest, flush} = pair;
+    host.ctx.startRoundHostAuthoritative();
+    flush();
+    host.ctx.handlePlayerDeckClick();
+    flush();
+    guest.ctx.handlePlayerDeckClick();
+    flush();
+    host.ctx.performRevealHostOnly();
+    flush();
+}
+
 test('two peers reveal together and mirror a legal release and exposed replacement', () => {
     const {host, guest, packets, flush, tally, cardsAreUnique} = pairedMatch(1);
     host.ctx.startRoundHostAuthoritative();
     flush();
     assert.ok(cardsAreUnique(host) && cardsAreUnique(guest));
-    const laneSizes = guest.run('gameState.playerHand.reduce((sizes,card)=>(sizes[card.laneIndex]++,sizes),[0,0,0,0])');
-    assert.deepEqual(Array.from(laneSizes), [4, 3, 2, 1]);
+    const stackSizes = guest.run('Object.values(Object.groupBy(gameState.playerHand, card=>card.foundation.x)).map(group=>group.length)');
+    assert.deepEqual(Array.from(stackSizes), [4, 3, 2, 1]);
 
     host.ctx.handlePlayerDeckClick();
     flush();
@@ -301,12 +319,10 @@ test('two peers reveal together and mirror a legal release and exposed replaceme
     assert.equal(tally(guest, 'playerDeck.every(card=>card.rank===undefined)'), true);
     assert.ok(cardsAreUnique(host) && cardsAreUnique(guest));
 
-    guest.ctx.handlePlayerDeckClick();
-    assert.equal(packets.length, 0, 'a legal Foundation play prevents restart');
     guest.run(`
       const move=SlapsEngine.availableMoves(gameState,'player')[0];
       const playedId=move.card.id;
-      const lane=move.card.laneIndex;
+      const stackX=move.card.foundation.x;
       requestMoveToHost(move.card, move.side);
       requestMoveToHost(move.card, move.side);
     `);
@@ -314,10 +330,10 @@ test('two peers reveal together and mirror a legal release and exposed replaceme
     flush();
     assert.equal(guest.run('gameState.playerHand.some(card=>card.id===playedId)'), false);
     assert.equal(guest.run('gameState.playerHand.filter(card=>card.isFaceUp).length'), 3);
-    assert.equal(guest.run('gameState.playerHand.find(card=>card.laneIndex===0&&card.isFaceUp)!==undefined'), true);
+    assert.equal(guest.run('gameState.playerHand.some(card=>card.foundation.x<stackX&&card.isFaceUp)'), true);
     guest.run(`
-      const replacement=SlapsEngine.getExposedCards(gameState.playerHand).find(card=>card.laneIndex===lane);
-      const stillCovered=gameState.playerHand.find(card=>card.laneIndex===lane&&card!==replacement);
+      const replacement=SlapsEngine.getExposedCards(gameState.playerHand).find(card=>card.foundation.x===stackX);
+      const stillCovered=gameState.playerHand.find(card=>card.foundation.x===stackX&&card!==replacement);
       tryFlipCard(stillCovered.element,stillCovered);
     `);
     flush();
@@ -347,9 +363,11 @@ test('a match-winning final peer release closes the slap window and preserves bo
       sendAuthoritative('ROUND_START',{state:buildGuestState()});
     `);
     flush();
+    // A guest sees the previous board while the host completes their release.
+    guest.ctx.handlePlayerDeckClick();
     host.run('requestMoveToHost(final,"right");');
-    assert.deepEqual(packets.map(([, packet]) => packet.type), ['MOVE_APPLY', 'MATCH_OVER']);
-    assert.equal(packets[0][1].apply.finishedRound, true);
+    assert.deepEqual(packets.map(([, packet]) => packet.type), ['DRAW_REQ', 'MOVE_APPLY', 'MATCH_OVER']);
+    assert.equal(packets[1][1].apply.finishedRound, true);
     flush();
     assert.equal(tally(host, 'p1Rounds'), 1);
     assert.equal(tally(guest, 'aiRounds'), 1);
@@ -362,8 +380,108 @@ test('a match-winning final peer release closes the slap window and preserves bo
     assert.ok(cardsAreUnique(host) && cardsAreUnique(guest));
 });
 
+test('a forced reveal can create a slap and invalidate a would-be final release against the old centre', () => {
+    const {host, guest, flush, tally, cardsAreUnique} = pairedMatch();
+    host.run(`
+      SlapsEngine.initializeMatch(gameState);
+      const cards=[...gameState.playerRoundCards.splice(0),...gameState.aiRoundCards.splice(0)];
+      const take=(rank,suit)=>cards.splice(cards.findIndex(card=>card.rank===rank&&card.suit===suit),1)[0];
+      const final=take('7','hearts'); final.owner='player';final.isFaceUp=true;
+      const left=take('7','clubs'); const right=take('6','hearts');
+      const other=take('8','diamonds');other.owner='ai';other.isFaceUp=true;
+      gameState.playerHand=[final];gameState.aiHand=[other];
+      gameState.playerDeck=[take('9','hearts')];gameState.aiDeck=[take('9','clubs')];
+      gameState.centerPileLeft=cards.concat(left);gameState.centerPileRight=[right];
+      gameState.phase='active';gameState.gameActive=true;gameState.matchLive=true;gameState.roundStarted=true;
+      assignNetworkIds([...gameState.aiHand,...gameState.playerHand,...gameState.centerPileLeft,...gameState.centerPileRight,
+        ...gameState.playerDeck,...gameState.aiDeck]);
+      const originalRight=centreTopId('right');
+      sendAuthoritative('ROUND_START',{state:buildGuestState()});
+    `);
+    flush();
+    guest.ctx.handlePlayerDeckClick();
+    flush();
+    assert.equal(tally(host, 'slapActive'), true);
+    assert.equal(tally(guest, 'slapActive'), true);
+    assert.equal(host.run(`adjudicateMove({card:{id:networkCardId(final)},targetId:originalRight,dropSide:'right',reqId:'held'},'player')`), false);
+    assert.equal(tally(host, 'playerHand.length'), 1);
+    const centreCount = tally(host, 'centerPileLeft.length + gameState.centerPileRight.length');
+    guest.ctx.handleInput({code:'Space', preventDefault(){}});
+    flush();
+    assert.equal(tally(host, 'aiSlaps'), 1);
+    assert.equal(tally(host, 'playerHolding.length'), centreCount);
+    assert.equal(tally(guest, 'aiHolding.length'), centreCount);
+    assert.ok(cardsAreUnique(host) && cardsAreUnique(guest));
+});
+
+test('the guest parks a blocker, flips the exposed card, and keeps the placement through a force and sync', () => {
+    const pair = pairedMatch(3);
+    const {host, guest, packets, flush, cardsAreUnique} = pair;
+    openPairedMatch(pair);
+    guest.run(`
+        const ownHand=gameState.playerHand;
+        const singleton=ownHand.at(-1);
+        const destination={...singleton.foundation};
+        const release=SlapsEngine.availableMoves(gameState,'player').find(move=>move.card===singleton);
+        requestMoveToHost(singleton,release.side);
+    `);
+    flush();
+    assert.equal(guest.run('SlapsEngine.countFaceUp(ownHand)'), 3);
+    guest.run(`
+        const blocker=SlapsEngine.getExposedCards(ownHand)[0];
+        const blockerId=blocker.id;
+        const stackX=blocker.foundation.x;
+        const behind=ownHand.filter(card=>card.foundation.x===stackX&&card!==blocker).at(-1);
+        const behindId=behind.id;
+        const parked=blocker.element.drag.move(destination);
+        const triedFlip=behind.element.drag.reveal();
+    `);
+    assert.equal(guest.run('parked && triedFlip'), true);
+    assert.equal(guest.run('behind.element.dataset.exposed'), 'true');
+    assert.deepEqual(packets.map(([,message]) => message.type), ['LAYOUT_REQ', 'FLIP_REQ']);
+    flush();
+    assert.equal(guest.run('behind.isFaceUp'), true);
+    assert.equal(guest.run('SlapsEngine.countFaceUp(ownHand)'), 4);
+    assert.equal(host.run('SlapsEngine.countFaceUp(gameState.aiHand)'), 4);
+
+    const placed = guest.run('JSON.stringify(blocker.foundation)');
+    const blockerId = JSON.stringify(guest.run('blockerId'));
+    assert.equal(host.run(`JSON.stringify(gameState.aiHand.find(card=>card.networkId===${blockerId})?.foundation)`), placed);
+    guest.ctx.handlePlayerDeckClick();
+    flush();
+    host.ctx.sendStateSnapshot('test_reconnect');
+    flush();
+    assert.equal(guest.run('JSON.stringify(gameState.playerHand.find(card=>card.id===blockerId)?.foundation)'), placed);
+    assert.equal(guest.run('gameState.playerHand.find(card=>card.id===behindId)?.isFaceUp'), true);
+    assert.ok(cardsAreUnique(host) && cardsAreUnique(guest));
+});
+
+test('simultaneous forced Draw Deck requests coalesce against the same reveal without a cooldown', () => {
+    const pair = pairedMatch(1);
+    const {host, guest, packets, flush, tally, cardsAreUnique} = pair;
+    openPairedMatch(pair);
+    assert.equal(host.run('SlapsEngine.availableMoves(gameState,"ai").length > 0'), true);
+    const length = tally(host, 'centerPileLeft.length + gameState.centerPileRight.length');
+    const oldPot = host.run('JSON.stringify([gameState.centerPileLeft[0].id,gameState.centerPileRight[0].id])');
+    const basis = tally(host, 'revealRevision');
+    guest.ctx.handlePlayerDeckClick();
+    guest.ctx.handlePlayerDeckClick();
+    host.ctx.handlePlayerDeckClick();
+    assert.deepEqual(packets.map(([,message]) => message.type), ['DRAW_REQ', 'DRAW_REQ', 'REVEAL_SHOW']);
+    flush();
+    assert.equal(tally(host, 'revealRevision'), basis + 1);
+    assert.equal(tally(guest, 'revealRevision'), basis + 1);
+    assert.equal(tally(host, 'centerPileLeft.length + gameState.centerPileRight.length'), length + 2);
+    assert.equal(host.run('JSON.stringify([gameState.centerPileLeft[0].id,gameState.centerPileRight[0].id])'), oldPot);
+    guest.ctx.handlePlayerDeckClick();
+    flush();
+    assert.equal(tally(host, 'revealRevision'), basis + 2);
+    assert.equal(tally(guest, 'centerPileLeft.length + gameState.centerPileRight.length'), length + 4);
+    assert.ok(cardsAreUnique(host) && cardsAreUnique(guest));
+});
+
 test('24 seeded peer matches carry legal moves, releases, slaps and restarts through both controllers', t => {
-    const totals = {matches: 0, actions: 0, rounds: 0, slaps: 0};
+    const totals = {matches: 0, actions: 0, rounds: 0, slaps: 0, layouts: 0, activeRestarts: 0};
     for (let seed = 1; seed <= 24; seed++) {
         const {host, guest, flush, tally, cardsAreUnique} = pairedMatch(seed);
         const peers = [host, guest];
@@ -377,26 +495,34 @@ test('24 seeded peer matches carry legal moves, releases, slaps and restarts thr
                 host.ctx.startRoundHostAuthoritative();
             } else if (tally(host, 'slapActive') && (action + seed) % 3 !== 0) {
                 actor.ctx.handleInput({code: 'Space', preventDefault(){}});
-            } else if (phase === 'awaiting_reveal' || host.run('SlapsEngine.canRestart(gameState)')) {
+            } else if (phase === 'awaiting_reveal') {
                 for (const peer of peers) {
                     peer.ctx.handlePlayerDeckClick();
                     flush();
                 }
                 assert.equal(tally(host, 'countdownRunning'), true, `seed ${seed}, action ${action}`);
                 host.ctx.performRevealHostOnly();
+            } else if (host.run('SlapsEngine.canRestart(gameState)') || (action + seed) % 31 === 0) {
+                actor.ctx.handlePlayerDeckClick();
+                totals.activeRestarts++;
             } else {
                 const order = [actor, peers.find(peer => peer !== actor)];
-                const acted = order.some(peer => peer.run(`
+                let acted;
+                for (const peer of order) {
+                    acted = peer.run(`
                     (() => {
-                        const hand = gameState.playerHand;
-                        const flip = SlapsEngine.getExposedCards(hand).find(card => SlapsEngine.canFlipCard(hand, card).ok);
                         const play = SlapsEngine.availableMoves(gameState, 'player')[0];
-                        if (play) requestMoveToHost(play.card, play.side);
-                        else if (flip) tryFlipCard(flip.element, flip);
-                        return Boolean(play || flip);
+                        if (play) return requestMoveToHost(play.card, play.side) ? 'play' : null;
+                        const prep = SlapsEngine.planFoundationPreparation(gameState.playerHand, SlapsEngine.getFoundationBounds(gameState, 'player'));
+                        if (prep?.type === 'flip') return tryFlipCard(prep.card.element, prep.card) ? 'flip' : null;
+                        if (prep?.type === 'move') return requestLayout(prep.card, prep.position) ? 'layout' : null;
+                        return null;
                     })()
-                `));
-                assert.equal(acted, true, `seed ${seed}, action ${action}`);
+                    `);
+                    if (acted) break;
+                }
+                if (acted === 'layout') totals.layouts++;
+                assert.ok(acted, `seed ${seed}, action ${action}`);
             }
             flush();
             assert.ok(cardsAreUnique(host) && cardsAreUnique(guest), `seed ${seed}, action ${action}`);

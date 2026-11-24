@@ -60,7 +60,7 @@ window.SlapsFeedback = {
     timer: null,
     flipReason(reason) {
         return {
-            covered: 'That card is still covered. Play the top card from this stack first.',
+            covered: 'That card is still covered. Move or play the card covering it first.',
             face_up_limit: 'You already have four cards open.',
             pending_move: 'That card is already being played.',
             already_face_up: 'That card is already open.',
@@ -150,6 +150,18 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    const drawDeck = document.getElementById('player-draw-deck');
+    if (drawDeck) {
+        drawDeck.tabIndex = 0;
+        drawDeck.setAttribute('role', 'button');
+        drawDeck.setAttribute('aria-label', 'Reveal from both Draw Decks');
+        drawDeck.addEventListener('keydown', event => {
+            if (event.key !== 'Enter' || event.repeat) return;
+            event.preventDefault();
+            drawDeck.click();
+        });
+    }
+
     const arrangeChrome = () => {
         const timer = document.querySelector('.timer-display');
         if (timer && timer.parentElement !== footer) footer.append(timer);
@@ -194,7 +206,8 @@ document.addEventListener('DOMContentLoaded', () => {
         /* Rebound previously repositioned cards after rotation/window resizing. */
         if (typeof gameState !== 'undefined') {
             for (const card of [...gameState.playerHand, ...gameState.aiHand]) {
-                if (!card.element || card.element.style.position === 'fixed') continue;
+                if (!card.element || card.element.style.position === 'fixed' ||
+                    card.element.parentElement?.dataset.spatialFoundation === 'true') continue;
                 if (card.layout && !card.isFaceUp && typeof CardLayout !== 'undefined') {
                     CardLayout.place(card, card.layout.x, card.layout.y);
                 } else if (card.element.style.top.endsWith('px')) {

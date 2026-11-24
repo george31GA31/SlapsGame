@@ -14,18 +14,15 @@ const gameState = {
     globalZ: 1000,
     difficulty: 1,
     gameActive: false,
-    playerReady: false, aiReady: false,
     drawLock: false,
-    resumeBlocked: false,
     aiProcessing: false, aiInChain: false,
     activitySerial: 0,
+    roundSerial: 0,
     slapActive: false
 };
 
 const CARD_BACK_SRC = 'assets/cards/back_of_card.png';
-const AI_LANES = [5, 29, 53, 77];
 const soloEl = id => document.getElementById(id);
-let countdownTimer = null;
 let slapDisplayTimer = null;
 
 window.addEventListener('load', () => {
@@ -36,7 +33,7 @@ window.addEventListener('load', () => {
     startRound();
     setInterval(() => {
         if (gameState.gameActive && !gameState.aiProcessing) attemptAIMove();
-    }, 250);
+    }, 100);
 });
 
 function setGameActive(active) {
@@ -49,20 +46,15 @@ function setGameActive(active) {
     if (!active) gameState.slapActive = false;
 }
 
-function setReadiness(player = false, ai = false) {
-    gameState.playerReady = player;
-    gameState.aiReady = ai;
-    soloEl('player-draw-deck').classList.toggle('deck-ready', player);
-    soloEl('ai-draw-deck').classList.toggle('deck-ready', ai);
-}
-
 function startRound() {
-    const result = SlapsEngine.startRound(gameState);
+    const result = SlapsEngine.startRound(gameState, undefined, {
+        player: SlapsDrag.measure(soloEl('player-foundation-area')),
+        ai: SlapsDrag.measure(soloEl('ai-foundation-area'))
+    });
     if (!result.ok) return false;
     setGameActive(false);
-    setReadiness();
     gameState.drawLock = false;
-    gameState.resumeBlocked = false;
+    gameState.roundSerial++;
 
     renderFoundation('player', gameState.playerHand);
     renderFoundation('ai', gameState.aiHand);
@@ -75,36 +67,36 @@ function startRound() {
 function renderFoundation(seat, hand) {
     const container = soloEl(seat + '-foundation-area');
     container.replaceChildren();
-    const depth = [0, 0, 0, 0];
     for (const card of hand) {
         const img = document.createElement('img');
-        const index = depth[card.laneIndex]++;
         img.className = 'game-card';
         img.draggable = false;
         img.dataset.cardId = card.id;
-        img.dataset.lane = String(card.laneIndex);
-        img.style.left = AI_LANES[card.laneIndex] + '%';
-        const step = seat === 'ai' ? index : 3 - index;
-        img.style.top = 'calc(4px + ' + step + ' * var(--stack-step))';
-        img.style.zIndex = String(index + 10);
         card.element = img;
         if (card.isFaceUp) setCardFaceUp(img, card, seat);
-        else setCardFaceDown(img, card, seat);
+        else setCardFaceDown(img);
         container.append(img);
+        if (seat === 'player') makeDraggable(img, card);
     }
-    syncFoundationExposure(hand, seat);
+    syncFoundationLayout(hand, seat);
 }
 
-function syncFoundationExposure(hand, seat) {
-    const exposed = new Set(SlapsEngine.getExposedCards(hand));
+function syncFoundationLayout(hand, seat, animateCard) {
     for (const card of hand) {
         const img = card.element;
-        const covered = !exposed.has(card);
-        img.dataset.covered = String(covered);
-        if (covered) img.setAttribute('aria-hidden', 'true');
+        const { accessible, exposed } = SlapsEngine.getFoundationExposure(hand, card);
+        img.dataset.covered = String(!exposed);
+        img.dataset.accessible = String(accessible);
+        if (!accessible) img.setAttribute('aria-hidden', 'true');
         else img.removeAttribute('aria-hidden');
-        img.tabIndex = seat === 'player' && !covered ? 0 : -1;
+        img.tabIndex = seat === 'player' && accessible ? 0 : -1;
     }
+    SlapsDrag.render(soloEl(seat + '-foundation-area'), hand,
+        card => SlapsEngine.getFoundationPosition(hand, card), {
+            bounds: SlapsEngine.getFoundationBounds(gameState, seat),
+            mirrored: seat === 'ai',
+            animateCard
+        });
 }
 
 function setCardFaceUp(img, card, seat) {
@@ -113,23 +105,13 @@ function setCardFaceUp(img, card, seat) {
     img.setAttribute('aria-label', card.rank + ' of ' + card.suit);
     img.classList.remove('card-face-down');
     img.classList.add(seat === 'player' ? 'player-card' : 'opponent-card');
-    img.onclick = null;
-    img.onkeydown = null;
-    if (seat === 'player') makeDraggable(img, card);
     if (previousFace === CARD_BACK_SRC) GameVisuals.flip(img, previousFace);
 }
 
-function setCardFaceDown(img, card, seat) {
+function setCardFaceDown(img) {
     img.src = CARD_BACK_SRC;
     img.classList.add('card-face-down');
-    if (seat !== 'player') return;
     img.setAttribute('aria-label', 'Face-down Foundation card. Press Enter to reveal it when exposed.');
-    img.onclick = () => tryFlipCard(img, card);
-    img.onkeydown = event => {
-        if (event.key !== 'Enter' || event.repeat) return;
-        event.preventDefault();
-        tryFlipCard(img, card);
-    };
 }
 
 function tryFlipCard(img, card, seat = 'player') {
@@ -140,18 +122,25 @@ function tryFlipCard(img, card, seat = 'player') {
         return false;
     }
     setCardFaceUp(img, card, seat);
+    syncFoundationLayout(gameState[seat + 'Hand'], seat);
     return true;
 }
 
-function checkPileLogic(card, targetPile) {
-    return SlapsEngine.canPlayOnPile(card, targetPile);
+function moveFoundationCard(seat, card, position) {
+    const result = SlapsEngine.moveFoundation(gameState, seat, card, position);
+    if (!result.ok) return false;
+    GameVisuals.stopFlip(card.element);
+    syncFoundationLayout(gameState[seat + 'Hand'], seat, seat === 'ai' ? card : undefined);
+    return true;
 }
 
 function makeDraggable(img, card) {
     SlapsDrag.attach(img, {
-        canLift: () => gameState.gameActive && card.isFaceUp &&
-            SlapsEngine.isTopOfLane(gameState.playerHand, card) &&
-            (checkPileLogic(card, gameState.centerPileLeft) || checkPileLogic(card, gameState.centerPileRight)),
+        canMove: () => (gameState.gameActive || gameState.phase === 'awaiting_reveal') &&
+            SlapsEngine.isFoundationAccessible(gameState.playerHand, card),
+        canLeave: () => gameState.gameActive && SlapsEngine.canTakeOutside(gameState, 'player', card),
+        move: position => moveFoundationCard('player', card, position),
+        reveal: () => !card.isFaceUp && tryFlipCard(img, card),
         play: side => playCardToCenter(card, img, side)
     });
 }
@@ -162,15 +151,13 @@ function playCardToCenter(card, img, side) {
     const decision = SlapsEngine.playFoundation(gameState, seat, card, side);
     if (!decision.ok) return false;
 
-    setReadiness();
     GameVisuals.stopFlip(img);
     img.remove();
     renderCenterPile(side, card);
     if (decision.finishedRound) {
         endRound(seat, decision.matchWinner);
     } else {
-        const hand = seat === 'player' ? gameState.playerHand : gameState.aiHand;
-        syncFoundationExposure(hand, seat);
+        syncFoundationLayout(gameState[seat + 'Hand'], seat);
         refreshMatchDisplay();
         checkSlapCondition();
     }
@@ -205,92 +192,60 @@ function resolveSlap(winner) {
     if (!result.ok) return false;
 
     setGameActive(false);
-    setReadiness();
+    SlapsDrag.cancel();
     clearCentreDisplay();
     refreshMatchDisplay();
-    gameState.resumeBlocked = true;
 
     const playerWon = winner === 'player';
     const overlay = soloEl('slap-overlay');
     soloEl('slap-text').textContent = playerWon ? 'PLAYER SLAP WON!' : 'AI SLAP WON!';
     overlay.style.backgroundColor = playerWon ? 'rgba(0, 200, 0, 0.9)' : 'rgba(200, 0, 0, 0.9)';
     overlay.classList.remove('hidden');
-    slapDisplayTimer = setTimeout(() => {
-        slapDisplayTimer = null;
-        overlay.classList.add('hidden');
-        gameState.resumeBlocked = false;
-    }, 1600);
+    clearTimeout(slapDisplayTimer);
+    slapDisplayTimer = setTimeout(hideSlapDisplay, 700);
     return true;
 }
 
+function hideSlapDisplay() {
+    clearTimeout(slapDisplayTimer);
+    slapDisplayTimer = null;
+    soloEl('slap-overlay').classList.add('hidden');
+}
+
 function handlePlayerDeckClick() {
-    if (gameState.drawLock || gameState.resumeBlocked || gameState.playerReady) return;
-    if (gameState.phase === 'active' && !SlapsEngine.canRestart(gameState)) {
-        const message = SlapsEngine.getExposedCards(gameState.playerHand).some(card => !card.isFaceUp)
-            ? 'Reveal your exposed Foundation cards before drawing.'
-            : 'Draw cards when neither player has a Foundation action.';
-        SlapsFeedback.show(message);
-        return;
-    }
-    if (gameState.phase !== 'active' && gameState.phase !== 'awaiting_reveal') return;
-    setReadiness(true);
-    setTimeout(() => {
-        if (!gameState.playerReady || gameState.drawLock) return;
-        if (gameState.phase === 'active' && !SlapsEngine.canRestart(gameState)) {
-            setReadiness();
-            return;
-        }
-        setReadiness(true, true);
-        startCountdown();
-    }, 800);
+    return requestSoloReveal();
 }
 
-function startCountdown() {
-    gameState.drawLock = true;
+function requestSoloReveal(expectedReveal = gameState.revealRevision) {
+    if (gameState.drawLock) return false;
+    const result = SlapsEngine.revealDraw(gameState, { force: true, expectedReveal });
+    if (!result.ok) return false;
+
     setGameActive(false);
-
-    const overlay = soloEl('countdown-overlay');
-    let count = 3;
-    overlay.textContent = String(count);
-    overlay.classList.remove('hidden');
-    countdownTimer = setInterval(() => {
-        count--;
-        if (count > 0) {
-            overlay.textContent = String(count);
-            return;
-        }
-        clearInterval(countdownTimer);
-        countdownTimer = null;
-        overlay.classList.add('hidden');
-        performRevealShow();
-    }, 800);
-}
-
-function performRevealShow() {
-    const result = SlapsEngine.revealDraw(gameState);
-    gameState.drawLock = false;
-    setReadiness();
-
-    if (!result.ok) {
-        setGameActive(gameState.phase === 'active');
-        checkSlapCondition();
-        return;
-    }
-
+    hideSlapDisplay();
+    const revealedRevision = gameState.revealRevision;
+    gameState.drawLock = revealedRevision;
+    // The board changes immediately. Concurrent requests share the same displayed reveal.
+    requestAnimationFrame(() => {
+        if (gameState.drawLock === revealedRevision) gameState.drawLock = false;
+    });
     if (result.redealt) {
+        SlapsDrag.cancel();
         clearCentreDisplay();
         refreshMatchDisplay();
         if (result.matchWinner) endRound(null, result.matchWinner);
         else showRoundMessage('NO REVEAL AVAILABLE', 'The next round starts with the cards each player holds.');
-        return;
+        return true;
     }
 
     if (result.recycled) clearCentreDisplay();
     if (result.cards.ai) renderCenterPile('left', result.cards.ai, true);
     if (result.cards.player) renderCenterPile('right', result.cards.player, true);
     setGameActive(true);
+    SlapsDrag.recheck();
     refreshMatchDisplay();
     checkSlapCondition();
+    return true;
 }
 
 function clearCentreDisplay() {
@@ -348,7 +303,7 @@ function updatePenalties() {
 
 function endRound(winner, matchWinner) {
     setGameActive(false);
-    setReadiness();
+    SlapsDrag.cancel();
     refreshMatchDisplay();
     if (matchWinner) {
         const isWin = matchWinner === 'player';
@@ -364,12 +319,8 @@ function endRound(winner, matchWinner) {
 function concedeSoloMatch() {
     const result = SlapsEngine.concedeMatch(gameState, 'player');
     if (!result.ok) return false;
-    clearInterval(countdownTimer);
-    clearTimeout(slapDisplayTimer);
-    countdownTimer = slapDisplayTimer = null;
     gameState.drawLock = false;
-    soloEl('countdown-overlay').classList.add('hidden');
-    soloEl('slap-overlay').classList.add('hidden');
+    hideSlapDisplay();
     endRound(null, result.winner);
     return true;
 }

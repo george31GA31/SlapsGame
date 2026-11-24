@@ -10,6 +10,8 @@ function loadAI(difficulty = 5) {
             phase: 'active',
             difficulty,
             aiInChain: false,
+            playerDeck: [],
+            aiDeck: [],
             playerHand: [{ value: 9 }, { value: 3 }],
             aiHand: [
                 { id: 'a', isFaceUp: true, value: 5, laneIndex: 0 },
@@ -59,8 +61,8 @@ test('AI reaction timing remains bounded and higher difficulty is faster on aver
     const legendSamples = Array.from({ length: 80 }, () => legend.SlapsAI.humanDelay('move'));
     const average = values => values.reduce((sum, value) => sum + value, 0) / values.length;
 
-    assert.ok(rookieSamples.every(value => Number.isFinite(value) && value >= 720));
-    assert.ok(legendSamples.every(value => Number.isFinite(value) && value >= 720));
+    assert.ok(rookieSamples.every(value => Number.isFinite(value) && value >= 480));
+    assert.ok(legendSamples.every(value => Number.isFinite(value) && value >= 480));
     assert.ok(average(rookieSamples) > average(legendSamples) + 700);
 
     const slapSamples = Array.from({ length: 80 }, () => legend.SlapsAI.humanDelay('slap'));
