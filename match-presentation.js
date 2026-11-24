@@ -27,7 +27,7 @@
  addEventListener('load',()=>{
   const header=document.querySelector('.match-header');if(!header)return;
   const context=document.createElement('div');context.className='match-context';
-  context.textContent=competition?`COMPETITION · ${params.get('match')} · VS ${params.get('opponent')||'Opponent'}`:'Tap either centre card to slap · Space also works';
+ context.textContent=competition?`COMPETITION · ${params.get('match')} · VS ${params.get('opponent')||'Opponent'}`:'Drag to arrange · Tap Draw Deck to reveal · Space to slap';
   header.append(context);
   const intro=document.createElement('section');intro.className='match-intro';
   const content=document.createElement('div');content.className='match-intro-card';
@@ -35,7 +35,7 @@
   const versus=document.createElement('div');versus.className='match-versus';
   const mine=document.createElement('strong'),vs=document.createElement('strong'),opponent=document.createElement('strong');vs.textContent='VS';versus.append(mine,vs,opponent);
   const myName=document.createElement('span');mine.append(portrait(),myName);
-  const hint=document.createElement('p');hint.textContent='Clear your Foundation. Watch the centre. Tap either card when ranks match.';
+  const hint=document.createElement('p');hint.textContent='Drag to arrange your Foundation. Tap an exposed face-down card to turn it over. Tap your Draw Deck to reveal together, or tap the centre when ranks match.';
   const ready=document.createElement('button');ready.className='btn-action-small';ready.textContent='Connecting…';ready.disabled=true;
   const back=document.createElement('a');back.href='index.html';back.textContent='Back to menu';
   content.append(eyebrow,versus,hint,ready,back);intro.append(content);document.body.append(intro);

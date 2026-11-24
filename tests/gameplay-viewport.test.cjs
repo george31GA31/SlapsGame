@@ -33,6 +33,6 @@ for(const file of ['multiplayer-game.js','tournament-online.js'])test(file+': re
 for(const file of ['multiplayer-game.js','tournament-online.js'])test(file+': draw reveal animation receives a back face without delaying play',()=>{
  const src=fs.readFileSync(file,'utf8'),name='applyRevealShow';
  const start=src.indexOf('function '+name+'('),end=src.indexOf('\nfunction ',start+10);let flipped=false;
- const img={style:{},classList:{remove(){}}};const ctx={performance:{now:()=>0},document:{querySelectorAll:()=>[img],getElementById:()=>({classList:{remove(){}}})},gameState:{aiLoopRunning:true},GameVisuals:{flip:(image,back)=>{assert.equal(back,'back.png');flipped=true;}},CARD_BACK_SRC:'back.png',checkSlapCondition(){},startAILoop(){},startVisualTimer(){},setTimeout(){},clearInterval(){}};
+ const img={style:{},classList:{remove(){}}};const ctx={performance:{now:()=>0},document:{querySelectorAll:()=>[img],getElementById:()=>({classList:{remove(){}}})},gameState:{aiLoopRunning:true},GameVisuals:{flip:(image,back)=>{assert.equal(back,'back.png');flipped=true;}},SlapsDrag:{recheck(){}},CARD_BACK_SRC:'back.png',checkSlapCondition(){},startAILoop(){},startVisualTimer(){},setTimeout(){},clearInterval(){}};
  vm.createContext(ctx);vm.runInContext(src.slice(start,end),ctx);ctx[name]();assert.equal(flipped,true);assert.equal(ctx.gameState.gameActive,true);
 });

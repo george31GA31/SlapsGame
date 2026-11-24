@@ -1,9 +1,88 @@
-/* One physical pointer may move a Foundation card. Only the rules layer can play it. */
+/* Foundation geometry is authoritative in SlapsEngine. This module projects it and handles pointer input. */
 (function (root) {
     'use strict';
 
-    let active = null;
+    const CARD_RATIO = 1.45;
+    const DRAG_THRESHOLD = 5;
     const attached = new WeakSet();
+    const mats = new WeakMap();
+    let active = null;
+
+    function defaultBounds() {
+        return { width: root.SlapsEngine?.FOUNDATION_WIDTH ?? 6.4, height: root.SlapsEngine?.FOUNDATION_HEIGHT ?? 2.15 };
+    }
+
+    function measure(foundation) {
+        const width = foundation?.clientWidth;
+        const height = foundation?.clientHeight;
+        if (!(width > 0 && height > 0)) return defaultBounds();
+        const cardWidth = Math.min(width / 6.4, height / (1.5 * CARD_RATIO), 130);
+        return { width: Math.min(24, width / cardWidth), height: Math.min(6, height / (cardWidth * CARD_RATIO)) };
+    }
+
+    function project(foundation, bounds) {
+        const box = foundation.getBoundingClientRect();
+        const width = foundation.clientWidth || box.width;
+        const height = foundation.clientHeight || box.height;
+        const cardWidth = Math.min(width / bounds.width, height / (bounds.height * CARD_RATIO));
+        const cardHeight = cardWidth * CARD_RATIO;
+        const matWidth = cardWidth * bounds.width;
+        const matHeight = cardHeight * bounds.height;
+        const x = (width - matWidth) / 2;
+        const y = (height - matHeight) / 2;
+        const left = box.left + (foundation.clientLeft || 0) + x;
+        const top = box.top + (foundation.clientTop || 0) + y;
+        return { x, y, matWidth, matHeight, cardWidth, cardHeight, left, top, right: left + matWidth, bottom: top + matHeight };
+    }
+
+    function render(foundation, hand, positionFor, options = {}) {
+        if (!foundation) return;
+        let mat = mats.get(foundation);
+        if (!mat) {
+            mat = {};
+            mats.set(foundation, mat);
+            if (root.ResizeObserver) {
+                const observer = new root.ResizeObserver(() => {
+                    if (active?.foundation === foundation) cancel();
+                    paintMat(foundation, mat);
+                });
+                observer.observe(foundation);
+            }
+        }
+        Object.assign(mat, { hand, positionFor, bounds: options.bounds ?? defaultBounds(), mirrored: options.mirrored === true });
+        paintMat(foundation, mat, options.animateCard);
+    }
+
+    function paintMat(foundation, mat, animateCard) {
+        const surface = project(foundation, mat.bounds);
+        if (!(surface.cardWidth > 0)) return;
+        if (foundation.dataset) foundation.dataset.spatialFoundation = 'true';
+        for (const [name, value] of Object.entries({
+            left: surface.x, top: surface.y, width: surface.matWidth, height: surface.matHeight
+        })) foundation.style?.setProperty?.(`--foundation-mat-${name}`, `${value}px`);
+
+        const positioned = mat.hand.map(card => ({ card, position: mat.positionFor(card) }))
+            .filter(({ card, position }) => card.element && position)
+            .sort((a, b) => a.position.z - b.position.z);
+        positioned.forEach(({ card, position }, index) => {
+            const el = card.element;
+            if (el.style.position === 'fixed') return;
+            const x = mat.mirrored ? mat.bounds.width - 1 - position.x : position.x;
+            const y = mat.mirrored ? mat.bounds.height - 1 - position.y : position.y;
+            const left = surface.x + x * surface.cardWidth;
+            const top = surface.y + y * surface.cardHeight;
+            const dx = parseFloat(el.style.left) - left;
+            const dy = parseFloat(el.style.top) - top;
+            Object.assign(el.style, {
+                left: `${left}px`, top: `${top}px`, zIndex: String(index + 10),
+                width: `${surface.cardWidth}px`, height: `${surface.cardHeight}px`
+            });
+            if ((animateCard === card || animateCard === card.id) && animateCard != null && Number.isFinite(dx + dy) &&
+                (dx || dy) && el.animate && !root.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+                el.animate([{ translate: `${dx}px ${dy}px` }, { translate: '0px 0px' }], { duration: 105, easing: 'ease-out' });
+            }
+        });
+    }
 
     function contains(rect, x, y) {
         return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
@@ -26,20 +105,34 @@
         return leftArea > rightArea ? 'left' : 'right';
     }
 
-    function attach(img, { canLift, play, onDrag }) {
+    function clamp(value, min, max) {
+        return Math.max(min, Math.min(max, value));
+    }
+
+    function cancel() {
+        active?.finish(false);
+    }
+
+    function recheck() {
+        active?.update();
+    }
+
+    function attach(img, { canMove, canLeave, move, reveal, play, onDrag }) {
         if (attached.has(img)) return;
         attached.add(img);
-        img.tabIndex = 0;
-        img.setAttribute('aria-description', 'Drag onto a centre pile, or press the corresponding left or right arrow key.');
+        img.setAttribute('aria-description', 'Drag to arrange. Press Enter to reveal, or Left or Right Arrow to play.');
 
         img.addEventListener('keydown', event => {
-            if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+            if (!['Enter', 'ArrowLeft', 'ArrowRight'].includes(event.key)) return;
             event.preventDefault();
-            if (!event.repeat && !active && canLift()) play(event.key === 'ArrowLeft' ? 'left' : 'right');
+            if (event.repeat || active) return;
+            if (event.key === 'Enter') {
+                if (canMove()) reveal?.();
+            } else if (canLeave()) play(event.key === 'ArrowLeft' ? 'left' : 'right');
         });
 
         img.addEventListener('pointerdown', event => {
-            if (!event.isPrimary || event.button !== 0 || active || !canLift()) return;
+            if (!event.isPrimary || event.button !== 0 || active || !canMove()) return;
             const doc = img.ownerDocument;
             const view = doc.defaultView;
             const foundation = img.parentElement;
@@ -47,83 +140,113 @@
             const right = doc.getElementById('center-pile-right');
             if (!foundation || !left || !right) return;
 
+            const mat = mats.get(foundation);
+            const bounds = mat?.bounds ?? defaultBounds();
+            const surface = project(foundation, bounds);
+            if (!(surface.cardWidth > 0)) return;
             event.preventDefault();
             root.GameVisuals?.stopFlip(img);
-            const bounds = img.getBoundingClientRect();
-            const startX = event.clientX;
-            const startY = event.clientY;
+
+            const source = img.getBoundingClientRect();
+            const shiftX = event.clientX - source.left;
+            const shiftY = event.clientY - source.top;
             const id = event.pointerId;
             const listeners = new AbortController();
             const { signal } = listeners;
             const oldVisibility = img.style.visibility;
+            let pointer = event;
             let preview = null;
-            active = img;
 
-            function report(phase, pointer) {
-                onDrag?.({ phase, clientX: pointer.clientX, clientY: pointer.clientY });
+            function report(phase, x = pointer.clientX, y = pointer.clientY) {
+                onDrag?.({ phase, clientX: x, clientY: y });
             }
 
-            function move(pointer) {
-                if (pointer.pointerId !== id) return;
-                const dx = pointer.clientX - startX;
-                const dy = pointer.clientY - startY;
+            function placement() {
+                const rawX = pointer.clientX - shiftX;
+                const rawY = pointer.clientY - shiftY;
+                const x = clamp(rawX, surface.left, surface.right - surface.cardWidth);
+                const y = clamp(rawY, surface.top, surface.bottom - surface.cardHeight);
+                return { x, y, rawX, rawY };
+            }
+
+            function update() {
+                if (!preview) return;
+                const { x, y, rawX, rawY } = placement();
+                const outsideAllowed = canLeave();
+                const left = outsideAllowed ? rawX : x;
+                const top = outsideAllowed ? rawY : y;
+                preview.style.translate = `${left - source.left}px ${top - source.top}px`;
+                report('move', left + shiftX, top + shiftY);
+            }
+
+            function follow(next) {
+                if (next.pointerId !== id) return;
+                pointer = next;
                 if (!preview) {
-                    if (Math.hypot(dx, dy) < 5 || !img.isConnected || !canLift()) return;
+                    if (Math.hypot(pointer.clientX - event.clientX, pointer.clientY - event.clientY) < DRAG_THRESHOLD ||
+                        !img.isConnected || !canMove()) return;
                     preview = img.cloneNode(false);
-                    preview.removeAttribute('id');
-                    preview.removeAttribute('tabindex');
-                    preview.removeAttribute('data-card-id');
+                    for (const name of ['id', 'tabindex', 'data-card-id', 'data-covered', 'data-accessible']) preview.removeAttribute(name);
                     preview.setAttribute('aria-hidden', 'true');
                     preview.classList.remove('is-held');
                     preview.classList.add('foundation-drag-preview');
                     Object.assign(preview.style, {
-                        position: 'fixed', left: `${bounds.left}px`, top: `${bounds.top}px`,
-                        width: `${bounds.width}px`, height: `${bounds.height}px`
+                        position: 'fixed', left: `${source.left}px`, top: `${source.top}px`,
+                        width: `${surface.cardWidth}px`, height: `${surface.cardHeight}px`
                     });
                     doc.body.append(preview);
                     img.style.visibility = 'hidden';
-                    report('start', event);
+                    report('start', event.clientX, event.clientY);
                 }
-                preview.style.translate = `${dx}px ${dy}px`;
-                report('move', pointer);
+                update();
             }
 
-            function finish(pointer, shouldPlay) {
-                if (pointer.pointerId != null && pointer.pointerId !== id) return;
-                const hasMoved = Boolean(preview);
+            function finish(commit) {
                 listeners.abort();
                 active = null;
                 if (img.hasPointerCapture(id)) img.releasePointerCapture(id);
-                if (!hasMoved) return;
+                if (!preview) {
+                    if (commit && img.isConnected && contains(source, pointer.clientX, pointer.clientY) && canMove()) reveal?.();
+                    return;
+                }
 
-                const dx = pointer.clientX - startX;
-                const dy = pointer.clientY - startY;
                 preview.remove();
                 img.style.visibility = oldVisibility;
-                report('end', pointer);
-                if (!shouldPlay || !img.isConnected) return;
+                report('end');
+                if (!commit || !img.isConnected || !canMove()) return;
 
+                const { x, y, rawX, rawY } = placement();
+                if (contains(surface, pointer.clientX, pointer.clientY)) {
+                    const localX = clamp((x - surface.left) / surface.cardWidth, 0, bounds.width - 1);
+                    const localY = clamp((y - surface.top) / surface.cardHeight, 0, bounds.height - 1);
+                    move?.({ x: localX, y: localY });
+                    return;
+                }
+                if (!canLeave()) return;
                 const side = dropSide({
-                    x: pointer.clientX, y: pointer.clientY,
-                    card: { left: bounds.left + dx, right: bounds.right + dx,
-                        top: bounds.top + dy, bottom: bounds.bottom + dy },
-                    foundation: foundation.getBoundingClientRect(),
+                    x: pointer.clientX, y: pointer.clientY, foundation: surface,
+                    card: { left: rawX, right: rawX + surface.cardWidth, top: rawY, bottom: rawY + surface.cardHeight },
                     left: left.getBoundingClientRect(), right: right.getBoundingClientRect()
                 });
                 if (side) play(side);
             }
 
-            // Listen above the card so a render update cannot strand the pointer lock.
-            view.addEventListener('pointermove', move, { signal });
-            view.addEventListener('pointerup', pointer => finish(pointer, true), { signal });
-            view.addEventListener('pointercancel', pointer => finish(pointer, false), { signal });
-            view.addEventListener('blur', () => finish(event, false), { signal });
-            img.addEventListener('lostpointercapture', pointer => finish(pointer, false), { signal });
+            active = { foundation, finish, update };
+            view.addEventListener('pointermove', follow, { signal });
+            view.addEventListener('pointerup', next => {
+                if (next.pointerId !== id) return;
+                follow(next);
+                finish(true);
+            }, { signal });
+            view.addEventListener('pointercancel', next => { if (next.pointerId === id) finish(false); }, { signal });
+            view.addEventListener('blur', cancel, { signal });
+            view.addEventListener('keydown', key => { if (key.key === 'Escape') cancel(); }, { signal });
+            img.addEventListener('lostpointercapture', next => { if (next.pointerId === id) finish(false); }, { signal });
             img.setPointerCapture(id);
         });
     }
 
-    const api = Object.freeze({ attach, dropSide });
+    const api = Object.freeze({ attach, cancel, dropSide, measure, recheck, render });
     if (typeof module === 'object' && module.exports) module.exports = api;
     else root.SlapsDrag = api;
 })(globalThis);

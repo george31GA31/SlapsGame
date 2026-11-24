@@ -206,6 +206,24 @@ body.game-body::before {
     pointer-events:none;
 }
 
+.game-body .foundation-box[data-spatial-foundation="true"]::after {
+    content:"";
+    position:absolute;
+    left:var(--foundation-mat-left);
+    top:var(--foundation-mat-top);
+    width:var(--foundation-mat-width);
+    height:var(--foundation-mat-height);
+    outline:1px dashed rgba(231,255,239,.28);
+    outline-offset:-1px;
+    border-radius:9px;
+    pointer-events:none;
+}
+
+.game-body .foundation-box[data-spatial-foundation="true"]::before {
+    left:calc(var(--foundation-mat-left) + 8px);
+    top:calc(var(--foundation-mat-top) + 4px);
+}
+
 .game-body .player-box {border-color:rgba(97,225,137,.34);}
 .game-body .opponent-box {border-color:rgba(255,127,127,.24);}
 
@@ -341,7 +359,7 @@ body.game-body::before {
     transition:box-shadow 90ms ease,filter 90ms ease,scale 90ms ease,translate 90ms ease;
 }
 
-.game-body #player-foundation-area [data-covered="true"],
+.game-body #player-foundation-area [data-accessible="false"],
 .game-body .foundation-drag-preview,
 .game-body .foundation-flip-preview {
     pointer-events:none !important;
@@ -366,6 +384,11 @@ body.game-body::before {
     filter:saturate(1.06) brightness(1.035);
     box-shadow:0 13px 20px rgba(0,0,0,.45),0 1px 2px rgba(255,255,255,.3) inset;
     cursor:grabbing;
+}
+
+.game-body [data-spatial-foundation="true"] .player-card:is(:hover,.is-held) {
+    translate:0 0;
+    scale:1;
 }
 
 .game-body .opponent-card {box-shadow:0 4px 7px rgba(0,0,0,.36);}
@@ -464,6 +487,7 @@ body.game-body::before {
     max-width:94vw;
     padding:clamp(8px,2dvh,24px);
     backdrop-filter:blur(2px);
+    pointer-events:none;
 }
 
 .game-body #countdown-overlay {

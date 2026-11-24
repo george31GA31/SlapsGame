@@ -25,28 +25,27 @@ test('slap requires matching ranks on both centre piles', () => {
     assert.equal(Engine.isSlapAvailable([], [{ rank: '7' }]), false);
 });
 
-test('only the uncovered top card in a lane can be flipped', () => {
+test('only an exposed card can be flipped regardless of original lanes', () => {
     const hand = [
-        { id: 'a', laneIndex: 0, isFaceUp: false },
-        { id: 'b', laneIndex: 0, isFaceUp: false },
-        { id: 'c', laneIndex: 1, isFaceUp: true }
+        { id: 'a', laneIndex: 0, isFaceUp: false, foundation: { x: 0, y: 0, z: 1 } },
+        { id: 'b', laneIndex: 1, isFaceUp: false, foundation: { x: 0.15, y: 0, z: 2 } },
+        { id: 'c', laneIndex: 0, isFaceUp: true, foundation: { x: 1.5, y: 0, z: 3 } }
     ];
     assert.equal(Engine.canFlipCard(hand, hand[0]).reason, 'covered');
     assert.equal(Engine.canFlipCard(hand, hand[1]).ok, true);
 });
 
-test('four exposed cards is the limit but a card awaiting move confirmation can be excluded', () => {
+test('all four face-up cards count even when covered or awaiting play confirmation', () => {
     const hand = [
-        { id: 'a', laneIndex: 0, isFaceUp: true, pendingMove: true },
-        { id: 'b', laneIndex: 1, isFaceUp: true },
-        { id: 'c', laneIndex: 2, isFaceUp: true },
-        { id: 'd', laneIndex: 3, isFaceUp: true },
-        { id: 'e', laneIndex: 4, isFaceUp: false }
+        { id: 'a', isFaceUp: true, pendingMove: true, foundation: { x: 0, y: 0, z: 1 } },
+        { id: 'b', isFaceUp: true, foundation: { x: 0.15, y: 0, z: 2 } },
+        { id: 'c', isFaceUp: true, foundation: { x: 1.5, y: 0, z: 3 } },
+        { id: 'd', isFaceUp: true, foundation: { x: 3, y: 0, z: 4 } },
+        { id: 'e', isFaceUp: false, foundation: { x: 4.5, y: 0, z: 5 } }
     ];
     assert.equal(Engine.countFaceUp(hand), 4);
-    assert.equal(Engine.countFaceUp(hand, { ignorePending: true }), 3);
-    assert.equal(Engine.canFlipCard(hand, hand[4], { requireTopOfLane: false }).reason, 'face_up_limit');
-    assert.equal(Engine.canFlipCard(hand, hand[4], { requireTopOfLane: false, ignorePending: true }).ok, true);
+    assert.equal(Engine.isFoundationExposed(hand, hand[0]), false);
+    assert.equal(Engine.canFlipCard(hand, hand[4]).reason, 'face_up_limit');
 });
 
 test('hand lane layout preserves current 4-3-2-1 ten-card shape', () => {

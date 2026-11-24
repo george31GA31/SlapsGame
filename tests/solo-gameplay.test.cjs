@@ -56,6 +56,8 @@ function soloFixture({ tournament = false, random = () => 0.5 } = {}) {
     };
     const messages = [];
     const flips = [];
+    const rearrangements = [];
+    const dragChecks = [];
     const storage = new Map([['slapsDifficulty', '10']]);
     const load = [];
     let now = 0;
@@ -88,7 +90,22 @@ function soloFixture({ tournament = false, random = () => 0.5 } = {}) {
             dispatchEvent() {}
         },
         Event,
-        SlapsDrag: { attach: (element, handlers) => { element.drag = handlers; } },
+        SlapsDrag: {
+            attach(element, handlers) { element.drag = handlers; },
+            measure() { return { width: 6.4, height: 2.15 }; },
+            recheck() { dragChecks.push(now); },
+            cancel() {},
+            render(_container, hand, positionFor, { animateCard } = {}) {
+                for (const card of hand) {
+                    const position = positionFor(card);
+                    Object.assign(card.element.style, {
+                        position: 'absolute', left: position.x + 'em', top: position.y + 'em',
+                        zIndex: String(position.z), width: '', height: ''
+                    });
+                }
+                if (animateCard) rearrangements.push({ card: animateCard, at: now });
+            }
+        },
         SlapsFeedback: { show: text => messages.push(text), flipReason: reason => reason },
         GameVisuals: { stopFlip() {}, flip: (element, from) => flips.push({ element, from }) },
         performance: { now: () => now },
@@ -108,10 +125,13 @@ function soloFixture({ tournament = false, random = () => 0.5 } = {}) {
         vm.runInContext(fs.readFileSync(path.join(__dirname, '..', file), 'utf8'), ctx, { filename: file });
     }
     const state = vm.runInContext('gameState', ctx);
-    return { ctx, state, getElement, messages, flips, storage, advance, load: () => load.forEach(listener => listener()) };
+    return {
+        ctx, state, getElement, messages, flips, rearrangements, dragChecks, storage, advance,
+        load: () => load.forEach(listener => listener())
+    };
 }
 
-function populate(fixture, { player, ai, left, right, playerDraw = [], playerHolding = [], aiDraw = [] }) {
+function populate(fixture, { player, ai, left, right, playerDraw = [], playerHolding = [], aiDraw = [], exhausted = false }) {
     const { ctx, state } = fixture;
     ctx.SlapsEngine.initializeMatch(state);
     state.difficulty = 10;
@@ -140,7 +160,9 @@ function populate(fixture, { player, ai, left, right, playerDraw = [], playerHol
     state.playerHolding.push(...playerHolding.map(name => take(name, 'player')));
     state.playerDeck.push(...playerDraw.map(([name, owner]) => take(name, owner || 'player')));
     const explicitAiDraw = aiDraw.map(name => take(name, 'ai'));
-    state.aiDeck.push(...cards.map(card => Object.assign(card, { owner: 'ai' })), ...explicitAiDraw);
+    const rest = cards.map(card => Object.assign(card, { owner: 'ai' }));
+    (exhausted ? state.aiHolding : state.aiDeck).push(...rest);
+    state.aiDeck.push(...explicitAiDraw);
 
     state.phase = 'active';
     state.roundStarted = true;
@@ -162,7 +184,8 @@ test('practice and local tournament both load the solo controller and deal four 
         for (const seat of ['player', 'ai']) {
             const hand = fixture.state[seat + 'Hand'];
             assert.equal(hand.length, 10);
-            assert.deepEqual([0, 1, 2, 3].map(lane => hand.filter(card => card.laneIndex === lane).length), [4, 3, 2, 1]);
+            const stacks = [...new Set(hand.map(card => card.foundation.x))].sort((a, b) => a - b);
+            assert.deepEqual(stacks.map(x => hand.filter(card => card.foundation.x === x).length), [4, 3, 2, 1]);
             assert.equal(hand.filter(card => card.isFaceUp).length, 4);
             assert.equal(fixture.state[seat + 'Deck'].length, 16);
         }
@@ -170,7 +193,7 @@ test('practice and local tournament both load the solo controller and deal four 
     }
 });
 
-test('covered strips are inert and an exposed replacement is revealable while the other lanes are untouched', () => {
+test('move a face-down strip without flipping, then restore four live cards by parking a blocker', () => {
     const fixture = soloFixture();
     populate(fixture, {
         player: [
@@ -185,60 +208,85 @@ test('covered strips are inert and an exposed replacement is revealable while th
     const [bottom, replacement, top, ...untouched] = state.playerHand;
     assert.equal(bottom.element.dataset.covered, 'true');
     assert.equal(replacement.element.dataset.covered, 'true');
-    assert.equal(replacement.element.tabIndex, -1);
-    assert.equal(replacement.element.getAttribute('aria-hidden'), 'true');
+    assert.equal(replacement.element.dataset.accessible, 'true');
+    assert.equal(replacement.element.tabIndex, 0);
     assert.equal(ctx.tryFlipCard(bottom.element, bottom), false);
+    assert.equal(bottom.element.drag.canLeave(), false);
+    assert.equal(bottom.element.drag.move({ x: -0.5, y: 0 }), false);
+    assert.equal(bottom.element.drag.move({ x: 5.2, y: 1.05 }), true);
+    assert.equal(bottom.isFaceUp, false);
+    assert.equal(bottom.element.drag.reveal(), false, 'an exposed fifth card must stay face-down');
 
-    assert.equal(top.element.drag.canLift(), true);
+    const [, jack] = untouched;
+    assert.equal(jack.element.drag.canMove(), true);
+    assert.equal(jack.element.drag.canLeave(), false);
+    assert.equal(jack.element.drag.move({ x: 5.35, y: 0 }), true);
+    assert.equal(jack.element.style.left, '5.35em');
+    assert.equal(jack.element.drag.move({ x: 5.5, y: 0 }), false);
+
+    assert.equal(untouched[0].element.drag.play('right'), true);
+    assert.equal(top.element.drag.canLeave(), true);
     assert.equal(top.element.drag.play('right'), false);
-    assert.equal(top.element.drag.play('left'), true);
-    assert.equal(top.element.drag.play('left'), false);
+    assert.equal(top.element.drag.move({ x: 1.55, y: 0 }), true);
+    assert.equal(top.element.style.left, '1.55em');
     assert.equal(replacement.isFaceUp, false);
-    assert.equal(untouched.every(card => card.isFaceUp), true);
+    assert.equal(state.playerHand.includes(top), true);
     assert.equal(replacement.element.dataset.covered, 'false');
     assert.equal(replacement.element.tabIndex, 0);
-    assert.equal(bottom.element.dataset.covered, 'true');
+    assert.equal(bottom.element.dataset.covered, 'false');
 
     fixture.advance(500);
-    assert.equal(replacement.element.onclick(), true);
+    assert.equal(replacement.element.drag.reveal(), true);
     assert.equal(replacement.isFaceUp, true);
     assert.equal(replacement.element.src, replacement.imgSrc);
     assert.equal(flips.at(-1).from, 'assets/cards/back_of_card.png');
     assert.equal(state.playerHand.filter(card => card.isFaceUp).length, 4);
+    assert.equal(top.element.drag.play('left'), true);
     assert.equal(replacement.element.drag.play('left'), true);
-    assert.equal(bottom.element.onclick(), true);
+    assert.equal(bottom.element.drag.reveal(), true);
     assert.equal(bottom.element.drag.play('left'), true);
     assertCardConservation(fixture);
 });
 
-test('draw waits for exposed cards first then commits both visible reveals in the same countdown event', () => {
+test('forced draw commits both reveals immediately with either player legal and an exposed card unrevealed', () => {
     const fixture = soloFixture();
     populate(fixture, {
-        player: [['2 spades/down']],
-        ai: [['king clubs']],
+        player: [['2 spades/down'], ['7 spades']],
+        ai: [['jack clubs']],
         left: '8 hearts',
         right: '10 hearts',
-        playerDraw: [['ace hearts']],
-        aiDraw: ['king hearts']
+        playerDraw: [['king hearts']],
+        aiDraw: ['king diamonds']
     });
 
-    const { state, ctx, advance, messages, flips } = fixture;
-    ctx.handlePlayerDeckClick();
-    assert.match(messages.at(-1), /Reveal your exposed Foundation cards/);
-    assert.equal(state.playerReady, false);
-
-    assert.equal(state.playerHand[0].element.onclick(), true);
-    ctx.handlePlayerDeckClick();
-    ctx.handlePlayerDeckClick();
-    advance(3199);
-    assert.equal(state.centerPileLeft.length, 1);
-    assert.equal(state.centerPileRight.length, 1);
-    assert.equal(state.gameActive, false);
-    advance(1);
+    const { state, ctx, advance, flips, dragChecks } = fixture;
+    assert.equal(ctx.SlapsEngine.availableMoves(state, 'player').length, 1);
+    assert.equal(ctx.SlapsEngine.availableMoves(state, 'ai').length, 1);
+    assert.equal(state.playerHand[0].isFaceUp, false);
+    const held = state.playerHand[1];
+    assert.equal(held.element.drag.canLeave(), true);
+    assert.equal(held.element.drag.move({ x: 4.12, y: 0.8 }), true);
+    const placed = held.foundation;
+    const previousReveal = state.revealRevision;
+    assert.equal(ctx.handlePlayerDeckClick(), true);
+    assert.equal(ctx.handlePlayerDeckClick(), false);
+    assert.equal(ctx.requestSoloReveal(previousReveal), false);
+    assert.equal(state.centerPileLeft.length, 2);
+    assert.equal(state.centerPileRight.length, 2);
     assert.equal(state.centerPileLeft.at(-1).rank, 'king');
-    assert.equal(state.centerPileRight.at(-1).rank, 'ace');
+    assert.equal(state.centerPileRight.at(-1).rank, 'king');
     assert.equal(state.gameActive, true);
-    assert.equal(flips.length, 3);
+    assert.equal(dragChecks.length, 1);
+    assert.equal(held.element.drag.canLeave(), false);
+    assert.equal(held.element.drag.play('left'), false);
+    assert.equal(flips.length, 2);
+    assert.equal(state.slapActive, true);
+    assert.equal(ctx.resolveSlap('player'), true);
+    advance(20);
+    assert.equal(state.drawLock, false, 'same-frame slap must not strand the draw lock');
+    assert.equal(ctx.requestSoloReveal(previousReveal), false);
+    assert.equal(ctx.handlePlayerDeckClick(), true);
+    assert.equal(held.foundation, placed, 'forced draw, slap and restart preserve the placement');
     assertCardConservation(fixture);
 });
 
@@ -291,6 +339,7 @@ test('final Foundation play outranks a matching slap and borrowed cards do not b
     ctx.handleInput({ code: 'Space', preventDefault() {} });
     advance(6000);
     assert.equal(state.p1Slaps + state.aiSlaps, 0);
+    assert.equal(ctx.handlePlayerDeckClick(), false);
     assert.ok(loanIds.every(id => state.aiRoundCards.some(card => card.id === id)));
     assert.equal(storage.get('isf_tourney_round'), '1');
     assert.equal(getElement('msg-btn').textContent, 'NEXT MATCH');
@@ -333,13 +382,15 @@ test('bot considers a legal play without reading a concealed rank and does not c
     });
     const { state, ctx, advance } = fixture;
     let hiddenReads = 0;
-    Object.defineProperty(state.playerHand[0], 'value', {
-        get() { hiddenReads++; throw new Error('Bot read a concealed card'); }
-    });
+    for (const [card, field] of [[state.playerHand[0], 'value'], [state.playerHand[0], 'rank'], [state.aiDeck[0], 'value']]) {
+        Object.defineProperty(card, field, {
+            get() { hiddenReads++; throw new Error('Bot read a concealed card'); }
+        });
+    }
     const target = state.aiHand[0];
     ctx.attemptAIMove();
     assert.equal(state.aiProcessing, true);
-    advance(1250);
+    advance(950);
     assert.equal(target.element.style.position, 'fixed');
     assert.equal(target.element.style.width, '80px');
     assert.equal(target.element.style.height, '116px');
@@ -360,35 +411,134 @@ test('bot considers a legal play without reading a concealed rank and does not c
     assertCardConservation(fixture);
 });
 
-test('bot turns up an exposed top and never uncovers a card by relocating a blocker', () => {
+test('bot with three live cards visibly relocates an unplayable blocker before a separate reveal', () => {
     const fixture = soloFixture();
     populate(fixture, {
-        player: [['7 spades']],
-        ai: [['6 diamonds/down', 'king clubs'], ['8 diamonds/down']],
+        player: [['7 spades'], ['2 hearts']],
+        ai: [['6 diamonds/down', 'king clubs'], ['jack clubs'], ['queen diamonds']],
         left: '9 hearts',
         right: '3 hearts'
     });
-    const { state, ctx, advance } = fixture;
-    const [covered, blocker, exposed] = state.aiHand;
+    const { state, ctx, advance, rearrangements } = fixture;
+    const [covered, blocker] = state.aiHand;
+    const before = ctx.SlapsEngine.getFoundationPosition(state.aiHand, blocker);
 
     ctx.attemptAIMove();
-    advance(1500);
-    assert.equal(exposed.isFaceUp, true);
+    advance(440);
+    assert.equal(rearrangements.length, 1);
+    assert.equal(rearrangements[0].card, blocker);
+    assert.notDeepEqual(blocker.foundation, before);
     assert.equal(covered.isFaceUp, false);
-    assert.equal(blocker.laneIndex, 0);
-    assert.equal(covered.element.dataset.covered, 'true');
+    assert.equal(covered.element.dataset.covered, 'false');
+    assert.equal(state.aiProcessing, true);
+    advance(150);
     ctx.attemptAIMove();
-    advance(2000);
-    assert.equal(state.centerPileLeft.at(-1), exposed);
+    advance(500);
+    assert.equal(covered.isFaceUp, true);
+    assert.equal(ctx.SlapsEngine.countFaceUp(state.aiHand), 4);
     assertCardConservation(fixture);
 });
 
-test('a concession records a round only after opening and cancels a pending reveal', () => {
+test('the same bot preparation restores two missing live cards at every difficulty without flipping a fifth', () => {
+    for (let difficulty = 1; difficulty <= 10; difficulty++) {
+        const fixture = soloFixture();
+        populate(fixture, {
+            player: [['8 spades'], ['4 hearts']],
+            ai: [['7 diamonds/down', '5 diamonds/down', 'king clubs'], ['6 diamonds/down', 'jack clubs']],
+            left: '9 hearts',
+            right: '3 hearts'
+        });
+        const { state, ctx, advance, rearrangements } = fixture;
+        state.difficulty = difficulty;
+        for (let action = 0; action < 10; action++) {
+            ctx.attemptAIMove();
+            advance(1800);
+            assert.ok(ctx.SlapsEngine.countFaceUp(state.aiHand) <= 4);
+        }
+        assert.equal(ctx.SlapsEngine.countFaceUp(state.aiHand), 4, 'difficulty ' + difficulty);
+        assert.ok(rearrangements.length >= 2, 'difficulty ' + difficulty);
+        assert.equal(state.aiHand.filter(card => !card.isFaceUp).length, 1);
+        assertCardConservation(fixture);
+    }
+});
+
+test('bots at every difficulty force a shared restart to block a visible final-card reply', () => {
+    for (let difficulty = 1; difficulty <= 10; difficulty++) {
+        const fixture = soloFixture();
+        populate(fixture, {
+            player: [['7 spades']],
+            ai: [['jack clubs'], ['2 diamonds']],
+            left: '6 hearts',
+            right: '10 hearts',
+            playerDraw: [['king hearts']],
+            aiDraw: ['queen diamonds']
+        });
+        const { state, ctx, advance } = fixture;
+        state.difficulty = difficulty;
+        assert.equal(ctx.SlapsEngine.availableMoves(state, 'ai').length, 1);
+        const oldRevision = state.revealRevision;
+        const queued = state.aiHand[0];
+        ctx.attemptAIMove();
+        advance(1500);
+        assert.equal(state.revealRevision, oldRevision + 1, 'difficulty ' + difficulty);
+        assert.equal(state.aiHand.includes(queued), true);
+        assert.equal(state.centerPileRight.at(-1).rank, 'king');
+        assert.equal(state.centerPileLeft.at(-1).rank, 'queen');
+        assertCardConservation(fixture);
+    }
+});
+
+test('forced draws preserve the layout and apply loans or neutral recycling when decks are short', () => {
+    for (const exhausted of [false, true]) {
+        const fixture = soloFixture();
+        populate(fixture, {
+            player: [['4 diamonds'], ['2 clubs/down']],
+            ai: [['7 clubs']],
+            left: '5 hearts',
+            right: '8 hearts',
+            exhausted
+        });
+        const { state, ctx, advance } = fixture;
+        const card = state.playerHand[0];
+        assert.equal(card.element.drag.move({ x: 3.25, y: 0.6 }), true);
+        const placed = card.foundation;
+        const rendered = card.element.style.left;
+        assert.equal(state.playerDeck.length, 0);
+        assert.equal(ctx.handlePlayerDeckClick(), true);
+        advance(20);
+        assert.equal(card.foundation, placed);
+        assert.equal(card.element.style.left, rendered);
+        assert.equal(state.centerPileLeft.length + state.centerPileRight.length, exhausted ? 2 : 4);
+        if (!exhausted) assert.equal(state.borrowedPlayer, true);
+        assertCardConservation(fixture);
+    }
+});
+
+test('bot prefers a visible same-rank slap setup to its other legal Centre Pile', () => {
+    const fixture = soloFixture();
+    populate(fixture, {
+        player: [['10 spades'], ['2 clubs']],
+        ai: [['6 diamonds'], ['7 clubs']],
+        left: '5 hearts',
+        right: '6 hearts'
+    });
+    const { state, ctx, advance } = fixture;
+    const card = state.aiHand[0];
+    const candidates = ctx.SlapsAI.legalCandidates();
+    assert.equal(candidates.some(move => move.c.id === card.id && move.t === 'left'), true);
+    assert.equal(candidates.some(move => move.c.id === state.aiHand[1].id && move.t === 'right'), true);
+    ctx.attemptAIMove();
+    advance(1500);
+    assert.equal(state.aiSlaps, 1);
+    assertCardConservation(fixture);
+});
+
+test('a concession records a round only after opening and invalidates future reveals', () => {
     const before = soloFixture();
     before.load();
     before.ctx.handleInput({ code: 'Space', preventDefault: assert.fail });
-    before.ctx.handlePlayerDeckClick();
     assert.equal(before.ctx.concedeSoloMatch(), true);
+    assert.equal(before.ctx.handlePlayerDeckClick(), false);
     before.advance(5000);
     assert.equal(before.state.aiRounds, 0);
     assert.equal(before.state.matchWinner, 'ai');
@@ -397,23 +547,23 @@ test('a concession records a round only after opening and cancels a pending reve
     const after = soloFixture();
     after.load();
     after.ctx.handlePlayerDeckClick();
-    after.advance(3200);
     assert.equal(after.ctx.concedeSoloMatch(), true);
     assert.equal(after.state.aiRounds, 1);
     assert.equal(after.state.matchWinner, 'ai');
     assertCardConservation(after);
 });
 
-test('24 seeded solo controller matches complete with the real bot and rendered-card callbacks', t => {
+test('100 seeded solo controller matches complete with the real bot across all difficulties', t => {
     const totals = { matches: 0, actions: 0, rounds: 0, slaps: 0 };
-    for (let seed = 1; seed <= 24; seed++) {
+    for (let seed = 1; seed <= 100; seed++) {
         let generator = seed;
         const random = () => {
             generator = (Math.imul(1664525, generator) + 1013904223) >>> 0;
             return generator / 2 ** 32;
         };
         const fixture = soloFixture({ tournament: seed % 2 === 0, random });
-        const { state, ctx, advance, getElement } = fixture;
+        const { state, ctx, advance, getElement, storage } = fixture;
+        storage.set('slapsDifficulty', String((seed - 1) % 10 + 1));
         fixture.load();
 
         for (let action = 0; action < 2000 && state.phase !== 'match_over'; action++) {
@@ -421,19 +571,21 @@ test('24 seeded solo controller matches complete with the real bot and rendered-
             if (state.phase === 'round_over') {
                 assert.equal(getElement('msg-btn').onclick(), true, 'continue, seed ' + seed);
             } else if (state.phase === 'awaiting_reveal') {
-                if (!state.resumeBlocked) ctx.handlePlayerDeckClick();
+                ctx.handlePlayerDeckClick();
             } else if (state.gameActive) {
                 const moves = ctx.SlapsEngine.availableMoves(state, 'player');
-                const exposed = ctx.SlapsEngine.getExposedCards(state.playerHand)
-                    .find(card => ctx.SlapsEngine.canFlipCard(state.playerHand, card).ok);
+                const preparation = ctx.SlapsEngine.planFoundationPreparation(state.playerHand,
+                    ctx.SlapsEngine.getFoundationBounds(state, 'player'));
                 if (state.slapActive) {
                     if (random() < 0.55) ctx.handleInput({ code: 'Space', preventDefault() {} });
                 } else if (moves.length && random() < 0.75) {
                     const move = moves[Math.floor(random() * moves.length)];
                     assert.equal(move.card.element.drag.play(move.side), true, 'play, seed ' + seed);
-                } else if (exposed) {
-                    assert.equal(exposed.element.onclick(), true, 'flip, seed ' + seed);
-                } else if (ctx.SlapsEngine.canRestart(state)) {
+                } else if (preparation?.type === 'flip') {
+                    assert.equal(preparation.card.element.drag.reveal(), true, 'flip, seed ' + seed);
+                } else if (preparation?.type === 'move') {
+                    assert.equal(preparation.card.element.drag.move(preparation.position), true, 'arrange, seed ' + seed);
+                } else if (ctx.SlapsEngine.canRestart(state) || random() < 0.25) {
                     ctx.handlePlayerDeckClick();
                 }
             }
